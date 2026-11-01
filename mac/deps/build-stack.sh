@@ -282,8 +282,9 @@ install_dep() {
     echo "meson: installed by build (venv in $TOOLS_PREFIX)"
     return 0
   fi
-  [ -d "$WORK/pkg/$dep" ] || die "no $WORK/pkg/$dep to install"
-  cp -R "$WORK/pkg/$dep"/. /
+  # Both prefixes sit under $HOME; copying to / fails, as macOS's / is read-only.
+  [ -d "$WORK/pkg/$dep$HOME" ] || die "no $WORK/pkg/$dep$HOME to install"
+  cp -R "$WORK/pkg/$dep$HOME"/. "$HOME"/
   echo "installed $dep"
 }
 
