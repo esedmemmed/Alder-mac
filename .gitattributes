@@ -1,0 +1,2 @@
+# Shell scripts run on bash everywhere, including Git Bash on a CRLF checkout.
+*.sh text eol=lf
