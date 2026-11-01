@@ -149,9 +149,10 @@ assert_line() {
   echo "assert ok: $2"
 }
 
+# Target all, not nasm ndisasm: all runs the dirs rule that makes asm/, stdlib/ etc. in an out-of-tree build.
 recipe_nasm() {
   mkdir -p "$B"
-  (cd "$B" && "$S/configure" --prefix="$TOOLS_PREFIX" && make -j "$JOBS" nasm ndisasm \
+  (cd "$B" && "$S/configure" --prefix="$TOOLS_PREFIX" && make -j "$JOBS" all \
     && install -d "$PKG$TOOLS_PREFIX/bin" && install -m 755 nasm ndisasm "$PKG$TOOLS_PREFIX/bin/")
 }
 
