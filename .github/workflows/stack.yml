@@ -1,0 +1,301 @@
+# Builds the static mpv + FFmpeg stack for macOS 11.0 x86_64 (recipes: mac/deps/build-stack.sh, pins: mac/deps/versions.env).
+# Per dep, in dependency order: restore the cache, build on a miss, save (even when a later dep fails, so a failed
+# mpv build does not lose FFmpeg), install. The combined actions/cache is not used: its post step saves only on job success.
+# Publishes the assets to release stack-<pinhash> after the bundle checks pass.
+name: stack
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mac/deps/**'
+      - '.github/workflows/stack.yml'
+      - 'mac/ci/check-bundle.sh'
+
+permissions:
+  contents: write
+
+jobs:
+  stack:
+    runs-on: macos-15-intel
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Select Xcode 26.2 and assert the runner
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.2.app
+          xcodebuild -version
+          xcodebuild -version | grep -q '^Xcode 26\.2$'
+          uname -m
+          test "$(uname -m)" = x86_64
+          sw_vers
+          /bin/bash --version | head -n 1
+          pkg-config --version || pkgconf --version
+          ninja --version
+
+      - name: Cache keys
+        id: keys
+        run: |
+          for d in nasm meson dav1d ffmpeg fribidi freetype harfbuzz libass libplacebo luajit mpv; do
+            echo "$d=$(/bin/bash mac/deps/build-stack.sh key "$d")" | tee -a "$GITHUB_OUTPUT"
+          done
+          echo "pinhash=$(/bin/bash mac/deps/build-stack.sh pinhash)" | tee -a "$GITHUB_OUTPUT"
+
+      - name: meson (pinned wheel, not cached)
+        run: /bin/bash mac/deps/build-stack.sh build meson
+
+      - name: nasm cache restore
+        id: r_nasm
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/nasm
+          key: stack-nasm-${{ steps.keys.outputs.nasm }}
+
+      - name: nasm build
+        id: b_nasm
+        if: steps.r_nasm.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build nasm
+
+      - name: nasm cache save
+        if: always() && steps.b_nasm.outcome == 'success' && hashFiles('.stack/pkg/nasm/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/nasm
+          key: stack-nasm-${{ steps.keys.outputs.nasm }}
+
+      - name: nasm install
+        run: /bin/bash mac/deps/build-stack.sh install nasm
+
+      - name: dav1d cache restore
+        id: r_dav1d
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/dav1d
+          key: stack-dav1d-${{ steps.keys.outputs.dav1d }}
+
+      - name: dav1d build
+        id: b_dav1d
+        if: steps.r_dav1d.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build dav1d
+
+      - name: dav1d cache save
+        if: always() && steps.b_dav1d.outcome == 'success' && hashFiles('.stack/pkg/dav1d/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/dav1d
+          key: stack-dav1d-${{ steps.keys.outputs.dav1d }}
+
+      - name: dav1d install
+        run: /bin/bash mac/deps/build-stack.sh install dav1d
+
+      - name: ffmpeg cache restore
+        id: r_ffmpeg
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/ffmpeg
+          key: stack-ffmpeg-${{ steps.keys.outputs.ffmpeg }}
+
+      - name: ffmpeg build
+        id: b_ffmpeg
+        if: steps.r_ffmpeg.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build ffmpeg
+
+      - name: ffmpeg cache save
+        if: always() && steps.b_ffmpeg.outcome == 'success' && hashFiles('.stack/pkg/ffmpeg/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/ffmpeg
+          key: stack-ffmpeg-${{ steps.keys.outputs.ffmpeg }}
+
+      - name: ffmpeg install
+        run: /bin/bash mac/deps/build-stack.sh install ffmpeg
+
+      - name: fribidi cache restore
+        id: r_fribidi
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/fribidi
+          key: stack-fribidi-${{ steps.keys.outputs.fribidi }}
+
+      - name: fribidi build
+        id: b_fribidi
+        if: steps.r_fribidi.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build fribidi
+
+      - name: fribidi cache save
+        if: always() && steps.b_fribidi.outcome == 'success' && hashFiles('.stack/pkg/fribidi/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/fribidi
+          key: stack-fribidi-${{ steps.keys.outputs.fribidi }}
+
+      - name: fribidi install
+        run: /bin/bash mac/deps/build-stack.sh install fribidi
+
+      - name: freetype cache restore
+        id: r_freetype
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/freetype
+          key: stack-freetype-${{ steps.keys.outputs.freetype }}
+
+      - name: freetype build
+        id: b_freetype
+        if: steps.r_freetype.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build freetype
+
+      - name: freetype cache save
+        if: always() && steps.b_freetype.outcome == 'success' && hashFiles('.stack/pkg/freetype/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/freetype
+          key: stack-freetype-${{ steps.keys.outputs.freetype }}
+
+      - name: freetype install
+        run: /bin/bash mac/deps/build-stack.sh install freetype
+
+      - name: harfbuzz cache restore
+        id: r_harfbuzz
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/harfbuzz
+          key: stack-harfbuzz-${{ steps.keys.outputs.harfbuzz }}
+
+      - name: harfbuzz build
+        id: b_harfbuzz
+        if: steps.r_harfbuzz.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build harfbuzz
+
+      - name: harfbuzz cache save
+        if: always() && steps.b_harfbuzz.outcome == 'success' && hashFiles('.stack/pkg/harfbuzz/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/harfbuzz
+          key: stack-harfbuzz-${{ steps.keys.outputs.harfbuzz }}
+
+      - name: harfbuzz install
+        run: /bin/bash mac/deps/build-stack.sh install harfbuzz
+
+      - name: libass cache restore
+        id: r_libass
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/libass
+          key: stack-libass-${{ steps.keys.outputs.libass }}
+
+      - name: libass build
+        id: b_libass
+        if: steps.r_libass.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build libass
+
+      - name: libass cache save
+        if: always() && steps.b_libass.outcome == 'success' && hashFiles('.stack/pkg/libass/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/libass
+          key: stack-libass-${{ steps.keys.outputs.libass }}
+
+      - name: libass install
+        run: /bin/bash mac/deps/build-stack.sh install libass
+
+      - name: libplacebo cache restore
+        id: r_libplacebo
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/libplacebo
+          key: stack-libplacebo-${{ steps.keys.outputs.libplacebo }}
+
+      - name: libplacebo build
+        id: b_libplacebo
+        if: steps.r_libplacebo.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build libplacebo
+
+      - name: libplacebo cache save
+        if: always() && steps.b_libplacebo.outcome == 'success' && hashFiles('.stack/pkg/libplacebo/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/libplacebo
+          key: stack-libplacebo-${{ steps.keys.outputs.libplacebo }}
+
+      - name: libplacebo install
+        run: /bin/bash mac/deps/build-stack.sh install libplacebo
+
+      - name: luajit cache restore
+        id: r_luajit
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/luajit
+          key: stack-luajit-${{ steps.keys.outputs.luajit }}
+
+      - name: luajit build
+        id: b_luajit
+        if: steps.r_luajit.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build luajit
+
+      - name: luajit cache save
+        if: always() && steps.b_luajit.outcome == 'success' && hashFiles('.stack/pkg/luajit/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/luajit
+          key: stack-luajit-${{ steps.keys.outputs.luajit }}
+
+      - name: luajit install
+        run: /bin/bash mac/deps/build-stack.sh install luajit
+
+      - name: mpv cache restore
+        id: r_mpv
+        uses: actions/cache/restore@v6
+        with:
+          path: .stack/pkg/mpv
+          key: stack-mpv-${{ steps.keys.outputs.mpv }}
+
+      - name: mpv build
+        id: b_mpv
+        if: steps.r_mpv.outputs.cache-hit != 'true'
+        run: /bin/bash mac/deps/build-stack.sh build mpv
+
+      - name: mpv cache save
+        if: always() && steps.b_mpv.outcome == 'success' && hashFiles('.stack/pkg/mpv/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .stack/pkg/mpv
+          key: stack-mpv-${{ steps.keys.outputs.mpv }}
+
+      - name: mpv install
+        run: /bin/bash mac/deps/build-stack.sh install mpv
+
+      - name: Check bundle (Mach-O arch, minos, linkage)
+        run: /bin/bash mac/ci/check-bundle.sh "$HOME/stack"
+
+      - name: Check features (decoders, videotoolbox, https, smoke play)
+        run: /bin/bash mac/ci/check-bundle.sh --features "$HOME/stack/bin/mpv"
+
+      - name: Package
+        run: |
+          /bin/bash mac/deps/build-stack.sh package
+          /bin/bash mac/deps/build-stack.sh sources
+          ls -l .stack/out
+
+      - name: Publish release stack-<pinhash>
+        run: |
+          tag="stack-${{ steps.keys.outputs.pinhash }}"
+          notes=$(/bin/bash mac/deps/build-stack.sh list)
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes "$notes"
+          gh release upload "$tag" .stack/out/*.tar.gz --clobber
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-logs
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            .stack/build/*/obj/meson-logs/meson-log.txt
+            .stack/build/*/obj/config.log
+            .stack/build/*/obj/ffbuild/config.log

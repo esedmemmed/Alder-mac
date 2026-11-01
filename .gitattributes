@@ -1,2 +1,5 @@
 # Shell scripts run on bash everywhere, including Git Bash on a CRLF checkout.
 *.sh text eol=lf
+
+# Binary media fixtures.
+*.mp4 binary
