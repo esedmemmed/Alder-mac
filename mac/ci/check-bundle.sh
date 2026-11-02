@@ -1,11 +1,15 @@
 #!/bin/bash
-# Gate for the mpv stack build (macOS 11.0 x86_64). Two modes:
+# Gate for the mpv stack build (macOS 11.0 x86_64) and for the app built on it. Three modes:
 #   check-bundle.sh <dir>...            every Mach-O in <dir>/bin/* and <dir>/lib/*.dylib must be x86_64, have
 #                                       minos <= 11.0 (vtool -show-build, compared as integers), and link only
 #                                       /usr/lib/ and /System/ besides its own id. Each file's result is printed.
 #   check-bundle.sh --features <mpv>    decoders h264/hevc, audio decoders dca/truehd, hwdec videotoolbox,
 #                                       https protocol, and a smoke play of mac/test/clip.mp4 with null outputs.
-# Exit 0 only when every assertion holds. Needs lipo, vtool, otool, file (Xcode command line tools).
+#   check-bundle.sh --app <X.app>       every Mach-O anywhere in the bundle passes the same test, except that
+#                                       @executable_path/... is also a legal dependency when the file it names exists
+#                                       under Contents/MacOS; codesign --verify --deep --strict passes; the licence
+#                                       texts and the source link file exist under Contents/Resources/licenses.
+# Exit 0 only when every assertion holds. Needs lipo, vtool, otool, file, codesign (Xcode command line tools).
 set -uo pipefail
 
 MAX_MINOS=110000   # 11.0 as major*10000 + minor*100 + patch
@@ -13,6 +17,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 CLIP="$HERE/../test/clip.mp4"
 failures=0
 checked=0
+APP_EXEC_DIR=""   # set by --app: what @executable_path stands for; empty keeps @executable_path illegal
 
 fail() { echo "FAIL: $*"; failures=$((failures + 1)); }
 
@@ -62,6 +67,15 @@ check_macho() {
     ndeps=$((ndeps + 1))
     case "$dep" in
       /usr/lib/* | /System/*) ;;
+      @executable_path/*)
+        if [ -z "$APP_EXEC_DIR" ]; then
+          fail "$f: dependency $dep outside /usr/lib and /System"
+          bad=1
+        elif [ ! -e "$APP_EXEC_DIR/${dep#@executable_path/}" ]; then
+          fail "$f: dependency $dep not found in the bundle"
+          bad=1
+        fi
+        ;;
       *)
         fail "$f: dependency $dep outside /usr/lib and /System"
         bad=1
@@ -90,6 +104,35 @@ check_dirs() {
     done
   done
   if [ "$checked" -eq 0 ]; then fail "no Mach-O file found under: $*"; fi
+}
+
+check_app() {
+  local app=$1 f lic
+  [ -d "$app" ] || { fail "$app: not a directory"; return; }
+  app=$(cd "$app" && pwd)
+  APP_EXEC_DIR="$app/Contents/MacOS"
+  while IFS= read -r f; do
+    case "$(file -b "$f")" in
+      *Mach-O*) check_macho "$f" ;;
+    esac
+  done <<EOF
+$(find "$app" -type f)
+EOF
+  if [ "$checked" -eq 0 ]; then fail "no Mach-O file found in $app"; fi
+
+  if codesign --verify --deep --strict "$app" 2>&1; then
+    echo "ok: codesign --verify --deep --strict"
+  else
+    fail "$app: codesign --verify --deep --strict failed"
+  fi
+
+  for lic in GPL-3.0.txt NOTICE.txt SOURCE.txt; do
+    if [ -s "$app/Contents/Resources/licenses/$lic" ]; then
+      echo "ok: licenses/$lic"
+    else
+      fail "$app: licenses/$lic missing or empty"
+    fi
+  done
 }
 
 # Run mpv with the given args, keep stdout+stderr in $out and its status in $rc.
@@ -139,7 +182,8 @@ check_features() {
 
 case "${1:-}" in
   --features) check_features "${2:?path to mpv}" ;;
-  '' | -*) echo "usage: check-bundle.sh <dir>... | --features <mpv>" >&2; exit 2 ;;
+  --app) check_app "${2:?path to X.app}" ;;
+  '' | -*) echo "usage: check-bundle.sh <dir>... | --features <mpv> | --app <X.app>" >&2; exit 2 ;;
   *) check_dirs "$@" ;;
 esac
 

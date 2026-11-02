@@ -1,0 +1,102 @@
+# Builds AlderProof.app (Swift AppKit shell, mac/shell) on the stack published by stack.yml, never the stack itself:
+# the stack tarball is downloaded from release stack-<pinhash>, and a missing release fails the run.
+# Checks the bundle, runs the selftest on the built app, packs AlderProof.dmg, repeats both checks on the mounted
+# image, then publishes a prerelease app-<short sha> with the dmg.
+name: app
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mac/shell/**'
+      - 'mac/web/**'
+      - 'mac/ci/**'
+      - 'mac/test/**'
+      - '.github/workflows/app.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  app:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Select Xcode 26.2 and assert the runner
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.2.app
+          xcodebuild -version
+          xcodebuild -version | grep -q '^Xcode 26\.2$'
+          uname -m
+          test "$(uname -m)" = x86_64
+          sw_vers
+          swiftc --version
+          /bin/bash --version | head -n 1
+
+      - name: Stack tag
+        id: stack
+        run: |
+          pin=$(/bin/bash mac/deps/build-stack.sh pinhash)
+          echo "pinhash=$pin" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Download and extract stack-<pinhash> (never built here)
+        run: |
+          tag="stack-${{ steps.stack.outputs.pinhash }}"
+          mkdir -p "$RUNNER_TEMP/stackdl"
+          if ! gh release download "$tag" --pattern "$tag.tar.gz" --dir "$RUNNER_TEMP/stackdl"; then
+            echo "::error::release $tag or its $tag.tar.gz is absent: run the stack workflow first, this one never builds the stack"
+            exit 1
+          fi
+          tar -xzf "$RUNNER_TEMP/stackdl/$tag.tar.gz" -C "$HOME"
+          ls -l "$HOME/stack/lib/libmpv.dylib" "$HOME/stack/include/mpv/client.h"
+
+      - name: Install dylibbundler
+        run: brew install dylibbundler
+
+      - name: Build AlderProof.app
+        env:
+          PINHASH: ${{ steps.stack.outputs.pinhash }}
+          COMMIT: ${{ github.sha }}
+        run: /bin/bash mac/shell/build-app.sh "$RUNNER_TEMP/out"
+
+      - name: Check app (Mach-O arch, minos, linkage, signature, licences)
+        run: /bin/bash mac/ci/check-bundle.sh --app "$RUNNER_TEMP/out/AlderProof.app"
+
+      - name: Selftest on the built app
+        run: |
+          rc=0
+          "$RUNNER_TEMP/out/AlderProof.app/Contents/MacOS/AlderProof" --selftest mac/test/clip.mp4 || rc=$?
+          echo "selftest exit code: $rc"
+          test "$rc" -eq 0
+
+      - name: Pack AlderProof.dmg
+        run: |
+          hdiutil create -volname AlderProof -srcfolder "$RUNNER_TEMP/out/AlderProof.app" -ov -format UDZO "$RUNNER_TEMP/AlderProof.dmg"
+          ls -l "$RUNNER_TEMP/AlderProof.dmg"
+
+      - name: Mount the dmg, check and selftest the mounted app
+        run: |
+          mnt="$RUNNER_TEMP/mnt"
+          mkdir -p "$mnt"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$RUNNER_TEMP/AlderProof.dmg"
+          trap 'hdiutil detach "$mnt" -force || true' EXIT
+          /bin/bash mac/ci/check-bundle.sh --app "$mnt/AlderProof.app"
+          rc=0
+          "$mnt/AlderProof.app/Contents/MacOS/AlderProof" --selftest mac/test/clip.mp4 || rc=$?
+          echo "selftest exit code (mounted dmg): $rc"
+          test "$rc" -eq 0
+
+      - name: Publish prerelease app-<short sha>
+        run: |
+          short="${GITHUB_SHA:0:7}"
+          tag="app-$short"
+          stack="stack-${{ steps.stack.outputs.pinhash }}"
+          notes="commit $GITHUB_SHA, stack $stack"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --prerelease --target "$GITHUB_SHA" --title "$tag" --notes "$notes"
+          gh release upload "$tag" "$RUNNER_TEMP/AlderProof.dmg" --clobber

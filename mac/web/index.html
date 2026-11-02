@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alder proof overlay</title>
+<style>
+  /* Transparent so the video view below shows through (the shell also clears drawsBackground). */
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { font: 13px -apple-system, "Segoe UI", sans-serif; color: #fff; }
+  /* Near-opaque panel, no backdrop-filter: T8 measures this bar's load, and blur would be a cost Alder may not pay. */
+  #bar { position: fixed; left: 16px; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 10px;
+         padding: 8px 12px; border-radius: 8px; background: rgba(20, 20, 24, 0.9); }
+  #bar button, #bar input[type=text], #probe-box button { font: inherit; color: #fff; background: #33343a;
+         border: 1px solid #55565c; border-radius: 4px; padding: 4px 8px; }
+  #seek { flex: 2; min-width: 80px; }
+  #link { flex: 1; min-width: 80px; }
+  #pos { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #status { position: fixed; left: 16px; bottom: 64px; padding: 4px 8px; border-radius: 4px;
+            background: rgba(20, 20, 24, 0.9); }
+  #status:empty { display: none; }
+  #status.error { background: rgba(150, 30, 30, 0.95); }
+  #mock-badge { position: fixed; right: 16px; top: 16px; padding: 2px 8px; border-radius: 4px; background: #a60; }
+  #probe-box { position: fixed; left: 16px; right: 16px; top: 16px; bottom: 112px; display: flex;
+               flex-direction: column; gap: 6px; }
+  #probe-out { flex: 1; font: 12px Menlo, Consolas, monospace; color: #fff; background: rgba(20, 20, 24, 0.95); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="mock-badge" hidden>MOCK</div>
+<div id="probe-box" hidden>
+  <textarea id="probe-out" readonly aria-label="Probe results"></textarea>
+  <div><button id="probe-copy" type="button">Copy</button></div>
+</div>
+<div id="status" role="status"></div>
+<div id="bar">
+  <button id="play" type="button">Pause</button>
+  <input id="seek" type="range" min="0" max="0" step="1" value="0" aria-label="Seek">
+  <span id="pos">0:00 / 0:00</span>
+  <input id="link" type="text" placeholder="Paste a link" autocomplete="off" spellcheck="false" aria-label="Link">
+  <button id="load" type="button">Load</button>
+  <button id="probe" type="button">Probe</button>
+</div>
+<script src="bridge.js"></script>
+<script src="probe.js"></script>
+<script>
+  // Native handler absent means a desktop browser: bring in the mock. The badge keeps a shell bug from passing as real.
+  function start() {
+    var el = function (id) { return document.getElementById(id); };
+    var bridge = AlderBridge.createBridge({ win: window, log: function (l) { console.log(l); } });
+    var pos = 0, duration = 0, paused = false, dragging = false;
+
+    function clock(s) {
+      s = Math.floor(s);
+      return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+    function setStatus(text, isError) {
+      el('status').textContent = text;
+      el('status').className = isError ? 'error' : '';
+    }
+
+    bridge.on('prop', function (e) {
+      if (e.name === 'time-pos') pos = typeof e.value === 'number' ? e.value : 0;
+      else if (e.name === 'duration') { duration = e.value || 0; el('seek').max = duration; }
+      else if (e.name === 'pause') { paused = !!e.value; el('play').textContent = paused ? 'Play' : 'Pause'; }
+    });
+    bridge.on('fileLoaded', function () { setStatus(''); });
+    bridge.on('endFile', function (e) {
+      if (e.reason === 'error') setStatus('Playback failed: ' + (e.message || 'error ' + e.error), true);
+      else if (e.reason === 'eof') setStatus('Finished');
+    });
+
+    // Position redraws at 4 Hz from the latest time-pos, whatever rate native sends: the live load T8 measures.
+    setInterval(function () {
+      el('pos').textContent = clock(pos) + ' / ' + clock(duration);
+      if (!dragging) el('seek').value = pos;
+    }, 250);
+
+    function report(err) { setStatus(err.message, true); }
+    el('play').onclick = function () { bridge.pause(!paused).catch(report); };
+    el('seek').oninput = function () { dragging = true; };
+    el('seek').onchange = function () {
+      dragging = false;
+      bridge.seek(Number(el('seek').value)).catch(report);
+    };
+    el('load').onclick = function () {
+      var link = el('link').value.trim();
+      el('link').value = ''; // the link stays nowhere on the page
+      bridge.load(link).catch(report);
+    };
+    el('probe').onclick = function () {
+      var box = el('probe-box');
+      box.hidden = !box.hidden;
+      if (box.hidden) return;
+      el('probe-out').value = 'Running...';
+      AlderProbe.runProbe(window).then(function (text) { el('probe-out').value = text; });
+    };
+    el('probe-copy').onclick = function () {
+      el('probe-out').select();
+      document.execCommand('copy');
+    };
+  }
+
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.alder) {
+    start();
+  } else {
+    var mockScript = document.createElement('script');
+    mockScript.src = 'mock-bridge.js';
+    mockScript.onload = function () {
+      window.alderMock = AlderMockBridge.installMock({ win: window });
+      document.getElementById('mock-badge').hidden = false;
+      start();
+    };
+    document.body.appendChild(mockScript);
+  }
+</script>
+</body>
+</html>
