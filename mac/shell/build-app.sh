@@ -78,6 +78,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Last step: any change after this invalidates the signature (ad-hoc, no identity).
+# Last step: any change after this invalidates the signature (ad-hoc, no identity). The libs first: install_name_tool
+# broke their signature and Contents/libs is not a standard nested-code folder, so --deep may not reach them.
+codesign --force -s - "$APP"/Contents/libs/*
 codesign --force --deep -s - "$APP"
 echo "built $APP"

@@ -5,7 +5,8 @@
 // render.h on MPV_RENDER_PARAM_ADVANCED_CONTROL: mpv_render_context_update must follow every update callback (done in
 // canDraw), and the render thread must not call other libmpv API or wait on one (draw calls none).
 import AppKit
-import OpenGL // not OpenGL.GL3: that module may not carry CGL, and gl.h has every call used here
+import OpenGL    // CGL
+import OpenGL.GL // gl.h is an explicit submodule: plain `import OpenGL` does not expose it (run 41389747748)
 import QuartzCore
 
 /// GL context, pixel format and the mpv render context, shared by the layer and its presentation copies.

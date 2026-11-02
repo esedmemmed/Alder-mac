@@ -60,6 +60,7 @@ jobs:
         run: brew install dylibbundler
 
       - name: Build AlderProof.app
+        id: build
         env:
           PINHASH: ${{ steps.stack.outputs.pinhash }}
           COMMIT: ${{ github.sha }}
@@ -68,7 +69,10 @@ jobs:
       - name: Check app (Mach-O arch, minos, linkage, signature, licences)
         run: /bin/bash mac/ci/check-bundle.sh --app "$RUNNER_TEMP/out/AlderProof.app"
 
+      # Once the build exists these steps run even after a red check, so one run shows every failure; publish still
+      # needs them all green.
       - name: Selftest on the built app
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           rc=0
           "$RUNNER_TEMP/out/AlderProof.app/Contents/MacOS/AlderProof" --selftest mac/test/clip.mp4 || rc=$?
@@ -76,11 +80,22 @@ jobs:
           test "$rc" -eq 0
 
       - name: Pack AlderProof.dmg
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
-          hdiutil create -volname AlderProof -srcfolder "$RUNNER_TEMP/out/AlderProof.app" -ov -format UDZO "$RUNNER_TEMP/AlderProof.dmg"
+          # A staging folder: -srcfolder copies a folder's contents, so the app sits at the volume root.
+          mkdir -p "$RUNNER_TEMP/dmgroot"
+          ditto "$RUNNER_TEMP/out/AlderProof.app" "$RUNNER_TEMP/dmgroot/AlderProof.app"
+          n=0
+          until hdiutil create -volname AlderProof -srcfolder "$RUNNER_TEMP/dmgroot" -ov -format UDZO "$RUNNER_TEMP/AlderProof.dmg"; do
+            n=$((n + 1))
+            test "$n" -lt 3
+            echo "hdiutil create failed, retry $n"
+            sleep 15
+          done
           ls -l "$RUNNER_TEMP/AlderProof.dmg"
 
       - name: Mount the dmg, check and selftest the mounted app
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           mnt="$RUNNER_TEMP/mnt"
           mkdir -p "$mnt"
