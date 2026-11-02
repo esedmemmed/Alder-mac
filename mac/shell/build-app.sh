@@ -39,6 +39,25 @@ swiftc -target x86_64-apple-macos11.0 -O -swift-version 5 \
 # libmpv and whatever of the stack it still links go to Contents/libs, install names rewritten to the bundle.
 dylibbundler -od -b -x "$BIN" -d "$APP/Contents/libs" -p @executable_path/../libs/ -s "$STACK/lib" -ns
 
+# dylibbundler renames every LC_RPATH to the -p path, so a file with two ends up with duplicates, and dyld refuses to
+# load those (run 41394752166). Nothing here is loaded through @rpath (check-bundle fails on that), so all of them go.
+rpaths_of() {
+  otool -l "$1" | awk '/cmd LC_RPATH/ { f = 1; next } f && /^ *path / { sub(/^ *path /, ""); sub(/ \(offset [0-9]+\)$/, ""); print; f = 0 }'
+}
+strip_rpaths() {
+  local n=0 p
+  while :; do
+    p=$(rpaths_of "$1" | sed -n 1p)
+    [ -n "$p" ] || return 0
+    install_name_tool -delete_rpath "$p" "$1"
+    n=$((n + 1))
+    [ "$n" -lt 20 ] || { echo "cannot strip LC_RPATH from $1" >&2; exit 1; }
+  done
+}
+for f in "$BIN" "$APP"/Contents/libs/*; do
+  strip_rpaths "$f"
+done
+
 # Resources: the page and its scripts (never test/), the measuring script.
 for f in index.html bridge.js probe.js mock-bridge.js; do
   cp "$ROOT/mac/web/$f" "$APP/Contents/Resources/web/$f"
