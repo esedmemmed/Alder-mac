@@ -9,6 +9,8 @@ Usage:  python air/run_from_windows.py        (see air/RECIPE.md, "The easy way"
 3. Serves the kit and a script on the LAN and prints the line to type on the Air. Every path needs the token.
 4. Collects status lines and the results archive, unpacks `results/` to .run/1.1/air-results/ with anything
    that looks like a link stripped, forgets the links and exits.
+With --links-only (T7's setup): steps 1 and 2 for SETUP_LABELS only, then the line typed on the Air writes
+~/AlderProof/links.txt and the kit, and nothing plays. Links go only to that file on the Air.
 Python standard library only. Test hooks: --host, --api, --cooldown, --end, --out.
 """
 import argparse
@@ -33,6 +35,7 @@ ROOT = os.path.dirname(HERE)
 API = "https://api.strem.io/api/"
 PORT = 8765
 LABELS = ["720p-h264", "1080p-h264", "1080p-hevc8", "1080p-hevc10", "4k-hevc", "4k-h264", "dts", "truehd"]
+SETUP_LABELS = ["1080p-h264", "4k-hevc"]  # what docs/air/webview-1.1.md plays
 LINK_RE = re.compile(r"(?i)\b(?:https?|ftp)://\S*")
 TOKEN_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/o/1/l/i: it is typed by hand
 
@@ -159,7 +162,7 @@ def link_answers(url):
         return False
 
 
-def find_links(api, key, say, movies=MOVIES, series=SERIES, deadline=MAX_SECONDS, check=link_answers):
+def find_links(api, key, say, movies=MOVIES, series=SERIES, deadline=MAX_SECONDS, check=link_answers, labels=LABELS):
     """{label: url}. Movies first; series only for labels still missing. Deterministic order and tie-break."""
     addons = stream_addons(api, key)
     say("%d stream add-on(s) in your collection" % len(addons))
@@ -170,7 +173,7 @@ def find_links(api, key, say, movies=MOVIES, series=SERIES, deadline=MAX_SECONDS
     def sweep(kind, ids):
         nonlocal order
         for i in range(0, len(ids), 4):
-            if time.time() - start > deadline or all(l in cands and len(cands[l]) >= 3 for l in LABELS):
+            if time.time() - start > deadline or all(l in cands and len(cands[l]) >= 3 for l in labels):
                 return
             batch = ids[i:i + 4]
             with concurrent.futures.ThreadPoolExecutor(4) as ex:
@@ -183,14 +186,14 @@ def find_links(api, key, say, movies=MOVIES, series=SERIES, deadline=MAX_SECONDS
                             remux = 1 if re.search(r"remux", text.lower()) else 0
                             cands.setdefault(label, []).append((rank, not explicit, remux, ai, order, url))
             say("looked at %d of %d titles; found %d of %d labels" % (
-                min(i + 4, len(ids)), len(ids), sum(1 for l in LABELS if l in cands), len(LABELS)))
+                min(i + 4, len(ids)), len(ids), sum(1 for l in labels if l in cands), len(labels)))
 
     if addons:
         sweep("movie", movies)
-        if any(l not in cands for l in LABELS):
+        if any(l not in cands for l in labels):
             sweep("series", series)
     chosen = {}
-    for label in LABELS:
+    for label in labels:
         for c in sorted(cands.get(label, []))[:5]:
             if check(c[-1]):
                 chosen[label] = c[-1]
@@ -267,14 +270,43 @@ main "$@"
 '''
 
 
-def air_script(base, labels):
-    return AIR_SCRIPT.replace("__BASE__", base).replace("__LABELS__", " ".join(labels))
+SETUP_SCRIPT = r'''#!/bin/bash
+# Alder Air setup: the kit and links.txt, nothing plays. Served by run_from_windows.py --links-only; bash 3.2.
+main() {
+base="__BASE__"
+labels="__LABELS__"
+dir=${ALDERPROOF_DIR:-$HOME/AlderProof}
+umask 077
+say() { curl -s -m 20 -X POST --data-binary "$1" "$base/status" >/dev/null 2>&1 </dev/null; echo "$1"; }
+mkdir -p "$dir/results" "$dir/logs" || { say "cannot make $dir"; return 1; }
+say "air connected: $(sw_vers -productVersion 2>/dev/null) $(sysctl -n hw.model 2>/dev/null)"
+curl -fsS -m 60 "$base/measure.sh" -o "$dir/measure.sh" </dev/null && curl -fsS -m 60 "$base/measure.lua" -o "$dir/measure.lua" </dev/null \
+    || { say "could not fetch the kit from Windows"; return 1; }
+tmp="$dir/.links"
+: > "$tmp"
+for label in $labels; do
+    link=$(curl -fsS -m 30 "$base/link/$label" </dev/null) || { rm -f "$tmp"; say "could not fetch the $label link"; return 1; }
+    printf '%s %s\n' "$label" "$link" >> "$tmp"
+done
+chmod 600 "$tmp" && mv -f "$tmp" "$dir/links.txt" || { rm -f "$tmp"; say "could not save links.txt"; return 1; }
+say "links saved for: $labels"
+curl -s -m 20 -X POST "$base/saved" >/dev/null 2>&1 </dev/null
+echo
+echo "Done. Go on to step 2 of the steps page."
+}
+main "$@"
+'''
+
+
+def air_script(base, labels, template=AIR_SCRIPT):
+    return template.replace("__BASE__", base).replace("__LABELS__", " ".join(labels))
 
 
 # ---------------------------------------------------------------- server and results
 class State:
-    def __init__(self, token, links, script_text, out_dir, say):
+    def __init__(self, token, links, script_text, out_dir, say, links_only=False):
         self.token, self.links, self.script, self.out_dir, self.say = token, links, script_text, out_dir, say
+        self.links_only = links_only
         self.contact = time.time()
         self.done = threading.Event()
         self.kept = None
@@ -342,6 +374,9 @@ def make_handler(st):
             if r == ["status"]:
                 st.say("Air: " + scrub(body.decode("utf-8", "replace"))[:300])
                 return self._send(200)
+            if r == ["saved"] and st.links_only:
+                st.done.set()
+                return self._send(200)
             if r == ["results"]:
                 try:
                     st.kept = keep_results(body, st.out_dir)
@@ -385,27 +420,32 @@ def main(argv=None, creds=None):
     ap.add_argument("--out", default=os.path.join(ROOT, ".run", "1.1", "air-results"))
     ap.add_argument("--idle", type=int, default=3 * 3600, help="give up after this many seconds without the Air")
     ap.add_argument("--port", type=int, default=PORT)
+    ap.add_argument("--links-only", action="store_true", help="only put the kit and links.txt on the Air; nothing plays")
     a = ap.parse_args(argv)
 
     def say(s):
         print(scrub(s), flush=True)
 
+    wanted = SETUP_LABELS if a.links_only else LABELS
     email, password = creds or (input("Stremio email: ").strip(), getpass.getpass("Stremio password (not shown): "))
     try:
         say("Logging in to Stremio...")
         key = login(a.api, email, password)
         say("Logged in. Looking for files; this takes a few minutes.")
-        links = find_links(a.api, key, say)
+        links = find_links(a.api, key, say, labels=wanted)
     except Exception as e:
         say("Stopped: %s. Nothing was started." % (scrub(e) if isinstance(e, RuntimeError) else type(e).__name__))
         return 1
     finally:
         password = key = None
-    found = [l for l in LABELS if l in links]
+    found = [l for l in wanted if l in links]
     say("Found: " + (", ".join(found) or "nothing"))
-    say("Missing: " + (", ".join(l for l in LABELS if l not in links) or "none"))
+    say("Missing: " + (", ".join(l for l in wanted if l not in links) or "none"))
     if not found:
         say("No playable file was found, so there is nothing to measure.")
+        return 1
+    if a.links_only and "1080p-h264" not in links:
+        say("The test needs a 1080p-h264 file and none was found. Nothing was put on the Air.")
         return 1
 
     host, others = (a.host, [a.host]) if a.host else lan_addresses()
@@ -425,11 +465,11 @@ def main(argv=None, creds=None):
         say("Could not open a port. Close other programs and run again.")
         return 1
     base = "http://%s:%d/%s" % (host, server.server_address[1], token)
-    script = air_script(base, found)
+    script = air_script(base, found, SETUP_SCRIPT if a.links_only else AIR_SCRIPT)
     if a.end:
         script = script.replace('main "$@"', 'MEASURE_END=%d; export MEASURE_END\nmain "$@"' % a.end)
     script = script.replace("cool=${ALDER_COOLDOWN:-180}", "cool=${ALDER_COOLDOWN:-%d}" % a.cooldown)
-    st = State(token, links, script, a.out, say)
+    st = State(token, links, script, a.out, say, links_only=a.links_only)
     holder["h"] = make_handler(st)
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
@@ -441,7 +481,10 @@ def main(argv=None, creds=None):
     if len(others) > 1:
         print("If that cannot connect, the Windows computer has other addresses: " + ", ".join(x for x in others if x != host))
     print("The Air must be on the same Wi-Fi. If Windows asks about the firewall, press Allow.")
-    print("The run takes about two hours. Leave both computers alone; this window ends by itself.")
+    if a.links_only:
+        print("This takes seconds and nothing plays. This window ends by itself.")
+    else:
+        print("The run takes about two hours. Leave both computers alone; this window ends by itself.")
     print()
     try:
         while not st.done.wait(5):
@@ -453,6 +496,9 @@ def main(argv=None, creds=None):
         server.server_close()
         st.links.clear()
         links.clear()
+    if a.links_only:
+        say("The links are saved on the Air and forgotten here.")
+        return 0
     files, removed = st.kept
     say("Results kept: %d file(s), %d link(s) stripped." % (files, removed))
     say("They are in " + os.path.abspath(a.out))

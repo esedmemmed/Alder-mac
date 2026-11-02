@@ -280,6 +280,48 @@ class Loopback(unittest.TestCase):
             f.close()
             shutil.rmtree(work, ignore_errors=True)
 
+    def test_links_only(self):
+        f = Fake(["Movie.2019.1080p.BluRay.x264-GRP.mkv", "Movie.2019.2160p.WEB.x265-GRP.mkv", "Movie.2019.720p.WEB.x264-GRP.mkv"])
+        work = tempfile.mkdtemp()
+        buf = hold_output()
+        rc = {}
+
+        def run():
+            with contextlib.redirect_stdout(buf):
+                rc["rc"] = rw.main(["--host", "127.0.0.1", "--api", f.api, "--port", "18775", "--idle", "60", "--links-only"],
+                                   creds=("a@b.c", "pw"))
+
+        t = threading.Thread(target=run)
+        t.start()
+        try:
+            line = None
+            for _ in range(300):
+                m = re.search(r"curl -sS (http://\S+) \| bash", buf.getvalue())
+                if m:
+                    line = m.group(1)
+                    break
+                time.sleep(0.1)
+            self.assertTrue(line, buf.getvalue())
+            air = os.path.join(work, "air")
+            p = subprocess.run(["bash", "-c", "curl -s %s | bash" % line], env=dict(os.environ, ALDERPROOF_DIR=air),
+                               capture_output=True, text=True, timeout=60)
+            t.join(30)
+            shown = buf.getvalue() + p.stdout
+            self.assertFalse(t.is_alive(), shown)
+            self.assertEqual(rc.get("rc"), 0, shown)
+            with open(os.path.join(air, "links.txt"), newline="") as lf:
+                rows = lf.read().splitlines()
+            self.assertEqual([r.split(" ")[0] for r in rows], ["1080p-h264", "4k-hevc"])
+            for r in rows:
+                self.assertRegex(r, r"^\S+ http://127\.0\.0\.1:\d+/clip\.mp4\?k=SECRET$")
+            for name in ("measure.sh", "measure.lua", "results", "logs"):
+                self.assertTrue(os.path.exists(os.path.join(air, name)), name)
+            self.assertFalse(os.path.exists(os.path.join(air, ".links")))
+            self.assertNotRegex(shown, r"clip\.mp4|SECRET")
+        finally:
+            f.close()
+            shutil.rmtree(work, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

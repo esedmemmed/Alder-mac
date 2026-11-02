@@ -6,14 +6,14 @@ Input for the 1.3 device profile. No links and no keys, ever. Status: not run ye
 
 "Terminal" means the Air's Terminal: Cmd-Space, type Terminal, press Return. Do it all in one sitting on the same Wi-Fi.
 
-1. Links. If `~/AlderProof/links.txt` or `~/AlderProof/measure.sh` is missing, follow `air/RECIPE.md` steps 1 and 3; only `1080p-h264` and `4k-hevc` are needed here. If the `1080p-h264` link has expired, replace it now and use that one link for all three runs.
+1. Links and kit, made for you. On Windows, in `D:\Adler\Macbook`, run `C:/Users/MSI/AppData/Local/Programs/Python/Python315/python.exe air/run_from_windows.py --links-only` and type your Stremio email and password. After a few minutes it prints one line starting `curl -sS http://`. Type that line in the Air's Terminal and press Return; if Windows asks about network access, allow it. It writes `~/AlderProof/links.txt` and the kit in seconds, and both windows say when it is done. If it finds no `4k-hevc` file, skip step 10. If it cannot connect, send what both windows show. Fallback by hand: `air/RECIPE.md` manual steps 1 and 3, only `1080p-h264` and `4k-hevc`. Do the rest of the steps soon after, since links expire.
 2. Download in Safari on the Air: https://github.com/esedmemmed/Alder-mac/releases/download/app-e585081/AlderProof.dmg
 3. Open the DMG and drag the app to Applications. Double-click it there. Expect it to be blocked; write down the exact message.
 4. Right-click the app, Open. If that does not offer Open: System Preferences, Security & Privacy, General, Open Anyway. Last resort, in Terminal, and say you used it: `xattr -dr com.apple.quarantine /Applications/AlderProof.app`
 
    If it will not start at all, run this in Terminal, send what it prints, and stop: `/Applications/AlderProof.app/Contents/MacOS/AlderProof 2>&1 | head -30`
 5. Paste-link play. With the app closed, in Terminal: `grep '^1080p-h264 ' ~/AlderProof/links.txt | cut -d' ' -f2- | pbcopy`. Double-click the app, click the link box and try Cmd-V; if nothing appears, right-click the box and choose Paste. Press Load and let it play for a minute. Note which paste worked. If neither did, say so, and start it instead with `/Applications/AlderProof.app/Contents/MacOS/AlderProof --url "$(grep '^1080p-h264 ' ~/AlderProof/links.txt | cut -d' ' -f2-)"`.
-6. Probe, while the app is open: click Probe, wait until "Running..." is replaced, click Copy. Then in Terminal: `pbpaste > ~/AlderProof/results/probe.txt; wc -l ~/AlderProof/results/probe.txt`. It should count more than one line. Quit the app with Cmd-Q and clear the clipboard with `echo | pbcopy`.
+6. Probe, while the app is open: click Probe, wait until "Running..." is replaced, click Copy. Then in Terminal: `mkdir -p ~/AlderProof/results; pbpaste > ~/AlderProof/results/probe.txt; wc -l ~/AlderProof/results/probe.txt`. It should count more than one line. Quit the app with Cmd-Q and clear the clipboard with `echo | pbcopy`.
 7. Fetch our CI mpv, in Terminal. The last command's first line should start `mpv v0.41.0`.
 
    ```
