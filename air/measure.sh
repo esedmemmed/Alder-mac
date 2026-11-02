@@ -65,7 +65,8 @@ case $mode in
         mpv=${MPV_BIN:-$dir/mpv/mpv.app/Contents/MacOS/mpv}
         [ -x "$mpv" ] || mpv=$(command -v mpv) || { echo "mpv not found; see RECIPE.md step 2" >&2; exit 69; }
         # shellcheck disable=SC2086  # MEASURE_EXTRA is deliberately split into arguments
-        "$mpv" --no-config --fs --vo=gpu --hwdec=videotoolbox --framedrop=vo --end="$end" \
+        # vo=libmpv is cocoa-cb, macOS mpv's only native video path; --vo=gpu gave sound only on the Air (T7.1.1).
+        "$mpv" --no-config --fs --vo=libmpv --hwdec=videotoolbox --framedrop=vo --end="$end" \
             --script="$script" --script-opts="$opts" ${MEASURE_EXTRA:-} "$link" > "$log" 2>&1
         ;;
     shell-*)
@@ -77,6 +78,9 @@ case $mode in
 esac
 rc=$?
 
+# The player log holds the link and is deleted by the helper: keep its warnings, links cut, beside the results.
+grep -iE 'error|fail|warn|vo/|hwdec|video|measure|lua|script' "$log" 2>/dev/null     | sed -E 's#[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]]*#[link]#g' | tail -n 60 > "$stem.diag.txt"
+[ -f "$results/$label.$mode.tsv" ] || echo "no tsv: the measure script did not load; see $stem.diag.txt" >&2
 if [ -f "$stem.summary.txt" ]; then
     cat "$stem.summary.txt"
     grep -E '^(product_version|model)=' "$stem.machine.txt"

@@ -9,8 +9,9 @@ Usage:  python air/run_from_windows.py        (see air/RECIPE.md, "The easy way"
 3. Serves the kit and a script on the LAN and prints the line to type on the Air. Every path needs the token.
 4. Collects status lines and the results archive, unpacks `results/` to .run/1.1/air-results/ with anything
    that looks like a link stripped, forgets the links and exits.
-With --links-only (T7's setup): steps 1 and 2 for SETUP_LABELS only, then the line typed on the Air writes
-~/AlderProof/links.txt and the kit, and nothing plays. Links go only to that file on the Air.
+With --shell-check (T7.1): steps 1 and 2 for SHELL_LABELS only, then the line typed on the Air plays
+docs/air/webview-1.1.md steps 7-11 in order, asking the add-on again for a fresh link before each play
+(GET /<token>/link/<label>?fresh=1), and sends the results back as above. Links stay in ~/AlderProof/{.link,.fresh,logs}.
 Python standard library only. Test hooks: --host, --api, --cooldown, --end, --out.
 """
 import argparse
@@ -35,7 +36,7 @@ ROOT = os.path.dirname(HERE)
 API = "https://api.strem.io/api/"
 PORT = 8765
 LABELS = ["720p-h264", "1080p-h264", "1080p-hevc8", "1080p-hevc10", "4k-hevc", "4k-h264", "dts", "truehd"]
-SETUP_LABELS = ["1080p-h264", "4k-hevc"]  # what docs/air/webview-1.1.md plays
+SHELL_LABELS = ["1080p-h264", "4k-hevc"]  # what docs/air/webview-1.1.md plays
 LINK_RE = re.compile(r"(?i)\b(?:https?|ftp)://\S*")
 TOKEN_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/o/1/l/i: it is typed by hand
 
@@ -162,8 +163,10 @@ def link_answers(url):
         return False
 
 
-def find_links(api, key, say, movies=MOVIES, series=SERIES, deadline=MAX_SECONDS, check=link_answers, labels=LABELS):
-    """{label: url}. Movies first; series only for labels still missing. Deterministic order and tie-break."""
+def find_links(api, key, say, movies=MOVIES, series=SERIES, deadline=MAX_SECONDS, check=link_answers, labels=LABELS,
+               sources=None):
+    """{label: url}. Movies first; series only for labels still missing. Deterministic order and tie-break.
+    When `sources` is a dict it gets {label: (addon base, kind, vid, release text)} for each chosen url."""
     addons = stream_addons(api, key)
     say("%d stream add-on(s) in your collection" % len(addons))
     start = time.time()
@@ -177,14 +180,14 @@ def find_links(api, key, say, movies=MOVIES, series=SERIES, deadline=MAX_SECONDS
                 return
             batch = ids[i:i + 4]
             with concurrent.futures.ThreadPoolExecutor(4) as ex:
-                jobs = [(ai, vid, ex.submit(ask_addon, base, kind, vid)) for vid in batch for ai, base in enumerate(addons)]
-                for ai, vid, f in jobs:  # collected in submission order, not completion order
+                jobs = [(ai, vid, base, ex.submit(ask_addon, base, kind, vid)) for vid in batch for ai, base in enumerate(addons)]
+                for ai, vid, base, f in jobs:  # collected in submission order, not completion order
                     for text, url in f.result():
                         for label, explicit in classify(text).items():
                             order += 1
                             rank = audio_rank(text) if label in ("dts", "truehd") else 0
                             remux = 1 if re.search(r"remux", text.lower()) else 0
-                            cands.setdefault(label, []).append((rank, not explicit, remux, ai, order, url))
+                            cands.setdefault(label, []).append((rank, not explicit, remux, ai, order, url, (base, kind, vid, text)))
             say("looked at %d of %d titles; found %d of %d labels" % (
                 min(i + 4, len(ids)), len(ids), sum(1 for l in labels if l in cands), len(labels)))
 
@@ -195,8 +198,10 @@ def find_links(api, key, say, movies=MOVIES, series=SERIES, deadline=MAX_SECONDS
     chosen = {}
     for label in labels:
         for c in sorted(cands.get(label, []))[:5]:
-            if check(c[-1]):
-                chosen[label] = c[-1]
+            if check(c[-2]):
+                chosen[label] = c[-2]
+                if sources is not None:
+                    sources[label] = c[-1]
                 break
     return chosen
 
@@ -270,29 +275,112 @@ main "$@"
 '''
 
 
-SETUP_SCRIPT = r'''#!/bin/bash
-# Alder Air setup: the kit and links.txt, nothing plays. Served by run_from_windows.py --links-only; bash 3.2.
+SHELL_SCRIPT = r'''#!/bin/bash
+# Alder Air shell check (docs/air/webview-1.1.md steps 7-11). Served by run_from_windows.py --shell-check; bash 3.2.
 main() {
 base="__BASE__"
 labels="__LABELS__"
 dir=${ALDERPROOF_DIR:-$HOME/AlderProof}
+cool=${ALDER_COOLDOWN:-180}
+ci=${CI_MPV_BIN:-$dir/ci-mpv/mpv}
+ALDERPROOF_BIN=${ALDERPROOF_BIN:-/Applications/AlderProof.app/Contents/MacOS/AlderProof}; export ALDERPROOF_BIN
 umask 077
 say() { curl -s -m 20 -X POST --data-binary "$1" "$base/status" >/dev/null 2>&1 </dev/null; echo "$1"; }
-mkdir -p "$dir/results" "$dir/logs" || { say "cannot make $dir"; return 1; }
-say "air connected: $(sw_vers -productVersion 2>/dev/null) $(sysctl -n hw.model 2>/dev/null)"
+cleanup() { rm -rf "$dir/.link" "$dir/.fresh" "$dir/.stored" "$dir/logs" "$dir/results.tgz"; [ -n "${cafpid:-}" ] && kill "$cafpid" 2>/dev/null; }
+trap cleanup EXIT
+mkdir -p "$dir/logs" || { say "cannot make $dir"; return 1; }
+if command -v caffeinate >/dev/null 2>&1; then caffeinate -disu -w $$ & cafpid=$!; fi
+if command -v pmset >/dev/null 2>&1 && pmset -g ps 2>/dev/null | grep -q "Battery Power"; then
+    say "warning: the Air is on battery; plug in the charger (going on anyway)"
+fi
+say "air started: $(sw_vers -productVersion 2>/dev/null) $(sysctl -n hw.model 2>/dev/null)"
 curl -fsS -m 60 "$base/measure.sh" -o "$dir/measure.sh" </dev/null && curl -fsS -m 60 "$base/measure.lua" -o "$dir/measure.lua" </dev/null \
-    || { say "could not fetch the kit from Windows"; return 1; }
-tmp="$dir/.links"
-: > "$tmp"
-for label in $labels; do
-    link=$(curl -fsS -m 30 "$base/link/$label" </dev/null) || { rm -f "$tmp"; say "could not fetch the $label link"; return 1; }
-    printf '%s %s\n' "$label" "$link" >> "$tmp"
-done
-chmod 600 "$tmp" && mv -f "$tmp" "$dir/links.txt" || { rm -f "$tmp"; say "could not save links.txt"; return 1; }
-say "links saved for: $labels"
-curl -s -m 20 -X POST "$base/saved" >/dev/null 2>&1 </dev/null
+    || { say "could not fetch the kit from Windows"; echo "Could not reach the Windows computer. Same Wi-Fi? Firewall prompt allowed?"; return 1; }
+say "kit fetched"
+
+if [ ! -x "$ALDERPROOF_BIN" ]; then
+    say "the AlderProof app is missing at $ALDERPROOF_BIN"
+    echo "AlderProof is not in Applications. Install it (steps 2 to 4 of the steps page), then run this line again."
+    return 1
+fi
+if [ ! -x "$ci" ]; then
+    say "fetching ci-mpv"
+    mkdir -p "$dir/ci-mpv"
+    ( cd "$dir/ci-mpv" && curl -fsSL -m 900 https://github.com/esedmemmed/Alder-mac/releases/download/stack-158edb7e678b/mpv-cli-158edb7e678b.tar.gz </dev/null | tar xz ) >/dev/null 2>&1
+fi
+if [ ! -x "$ci" ]; then
+    say "ci-mpv could not be fetched"
+    echo "Could not get ci-mpv, so nothing was measured. The status was sent."
+    return 1
+fi
+say "app and ci-mpv ready"
+
+# Strip anything URL-like from text before it is sent.
+nolink() { sed -E 's#[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]]*#[link]#g'; }
+# What a download of the first KB of $1 does, without the address.
+probe() {
+    r=$(curl -sS -L -r 0-1023 -o /dev/null -m 20 -w '%{http_code} redirects=%{num_redirects} type=%{content_type}' "$1" 2>/dev/null </dev/null)
+    echo "$r curl_exit=$?" | nolink
+}
+first=1
+# prep <label> <tag>: stored and fresh link into .link/.fresh, one diagnosis line, the fresh link left in .link.
+prep() {
+    if ! curl -fsS -m 30 "$base/link/$1" -o "$dir/.stored" </dev/null 2>/dev/null; then say "$2: no link from Windows, skipped"; return 1; fi
+    if ! curl -fsS -m 60 "$base/link/$1?fresh=1" -o "$dir/.fresh" </dev/null 2>/dev/null; then cp "$dir/.stored" "$dir/.fresh"; fi
+    if cmp -s "$dir/.stored" "$dir/.fresh"; then same=yes; else same=no; fi
+    say "$2: stored link: $(probe "$(cat "$dir/.stored")"); fresh link: $(probe "$(cat "$dir/.fresh")"); fresh same as stored: $same"
+    mv -f "$dir/.fresh" "$dir/.link"; rm -f "$dir/.stored"
+}
+rest() { if [ $first -eq 0 ]; then say "cooling for $cool seconds"; sleep "$cool"; fi; first=0; }
+# why <logfile> <rc>: what to tell about a failed play, no links.
+why() {
+    say "$tag: failed (exit $2). Player log, error-like lines: $( [ -f "$1" ] && grep -iE 'error|fail|http|403|404|refused|end-file' "$1" | tail -n 5 | cut -c1-200 | nolink | tr '\n' '|')"
+}
+# play <label> <mode> <tag> <end> <mpv> <extra>
+play() {
+    rest
+    prep "$1" "$3" || return 0
+    say "$3: playing"
+    out=$(MEASURE_END="$4" MPV_BIN="$5" MEASURE_EXTRA="$6" bash "$dir/measure.sh" "$1" "$(cat "$dir/.link")" "$2" </dev/null 2>&1); rc=$?
+    rm -f "$dir/.link"
+    tag=$3
+    if [ $rc -eq 0 ]; then say "$3: done: $(echo "$out" | head -n 1)"; else why "$dir/logs/$1.$2.player.log" "$rc"; fi
+}
+
+end=${MEASURE_END:-600}
+heavy=${MEASURE_END:-120}
+bare_extra=${MEASURE_EXTRA:---no-fs --geometry=1280x720}
+[ -d "$dir/results" ] && mv "$dir/results" "$dir/results.old.$(date +%s)"
+play 1080p-h264 bare "1080p-h264 bare" "$end" "$ci" "$bare_extra"
+play 1080p-h264 shell-hidden "1080p-h264 shell-hidden" "$end" "" ""
+play 1080p-h264 shell-shown "1080p-h264 shell-shown" "$end" "" ""
+case " $labels " in
+    *" 4k-hevc "*) play 4k-hevc shell-shown "4k-hevc shell-shown" "$heavy" "" "" ;;
+    *) say "4k-hevc: no link was found, skipped" ;;
+esac
+
+if grep -ho 'hwdec=[^ ]*' "$dir"/results/1080p-h264.shell-*.summary.txt 2>/dev/null | grep -qv '^hwdec=videotoolbox'; then
+    rest
+    if prep 1080p-h264 "1080p-h264 videotoolbox-copy"; then
+        say "1080p-h264 videotoolbox-copy: playing"
+        "$ALDERPROOF_BIN" --url "$(cat "$dir/.link")" --overlay shown --end "$end" --hwdec videotoolbox-copy --measure "$dir/measure.lua" --label 1080p-h264-copy > "$dir/logs/copy.player.log" 2>&1
+        rc=$?
+        rm -f "$dir/.link"
+        tag="1080p-h264 videotoolbox-copy"
+        if [ $rc -eq 0 ]; then say "$tag: done"; else why "$dir/logs/copy.player.log" "$rc"; fi
+    fi
+fi
+
+say "sending results"
+if [ -d "$dir/results" ] && (cd "$dir" && tar czf results.tgz results) && \
+   curl -fsS -m 300 --data-binary @"$dir/results.tgz" "$base/results" >/dev/null </dev/null; then
+    say "results sent"
+else
+    say "results could not be sent; they stay in $dir/results"
+fi
+cleanup
 echo
-echo "Done. Go on to step 2 of the steps page."
+echo "Finished. The links are deleted from this Air. You can close this window."
 }
 main "$@"
 '''
@@ -304,12 +392,27 @@ def air_script(base, labels, template=AIR_SCRIPT):
 
 # ---------------------------------------------------------------- server and results
 class State:
-    def __init__(self, token, links, script_text, out_dir, say, links_only=False):
+    def __init__(self, token, links, script_text, out_dir, say, sources=None, ask=ask_addon):
         self.token, self.links, self.script, self.out_dir, self.say = token, links, script_text, out_dir, say
-        self.links_only = links_only
+        self.sources = sources if sources is not None else {}
+        self.ask = ask
         self.contact = time.time()
         self.done = threading.Event()
         self.kept = None
+
+    def fresh(self, label):
+        """The url for `label` asked of its add-on again now: the one whose release text matches, else the stored one.
+        Logs only whether that worked, never a link."""
+        url, got = self.links[label], False
+        src = self.sources.get(label)
+        if src:
+            base, kind, vid, text = src
+            for t, u in self.ask(base, kind, vid):
+                if t == text:
+                    url, got = u, True
+                    break
+        self.say("resolved fresh: " + ("yes" if got else "no"))
+        return url
 
 
 def keep_results(data, out_dir):
@@ -362,6 +465,8 @@ def make_handler(st):
                 with open(os.path.join(HERE, r[0]), "rb") as f:
                     return self._send(200, f.read())
             if len(r) == 2 and r[0] == "link" and r[1] in st.links:
+                if "fresh=1" in self.path.partition("?")[2].split("&"):
+                    return self._send(200, st.fresh(r[1]).encode())
                 return self._send(200, st.links[r[1]].encode())
             self._send(404)
 
@@ -373,9 +478,6 @@ def make_handler(st):
             body = self.rfile.read(n)
             if r == ["status"]:
                 st.say("Air: " + scrub(body.decode("utf-8", "replace"))[:300])
-                return self._send(200)
-            if r == ["saved"] and st.links_only:
-                st.done.set()
                 return self._send(200)
             if r == ["results"]:
                 try:
@@ -420,19 +522,20 @@ def main(argv=None, creds=None):
     ap.add_argument("--out", default=os.path.join(ROOT, ".run", "1.1", "air-results"))
     ap.add_argument("--idle", type=int, default=3 * 3600, help="give up after this many seconds without the Air")
     ap.add_argument("--port", type=int, default=PORT)
-    ap.add_argument("--links-only", action="store_true", help="only put the kit and links.txt on the Air; nothing plays")
+    ap.add_argument("--shell-check", action="store_true", help="T7.1: the AlderProof shell check (webview-1.1 steps 7-11)")
     a = ap.parse_args(argv)
 
     def say(s):
         print(scrub(s), flush=True)
 
-    wanted = SETUP_LABELS if a.links_only else LABELS
+    wanted = SHELL_LABELS if a.shell_check else LABELS
     email, password = creds or (input("Stremio email: ").strip(), getpass.getpass("Stremio password (not shown): "))
     try:
         say("Logging in to Stremio...")
         key = login(a.api, email, password)
         say("Logged in. Looking for files; this takes a few minutes.")
-        links = find_links(a.api, key, say, labels=wanted)
+        sources = {}
+        links = find_links(a.api, key, say, labels=wanted, sources=sources)
     except Exception as e:
         say("Stopped: %s. Nothing was started." % (scrub(e) if isinstance(e, RuntimeError) else type(e).__name__))
         return 1
@@ -444,8 +547,8 @@ def main(argv=None, creds=None):
     if not found:
         say("No playable file was found, so there is nothing to measure.")
         return 1
-    if a.links_only and "1080p-h264" not in links:
-        say("The test needs a 1080p-h264 file and none was found. Nothing was put on the Air.")
+    if a.shell_check and "1080p-h264" not in links:
+        say("The check needs a 1080p-h264 file and none was found. Nothing was started.")
         return 1
 
     host, others = (a.host, [a.host]) if a.host else lan_addresses()
@@ -465,11 +568,11 @@ def main(argv=None, creds=None):
         say("Could not open a port. Close other programs and run again.")
         return 1
     base = "http://%s:%d/%s" % (host, server.server_address[1], token)
-    script = air_script(base, found, SETUP_SCRIPT if a.links_only else AIR_SCRIPT)
+    script = air_script(base, found, SHELL_SCRIPT if a.shell_check else AIR_SCRIPT)
     if a.end:
         script = script.replace('main "$@"', 'MEASURE_END=%d; export MEASURE_END\nmain "$@"' % a.end)
     script = script.replace("cool=${ALDER_COOLDOWN:-180}", "cool=${ALDER_COOLDOWN:-%d}" % a.cooldown)
-    st = State(token, links, script, a.out, say, links_only=a.links_only)
+    st = State(token, links, script, a.out, say, sources=sources)
     holder["h"] = make_handler(st)
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
@@ -481,8 +584,8 @@ def main(argv=None, creds=None):
     if len(others) > 1:
         print("If that cannot connect, the Windows computer has other addresses: " + ", ".join(x for x in others if x != host))
     print("The Air must be on the same Wi-Fi. If Windows asks about the firewall, press Allow.")
-    if a.links_only:
-        print("This takes seconds and nothing plays. This window ends by itself.")
+    if a.shell_check:
+        print("The check takes about an hour. Leave both computers alone; this window ends by itself.")
     else:
         print("The run takes about two hours. Leave both computers alone; this window ends by itself.")
     print()
@@ -496,9 +599,7 @@ def main(argv=None, creds=None):
         server.server_close()
         st.links.clear()
         links.clear()
-    if a.links_only:
-        say("The links are saved on the Air and forgotten here.")
-        return 0
+        sources.clear()
     files, removed = st.kept
     say("Results kept: %d file(s), %d link(s) stripped." % (files, removed))
     say("They are in " + os.path.abspath(a.out))

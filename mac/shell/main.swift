@@ -29,7 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let script = opts.measureScript, let label = opts.label {
             let base = ProcessInfo.processInfo.environment["ALDERPROOF_DIR"] ?? (NSHomeDirectory() + "/AlderProof")
             let mode = opts.overlayShown ? "shell-shown" : "shell-hidden"
-            mpvOptions.append(("script", script))
+            // "scripts" is the list option itself ("script" is only a CLI alias); terminal+warn put a script's
+            // load errors in the caller's log, which libmpv otherwise swallows (T7.1.1: no tsv, no reason).
+            mpvOptions.append(("scripts", script))
+            mpvOptions.append(("terminal", "yes"))
+            mpvOptions.append(("msg-level", "all=warn"))
             mpvOptions.append(("script-opts", "measure-label=\(label),measure-mode=\(mode),measure-dir=\(base)/results"))
         }
         guard let player = Player(options: mpvOptions) else { die("mpv failed to start") }

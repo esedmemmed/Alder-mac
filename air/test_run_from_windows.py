@@ -81,8 +81,9 @@ class Scrub(unittest.TestCase):
 
 class Fake:
     """A fake Stremio API, one stream add-on and a video, all on loopback."""
-    def __init__(self, streams_by_name):
+    def __init__(self, streams_by_name, rotate=False):
         outer = self
+        self.asks = 0  # with rotate, every ask of the add-on returns a new url
 
         class H(http.server.BaseHTTPRequestHandler):
             def log_message(self, *a):
@@ -103,7 +104,9 @@ class Fake:
 
             def do_GET(self):
                 if self.path.startswith("/addon/stream/movie/"):
-                    streams = [{"name": n, "title": "x", "url": outer.base + "/clip.mp4?k=SECRET"} for n in streams_by_name]
+                    outer.asks += 1
+                    extra = "&n=%d" % outer.asks if rotate else ""
+                    streams = [{"name": n, "title": "x", "url": outer.base + "/clip.mp4?k=SECRET" + extra} for n in streams_by_name]
                     return self._send(200, json.dumps({"streams": streams}).encode())
                 if self.path.startswith("/clip.mp4") and os.path.exists(CLIP):
                     data = open(CLIP, "rb").read()
@@ -228,6 +231,38 @@ class FindLinks(unittest.TestCase):
         self.assertEqual(links, {})
 
 
+class FreshLink(unittest.TestCase):
+    def test_fresh_asks_the_addon_again(self):
+        f = Fake(["Movie.2019.1080p.BluRay.x264-GRP.mkv"], rotate=True)
+        out = tempfile.mkdtemp()
+        lines = []
+        srv = None
+        try:
+            sources = {}
+            links = rw.find_links(f.api, "KEY", lambda s: None, movies=["tt1"], series=[], check=lambda u: True,
+                                  labels=["1080p-h264", "4k-hevc"], sources=sources)
+            self.assertEqual(sorted(links), ["1080p-h264"])
+            self.assertEqual(sources["1080p-h264"][1:3], ("movie", "tt1"))
+            st = rw.State("k7m2q", dict(links, **{"4k-hevc": "http://x.example/stored"}), "SCRIPT", out, lines.append, sources=sources)
+            srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), rw.make_handler(st))
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            base = "http://127.0.0.1:%d/k7m2q/link/" % srv.server_address[1]
+            stored = fetch(base + "1080p-h264")[1]
+            fresh = fetch(base + "1080p-h264?fresh=1")[1]
+            self.assertEqual(stored, links["1080p-h264"].encode())
+            self.assertNotEqual(fresh, stored)
+            self.assertIn(b"clip.mp4?k=SECRET&n=", fresh)
+            self.assertEqual(fetch(base + "4k-hevc?fresh=1"), (200, b"http://x.example/stored"))  # no source: the stored one
+            self.assertEqual(lines, ["resolved fresh: yes", "resolved fresh: no"])
+            self.assertEqual(fetch(base + "wrong?fresh=1")[0], 404)
+        finally:
+            if srv:
+                srv.shutdown()
+                srv.server_close()
+            f.close()
+            shutil.rmtree(out, ignore_errors=True)
+
+
 def hold_output():
     return io.StringIO()
 
@@ -266,7 +301,9 @@ class Loopback(unittest.TestCase):
             self.assertFalse(t.is_alive(), shown)
             self.assertEqual(rc.get("rc"), 0, shown)
             self.assertIn("Finished", p.stdout)
-            self.assertEqual(sorted(os.listdir(out))[:1], ["1080p-h264.bare.machine.txt"], os.listdir(out))
+            self.assertIn("1080p-h264.bare.machine.txt", os.listdir(out))
+            # The player log is deleted on the Air; its link-free warnings come back as diag.txt (T7.1.1).
+            self.assertIn("1080p-h264.bare.diag.txt", os.listdir(out))
             self.assertTrue(os.path.exists(os.path.join(out, "720p-h264.bare.summary.txt")))
             for root, _, names in os.walk(out):
                 for n in names:
@@ -280,16 +317,19 @@ class Loopback(unittest.TestCase):
             f.close()
             shutil.rmtree(work, ignore_errors=True)
 
-    def test_links_only(self):
-        f = Fake(["Movie.2019.1080p.BluRay.x264-GRP.mkv", "Movie.2019.2160p.WEB.x265-GRP.mkv", "Movie.2019.720p.WEB.x264-GRP.mkv"])
+    def test_shell_check(self):
+        f = Fake(["Movie.2019.1080p.BluRay.x264-GRP.mkv", "Movie.2019.2160p.WEB.x265-GRP.mkv", "Movie.2019.720p.WEB.x264-GRP.mkv"],
+                 rotate=True)
         work = tempfile.mkdtemp()
+        out = os.path.join(work, "air-results")
+        air = os.path.join(work, "air")
         buf = hold_output()
         rc = {}
 
         def run():
             with contextlib.redirect_stdout(buf):
-                rc["rc"] = rw.main(["--host", "127.0.0.1", "--api", f.api, "--port", "18775", "--idle", "60", "--links-only"],
-                                   creds=("a@b.c", "pw"))
+                rc["rc"] = rw.main(["--host", "127.0.0.1", "--api", f.api, "--cooldown", "1", "--end", "3", "--out", out,
+                                    "--port", "18775", "--idle", "120", "--shell-check"], creds=("a@b.c", "pw"))
 
         t = threading.Thread(target=run)
         t.start()
@@ -302,22 +342,38 @@ class Loopback(unittest.TestCase):
                     break
                 time.sleep(0.1)
             self.assertTrue(line, buf.getvalue())
-            air = os.path.join(work, "air")
-            p = subprocess.run(["bash", "-c", "curl -s %s | bash" % line], env=dict(os.environ, ALDERPROOF_DIR=air),
-                               capture_output=True, text=True, timeout=60)
+            # A stand-in for the AlderProof shell: the same mpv, the same measure script, the shell's arguments.
+            stub = os.path.join(work, "AlderProof")
+            with open(stub, "w", newline="\n") as sf:
+                sf.write(r'''#!/bin/bash
+while [ $# -gt 0 ]; do case $1 in --url) url=$2; shift 2;; --overlay) ov=$2; shift 2;; --end) end=$2; shift 2;;
+  --measure) ms=$2; shift 2;; --label) lb=$2; shift 2;; *) shift;; esac; done
+res=$(cygpath -m "$ALDERPROOF_DIR/results"); ms=$(cygpath -m "$ms")
+exec "$STUB_MPV" --no-config --hwdec=no --vo=null --ao=null --end="$end" --script="$ms" --script-opts="measure-label=$lb,measure-mode=shell-$ov,measure-dir=$res" "$url"
+''')
+            os.chmod(stub, 0o755)
+            env = dict(os.environ, ALDERPROOF_DIR=air, ALDERPROOF_BIN=stub, STUB_MPV=MPV, CI_MPV_BIN=MPV,
+                       MEASURE_EXTRA="--no-fs --hwdec=no --vo=null --ao=null")
+            p = subprocess.run(["bash", "-c", "curl -s %s | bash" % line], env=env, capture_output=True, text=True, timeout=300)
             t.join(30)
             shown = buf.getvalue() + p.stdout
             self.assertFalse(t.is_alive(), shown)
             self.assertEqual(rc.get("rc"), 0, shown)
-            with open(os.path.join(air, "links.txt"), newline="") as lf:
-                rows = lf.read().splitlines()
-            self.assertEqual([r.split(" ")[0] for r in rows], ["1080p-h264", "4k-hevc"])
-            for r in rows:
-                self.assertRegex(r, r"^\S+ http://127\.0\.0\.1:\d+/clip\.mp4\?k=SECRET$")
-            for name in ("measure.sh", "measure.lua", "results", "logs"):
-                self.assertTrue(os.path.exists(os.path.join(air, name)), name)
-            self.assertFalse(os.path.exists(os.path.join(air, ".links")))
-            self.assertNotRegex(shown, r"clip\.mp4|SECRET")
+            self.assertIn("Finished", p.stdout)
+            self.assertEqual(shown.count("resolved fresh: yes"), 5, shown)  # four plays and the videotoolbox-copy run
+            self.assertIn("fresh same as stored: no", shown)
+            self.assertIn("redirects=0", shown)
+            self.assertIn("videotoolbox-copy: done", shown)
+            kept = sorted(os.listdir(out))
+            for stem in ("1080p-h264.bare", "1080p-h264.shell-hidden", "1080p-h264.shell-shown", "4k-hevc.shell-shown",
+                         "1080p-h264-copy.shell-shown"):
+                self.assertIn(stem + ".summary.txt", kept)
+            for root, _, names in os.walk(out):
+                for n in names:
+                    self.assertNotRegex(open(os.path.join(root, n)).read(), r"https?://|SECRET")
+            self.assertNotRegex(shown, r"https?://127\.0\.0\.1:\d+/clip|clip\.mp4|SECRET")
+            for name in ("links.txt", ".link", ".fresh", ".stored", "logs"):
+                self.assertFalse(os.path.exists(os.path.join(air, name)), name)
         finally:
             f.close()
             shutil.rmtree(work, ignore_errors=True)

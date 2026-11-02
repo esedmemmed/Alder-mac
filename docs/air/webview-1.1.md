@@ -2,48 +2,20 @@
 
 Input for the 1.3 device profile. No links and no keys, ever. Status: not run yet; every slot below is waiting for the Air.
 
-## Steps (about 50 minutes, plugged in, lid open, every other app quit)
+## Steps (about 50 minutes, plugged in, lid open, every other app quit, same Wi-Fi)
 
-"Terminal" means the Air's Terminal: Cmd-Space, type Terminal, press Return. Do it all in one sitting on the same Wi-Fi.
+AlderProof must already be in Applications (it is, from the first try). You never handle a link: Windows finds them, and the Air asks for each one fresh just before it plays.
 
-1. Links and kit, made for you. On Windows, in `D:\Adler\Macbook`, run `C:/Users/MSI/AppData/Local/Programs/Python/Python315/python.exe air/run_from_windows.py --links-only` and type your Stremio email and password. After a few minutes it prints one line starting `curl -sS http://`. Type that line in the Air's Terminal and press Return; if Windows asks about network access, allow it. It writes `~/AlderProof/links.txt` and the kit in seconds, and both windows say when it is done. If it finds no `4k-hevc` file, skip step 10. If it cannot connect, send what both windows show. Fallback by hand: `air/RECIPE.md` manual steps 1 and 3, only `1080p-h264` and `4k-hevc`. Do the rest of the steps soon after, since links expire.
-2. Download in Safari on the Air: https://github.com/esedmemmed/Alder-mac/releases/download/app-e585081/AlderProof.dmg
-3. Open the DMG and drag the app to Applications. Double-click it there. Expect it to be blocked; write down the exact message.
-4. Right-click the app, Open. If that does not offer Open: System Preferences, Security & Privacy, General, Open Anyway. Last resort, in Terminal, and say you used it: `xattr -dr com.apple.quarantine /Applications/AlderProof.app`
+1. On Windows, in `D:\Adler\Macbook`, run `C:/Users/MSI/AppData/Local/Programs/Python/Python315/python.exe air/run_from_windows.py --shell-check` and type your Stremio email and password. After a few minutes it prints one line starting `curl -sS http://`.
+2. On the Air: Cmd-Space, type Terminal, press Return, type that line, press Return. If Windows asks about network access, allow it. Then do not press keys on the Air.
 
-   If it will not start at all, run this in Terminal, send what it prints, and stop: `/Applications/AlderProof.app/Contents/MacOS/AlderProof 2>&1 | head -30`
-5. Paste-link play. With the app closed, in Terminal: `grep '^1080p-h264 ' ~/AlderProof/links.txt | cut -d' ' -f2- | pbcopy`. Double-click the app, click the link box and try Cmd-V; if nothing appears, right-click the box and choose Paste. Press Load and let it play for a minute. Note which paste worked. If neither did, say so, and start it instead with `/Applications/AlderProof.app/Contents/MacOS/AlderProof --url "$(grep '^1080p-h264 ' ~/AlderProof/links.txt | cut -d' ' -f2-)"`.
-6. Probe, while the app is open: click Probe, wait until "Running..." is replaced, click Copy. Then in Terminal: `mkdir -p ~/AlderProof/results; pbpaste > ~/AlderProof/results/probe.txt; wc -l ~/AlderProof/results/probe.txt`. It should count more than one line. Quit the app with Cmd-Q and clear the clipboard with `echo | pbcopy`.
-7. Fetch our CI mpv, in Terminal. The last command's first line should start `mpv v0.41.0`.
+It plays five times with a few minutes' cooling between them: 1080p in mpv (10 min), 1080p in AlderProof with the bar hidden (10 min), then shown (10 min), 4K in AlderProof with the bar shown (2 min), and a fifth 10-minute 1080p run only if the decoder was not the hardware one. Both windows say what is playing; when a play fails they say why (HTTP status or the player's error), never the link. When the Windows window ends, the results are on Windows and the links are deleted from the Air.
 
-   ```
-   mkdir -p ~/AlderProof/ci-mpv && cd ~/AlderProof/ci-mpv
-   curl -fsSL https://github.com/esedmemmed/Alder-mac/releases/download/stack-158edb7e678b/mpv-cli-158edb7e678b.tar.gz | tar xz
-   ./mpv --version
-   ```
-8. Set up this Terminal window. If you open a new window, paste this there again.
+## What to watch and send back
 
-   ```
-   L=$(grep '^1080p-h264 ' ~/AlderProof/links.txt | cut -d' ' -f2-)
-   H=$(grep '^4k-hevc ' ~/AlderProof/links.txt | cut -d' ' -f2-)
-   export ALDERPROOF_BIN=/Applications/AlderProof.app/Contents/MacOS/AlderProof
-   M=~/AlderProof/measure.sh
-   ```
-9. Three 10-minute runs, one line at a time, with a few minutes' cooling between them and no keys pressed. Each prints a line starting `label=` when it ends. Watch the last two closely, and around minute 5 of each read the fan as in `air/RECIPE.md` step 6.
-
-   ```
-   MPV_BIN=~/AlderProof/ci-mpv/mpv MEASURE_EXTRA="--no-fs --geometry=1280x720" bash $M 1080p-h264 "$L" bare
-   bash $M 1080p-h264 "$L" shell-hidden
-   bash $M 1080p-h264 "$L" shell-shown
-   ```
-10. Does the drop counter work in the shell? A 2-minute heavy run with the bar shown: `MEASURE_END=120 bash $M 4k-hevc "$H" shell-shown`. Note whether it visibly struggled.
-11. Read the decoder: `grep -ho 'hwdec=[^ ]*' ~/AlderProof/results/1080p-h264.shell-*.summary.txt`. If either does not say `videotoolbox`, run this once more (10 minutes):
-
-    ```
-    "$ALDERPROOF_BIN" --url "$L" --overlay shown --end 600 --hwdec videotoolbox-copy --measure ~/AlderProof/measure.lua --label 1080p-h264-copy > ~/AlderProof/logs/copy.player.log 2>&1
-    ```
-12. Notes: `nano ~/AlderProof/notes.txt`, then Ctrl-O, Return, Ctrl-X. Write what really happened in steps 3 to 5, and for the two watched runs and the heavy run: stutter, tearing, a white or black web view, audio slips, fan.
-13. Send back: `cd ~/AlderProof && zip -r ~/Desktop/alder-shell-check.zip results notes.txt`. Move that zip to Windows on a USB stick or by mail and say where it is. Never send `links.txt` or the `logs` folder: both hold links.
+Tell Claude in plain words, during or after:
+- The two AlderProof 1080p runs and the 4K run: stutter, tearing, a white or black area where the web view is, audio slips, and how loud the fan got around minute 5.
+- Any line in either window saying `failed`, as written.
 
 ## First open on Big Sur, as it really went
 
@@ -51,15 +23,11 @@ Input for the 1.3 device profile. No links and no keys, ever. Status: not run ye
 
 ## Conditions
 
-All three runs use a 1280x720 window, because the shell has no fullscreen launch, so only the player path and the web view differ. This is lighter than a fullscreen picture, and the runs are not comparable with T3's fullscreen `bare` rows.
+All 1080p runs use a 1280x720 window, because the shell has no fullscreen launch, so only the player path and the web view differ. This is lighter than a fullscreen picture, and the runs are not comparable with T3's fullscreen `bare` rows.
 
 ## Probe output
 
-Run with no key. To be checked for links and keys before committing.
-
-```
-(not run yet)
-```
+Dropped from this run: the Probe button needs clicks. Run later if 1.3 needs it.
 
 ## Watch notes
 
