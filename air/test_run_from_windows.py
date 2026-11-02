@@ -231,6 +231,32 @@ class FindLinks(unittest.TestCase):
         self.assertEqual(links, {})
 
 
+class AppRelease(unittest.TestCase):
+    def rel(self, tag, created, name="AlderProof.dmg"):
+        return {"tag_name": tag, "created_at": created, "prerelease": True,
+                "assets": [{"name": name, "browser_download_url": "https://x/%s/%s" % (tag, name)}]}
+
+    def test_pick_newest_app_with_dmg(self):
+        rels = [self.rel("app-aaa", "2026-11-01T00:00:00Z"), self.rel("app-bbb", "2026-11-03T00:00:00Z"),
+                self.rel("stack-ccc", "2026-11-04T00:00:00Z"), self.rel("app-ddd", "2026-11-05T00:00:00Z", "other.zip")]
+        self.assertEqual(rw.newest_app_release(rels), ("app-bbb", "https://x/app-bbb/AlderProof.dmg"))
+
+    def test_none_when_no_match(self):
+        self.assertIsNone(rw.newest_app_release([self.rel("stack-c", "2026-11-04T00:00:00Z")]))
+
+    def test_lookup_failure_falls_back(self):
+        self.assertIsNone(rw.find_app_release("http://127.0.0.1:9/none"))
+
+    def test_script_substitution_and_syntax(self):
+        s = rw.air_script("http://h:1/tok", ["1080p-h264"], rw.SHELL_SCRIPT, "https://x/AlderProof.dmg", "app-bbb")
+        self.assertIn('appurl="https://x/AlderProof.dmg"; apptag="app-bbb"', s)
+        self.assertNotIn("__APP", s)
+        bash = shutil.which("bash")
+        if bash:
+            p = subprocess.run([bash, "-n"], input=s.encode(), capture_output=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+
+
 class FreshLink(unittest.TestCase):
     def test_fresh_asks_the_addon_again(self):
         f = Fake(["Movie.2019.1080p.BluRay.x264-GRP.mkv"], rotate=True)

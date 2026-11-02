@@ -4,7 +4,7 @@ Input for the 1.3 device profile. No links and no keys, ever. Status: not run ye
 
 ## Steps (about 50 minutes, plugged in, lid open, every other app quit, same Wi-Fi)
 
-AlderProof must already be in Applications (it is, from the first try). You never handle a link: Windows finds them, and the Air asks for each one fresh just before it plays.
+The helper fetches the newest CI build of AlderProof onto the Air itself (no DMG to install; if the fetch fails it uses the app in Applications). You never handle a link: Windows finds them, and the Air asks for each one fresh just before it plays.
 
 1. On Windows, in `D:\Adler\Macbook`, run `C:/Users/MSI/AppData/Local/Programs/Python/Python315/python.exe air/run_from_windows.py --shell-check` and type your Stremio email and password. After a few minutes it prints one line starting `curl -sS http://`.
 2. On the Air: Cmd-Space, type Terminal, press Return, type that line, press Return. If Windows asks about network access, allow it. Then do not press keys on the Air.

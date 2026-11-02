@@ -298,6 +298,31 @@ curl -fsS -m 60 "$base/measure.sh" -o "$dir/measure.sh" </dev/null && curl -fsS 
     || { say "could not fetch the kit from Windows"; echo "Could not reach the Windows computer. Same Wi-Fi? Firewall prompt allowed?"; return 1; }
 say "kit fetched"
 
+appurl="__APPURL__"; apptag="__APPTAG__"
+if [ -n "$appurl" ]; then
+    if [ "$(cat "$dir/app/.tag" 2>/dev/null)" = "$apptag" ] && [ -x "$dir/app/AlderProof.app/Contents/MacOS/AlderProof" ]; then
+        ALDERPROOF_BIN="$dir/app/AlderProof.app/Contents/MacOS/AlderProof"; say "app $apptag already installed"
+    else
+        say "fetching app $apptag"
+        rm -rf "$dir/app" "$dir/mnt"; mkdir -p "$dir/app" "$dir/mnt"
+        if ! curl -fsSL -m 900 "$appurl" -o "$dir/AlderProof.dmg" </dev/null; then
+            say "app download failed; using the one in Applications if present"
+        elif ! hdiutil attach -nobrowse -readonly -mountpoint "$dir/mnt" "$dir/AlderProof.dmg" >/dev/null 2>&1; then
+            say "app dmg could not be mounted; using the one in Applications if present"
+        else
+            if ditto "$dir/mnt/AlderProof.app" "$dir/app/AlderProof.app" >/dev/null 2>&1; then
+                xattr -dr com.apple.quarantine "$dir/app/AlderProof.app" 2>/dev/null
+                echo "$apptag" > "$dir/app/.tag"
+                ALDERPROOF_BIN="$dir/app/AlderProof.app/Contents/MacOS/AlderProof"; say "app $apptag installed"
+            else
+                say "app could not be copied from the dmg; using the one in Applications if present"
+            fi
+            hdiutil detach "$dir/mnt" -force >/dev/null 2>&1
+        fi
+        rm -f "$dir/AlderProof.dmg"
+        [ -f "$dir/app/.tag" ] || rm -rf "$dir/app"
+    fi
+fi
 if [ ! -x "$ALDERPROOF_BIN" ]; then
     say "the AlderProof app is missing at $ALDERPROOF_BIN"
     echo "AlderProof is not in Applications. Install it (steps 2 to 4 of the steps page), then run this line again."
@@ -386,8 +411,35 @@ main "$@"
 '''
 
 
-def air_script(base, labels, template=AIR_SCRIPT):
-    return template.replace("__BASE__", base).replace("__LABELS__", " ".join(labels))
+def air_script(base, labels, template=AIR_SCRIPT, app_url="", app_tag=""):
+    return (template.replace("__BASE__", base).replace("__LABELS__", " ".join(labels))
+            .replace("__APPURL__", app_url).replace("__APPTAG__", app_tag))
+
+
+RELEASES_API = "https://api.github.com/repos/esedmemmed/Alder-mac/releases"
+
+
+def newest_app_release(releases):
+    """(tag, dmg url) of the newest app-* release with AlderProof.dmg (by created_at), else None."""
+    best = None
+    for r in releases or []:
+        tag = r.get("tag_name") or ""
+        if not tag.startswith("app-"):
+            continue
+        for asset in r.get("assets") or []:
+            if asset.get("name") == "AlderProof.dmg" and asset.get("browser_download_url"):
+                if best is None or (r.get("created_at") or "") > best[0]:
+                    best = (r.get("created_at") or "", tag, asset["browser_download_url"])
+    return best[1:] if best else None
+
+
+def find_app_release(url=RELEASES_API):
+    try:
+        req = urllib.request.Request(url + "?per_page=100", headers={"Accept": "application/vnd.github+json", "User-Agent": "alder-air"})
+        with urllib.request.urlopen(req, timeout=20) as f:
+            return newest_app_release(json.load(f))
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------- server and results
@@ -568,7 +620,15 @@ def main(argv=None, creds=None):
         say("Could not open a port. Close other programs and run again.")
         return 1
     base = "http://%s:%d/%s" % (host, server.server_address[1], token)
-    script = air_script(base, found, SHELL_SCRIPT if a.shell_check else AIR_SCRIPT)
+    app_tag, app_url = "", ""
+    if a.shell_check:
+        rel = find_app_release()
+        if rel:
+            app_tag, app_url = rel
+            say("Newest AlderProof build: %s (the Air will fetch it)." % app_tag)
+        else:
+            say("Could not look up the newest AlderProof build; the Air will use the app in Applications.")
+    script = air_script(base, found, SHELL_SCRIPT if a.shell_check else AIR_SCRIPT, app_url, app_tag)
     if a.end:
         script = script.replace('main "$@"', 'MEASURE_END=%d; export MEASURE_END\nmain "$@"' % a.end)
     script = script.replace("cool=${ALDER_COOLDOWN:-180}", "cool=${ALDER_COOLDOWN:-%d}" % a.cooldown)
