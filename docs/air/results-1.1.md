@@ -21,8 +21,10 @@ Values come from each file's `*.summary.txt`. Bar proposed in R0-005, confirmed 
 | 4k-h264 | bare | | | | | | | | | | | | |
 | dts | bare | | | | | | | | | | | | |
 | truehd | bare | | | | | | | | | | | | |
-| 1080p-h264 | shell-hidden | | | | | | | | | | | | |
-| 1080p-h264 | shell-shown | | | | | | | | | | | | |
+| 1080p-h264 (T7, 1280x720 window, CI mpv) | bare | | | | | | | | | | | | |
+| 1080p-h264 (T7, 1280x720 window) | shell-hidden | | | | | | | | | | | | |
+| 1080p-h264 (T7, 1280x720 window) | shell-shown | | | | | | | | | | | | |
+| 4k-hevc (T7, 120 s counter check) | shell-shown | | | | | | | | | | | | |
 
 ## What the columns mean
 
