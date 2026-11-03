@@ -93,6 +93,9 @@ export function createStremio(deps) {
       return list
     },
 
+    /** The list in memory (the last fetched or refreshed), or null; no network, no parse. */
+    cachedAddons(authKey) { return addonsCache.get(authKey) || null },
+
     /** The add-on list as it was last time (null if never fetched), so Home can start before the network answers. */
     savedAddons(authKey) {
       const answer = http.saved(API + 'addonCollectionGet', addonsBody(authKey))

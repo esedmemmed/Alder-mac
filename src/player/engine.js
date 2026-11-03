@@ -800,10 +800,14 @@ export function createEngine(params, deps) {
   async function loadAddonSubtitles() {
     if (!stremio || !authKey) return;
     try {
-      const addons = (await stremio.addons(authKey)).filter((a) => a.serves('subtitles', type, videoId));
-      const lists = await Promise.all(addons.map((a) => Promise.resolve().then(() => a.subtitles(type, videoId)).catch((e) => { warn('subtitles from ' + a.name + ' failed: ' + (e && e.message ? e.message : e)); return []; })));
-      // ponytail: the TV's language and English, three files each in the add-on's order; a language picker if asked
-      addonSubs = chooseAddonSubtitles([].concat(...lists), tvLanguage());
+      // the list is refreshed (an add-on installed since the app started is asked too; it also updates the shared cache); the cached one if offline
+      let all;
+      try { all = await stremio.addons(authKey, true); } catch (e) { warn('add-on list refresh failed, using the cached one: ' + (e && e.message ? e.message : e)); all = await stremio.addons(authKey); }
+      const addons = all.filter((a) => a.serves('subtitles', type, videoId));
+      if (diag) diag.subtitleAddon(null);
+      const lists = await Promise.all(addons.map((a) => Promise.resolve().then(() => a.subtitles(type, videoId)).then((subs) => { if (diag) diag.subtitleAddon(a.name, subs.length); return subs; }).catch((e) => { warn('subtitles from ' + a.name + ' failed: ' + (e && e.message ? e.message : e)); if (diag) diag.subtitleAddon(a.name, e); return []; })));
+      // ponytail: the TV's language and English, three files each, shared round-robin between the add-ons; a language picker if asked
+      addonSubs = chooseAddonSubtitles(addons.map((a, i) => ({ addon: a.name, subs: lists[i] })), tvLanguage());
       say('add-on subtitles: ' + addonSubs.length);
       emit('tracks');
     } catch (e) {

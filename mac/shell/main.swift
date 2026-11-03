@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Options before mpv_initialize. framedrop=vo so frame-drop-count counts; gpu-hwdec-interop=auto as IINA does.
+        // No video-sync=display-*, no interpolation: both need a real vsync/presentation time, which this host (a CAOpenGLLayer, no
+        // report_swap) does not have. video-sync stays at its default (audio). T8.1, R1.3-006.
         var mpvOptions: [(String, String)] = [
             ("vo", "libmpv"), ("hwdec", opts.hwdec), ("gpu-hwdec-interop", "auto"), ("framedrop", "vo"), ("osc", "no"),
             // coreaudio, decoded to PCM: an empty audio-spdif list means no passthrough of ac3/dts/eac3/truehd.

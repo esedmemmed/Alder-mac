@@ -4,6 +4,7 @@
  * fs=1 asks the shell for fullscreen over the bridge. The links are the page's query, never logged or emitted here.
  */
 import { macBridge } from './bridge.js';
+import { macNoteFullscreen } from './lifecycle.js';
 
 /** playRequest(search) -> { sources: [url], fullscreen }. Only http(s) values count; no `play` parameter is no request. */
 export function playRequest(search) {
@@ -13,7 +14,7 @@ export function playRequest(search) {
 }
 
 /** installPlayHook({ router, win, bridge, log }) -> whether a play request was there. Call once, after the first screen is pushed. */
-export function installPlayHook({ router, win = typeof window !== 'undefined' ? window : undefined, bridge = macBridge, log = null } = {}) {
+export function installPlayHook({ router, win = typeof window !== 'undefined' ? window : undefined, bridge = macBridge, log = null, noteFullscreen = macNoteFullscreen } = {}) {
   const req = playRequest(win && win.location ? win.location.search : '');
   if (!req.sources.length) return false;
   if (log) log.info('mac', 'play check: ' + req.sources.length + ' source(s)' + (req.fullscreen ? ', fullscreen' : ''));
@@ -23,7 +24,7 @@ export function installPlayHook({ router, win = typeof window !== 'undefined' ? 
   });
   if (req.fullscreen) {
     const b = bridge();
-    if (b) b.fullscreen(true).catch(() => {});
+    if (b) { noteFullscreen(true); b.fullscreen(true).catch(() => noteFullscreen(false)); } // the lifecycle must know, or the first F asks again
   }
   return true;
 }

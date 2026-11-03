@@ -4,6 +4,7 @@
 // canDraw/draw run on that queue; every mpv_render_* call runs under the CGL context lock, one at a time.
 // render.h on MPV_RENDER_PARAM_ADVANCED_CONTROL: mpv_render_context_update must follow every update callback (done in
 // canDraw), and the render thread must not call other libmpv API or wait on one (draw calls none).
+// mpv_render_context_report_swap is not called (T8.1): glFlush is not the vsync and CA presents later; see draw().
 import AppKit
 import OpenGL    // CGL
 import OpenGL.GL // gl.h is an explicit submodule: plain `import OpenGL` does not expose it (run 41389747748)
@@ -107,7 +108,10 @@ final class RenderCore {
             }
         }
         glFlush()
-        mpv_render_context_report_swap(rc)
+        // was: mpv_render_context_report_swap(rc)
+        // Off (T8.1, R1.3-006): this ran at glFlush, not at the vsync; CoreAnimation presents the layer later. render.h: report_swap
+        // used inconsistently makes playback bad, and the periodic ~0.5 s hitch was seen with it on. Re-enable only with a real
+        // presentation-time source (a CVDisplayLink, not this layer).
     }
 
     /// Main thread, teardown: clear the update callback, free the render context under the lock. After this

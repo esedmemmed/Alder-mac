@@ -77,7 +77,10 @@ export function createLifecycle({ bridge = macBridge, log = null } = {}) {
     return false;
   }
 
-  return { bind, install, fullscreenKey, exit, dispose, get fullscreen() { return fullscreen; } };
+  /** Fullscreen was asked for by someone else (the play-check hook): F must now leave it, and Esc leaves it first. */
+  function noteFullscreen(on) { fullscreen = !!on; }
+
+  return { bind, install, fullscreenKey, noteFullscreen, exit, dispose, get fullscreen() { return fullscreen; } };
 }
 
 // The page's one lifecycle, which scripts/build.mjs's patches (main.js, player/screen.js) call.
@@ -85,5 +88,6 @@ const shared = createLifecycle();
 export const installMacLifecycle = shared.install;
 export const macBindPlayer = shared.bind;
 export const macFullscreenKey = shared.fullscreenKey;
+export const macNoteFullscreen = shared.noteFullscreen;
 /** Asks the shell to quit after the player has saved. Same contract as bridge.js macQuit. */
 export const macExit = shared.exit;

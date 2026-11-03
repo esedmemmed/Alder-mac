@@ -62,6 +62,19 @@ test('chooseAddonSubtitles: three in the TV\'s language, then three English, add
   assert.deepEqual(chooseAddonSubtitles([], 'en'), [])
 })
 
+test('chooseAddonSubtitles: a second add-on contributes when the first alone would fill 3+3; order kept; add-on name on entries', () => {
+  const sub = (lang, n, addon) => new Subtitle(`https://${addon}/${lang}${n}.srt`, lang, addon)
+  const groups = [
+    { addon: 'A', subs: [1, 2, 3, 4].map(n => sub('ger', n, 'A')).concat([1, 2, 3, 4].map(n => sub('eng', n, 'A'))) },
+    { addon: 'B', subs: [sub('eng', 1, 'B'), sub('ger', 1, 'B'), sub('ger', 2, 'B')] },
+    { addon: 'C', subs: [sub('fre', 1, 'C')] },
+  ]
+  const got = chooseAddonSubtitles(groups, 'de')
+  assert.deepEqual(got.map(s => s.addon + ':' + s.url.split('/').pop()),
+    ['A:ger1.srt', 'B:ger1.srt', 'A:ger2.srt', 'A:eng1.srt', 'B:eng1.srt', 'A:eng2.srt'])
+  assert.ok(got.every(s => typeof s.addon === 'string' && s.addon))
+})
+
 test('parseSegments: IntroDB seconds -> milliseconds, recap before intro, outro start', () => {
   const r = parseSegments(fixtureJson('api.introdb.app/segments.json'))
   assert.deepEqual(r.segments, [{ label: 'Skip recap', start: 0, end: 41500 }, { label: 'Skip intro', start: 52000, end: 128400 }])

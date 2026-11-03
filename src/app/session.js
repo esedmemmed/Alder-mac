@@ -70,6 +70,8 @@ export function createSession({ store, http: rawHttp, webapis, log = nothing, tv
   const addonList = () => {
     const k = authKey()
     if (!k) return null
+    const live = stremio.cachedAddons ? stremio.cachedAddons(k) : null // a refresh elsewhere (the player) wins
+    if (live) parsed.set(k, live)
     if (!parsed.has(k)) { const kept = stremio.savedAddons(k); if (kept) parsed.set(k, kept) }
     return parsed.get(k) || null
   }

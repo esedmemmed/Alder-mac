@@ -45,11 +45,22 @@ export function nextVideo(videos, videoId) {
   return next && (next.season !== 0 || videos[at].season === 0) ? next : null
 }
 
-/** The TV's language and English, three files each in the add-on's order (a language picker if asked). */
-export function chooseAddonSubtitles(all, tvLanguage) {
-  const local = all.filter(s => s.isLocal(tvLanguage))
-  const english = all.filter(s => !s.isLocal(tvLanguage) && s.isEnglish())
-  return local.slice(0, 3).concat(english.slice(0, 3))
+/**
+ * The TV's language and English, three files each (a language picker if asked). [groups] is [{ addon, subs }] in the
+ * account's add-on order (a flat Subtitle[] is one group): the files are taken round-robin, so every add-on with a match
+ * gets one before any gets a second, and each add-on's own order is kept. Each Subtitle carries its add-on's name.
+ */
+export function chooseAddonSubtitles(groups, tvLanguage) {
+  const lists = (groups.length && Array.isArray(groups[0].subs) ? groups.map(g => g.subs) : [groups])
+  const share = keep => {
+    const per = lists.map(l => l.filter(keep))
+    const out = []
+    for (let round = 0; out.length < 3 && round < 3; round++) {
+      per.forEach(l => { if (out.length < 3 && round < l.length) out.push(l[round]) })
+    }
+    return out
+  }
+  return share(s => s.isLocal(tvLanguage)).concat(share(s => !s.isLocal(tvLanguage) && s.isEnglish()))
 }
 
 /**

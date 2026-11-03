@@ -22,6 +22,7 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
   let picture = null;
   let decisions = [];
   let errors = [];
+  let subtitleAddons = [];
 
   return {
     /** A source was opened: { url, label, at, total, height }. Clears the previous stream's tracks and decisions. */
@@ -44,8 +45,15 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
       errors.push({ t: now(), text });
       if (errors.length > limit) errors = errors.slice(errors.length - limit);
     },
-    snapshot() { return { stream, rawTracks, picture, decisions: decisions.slice(), errors: errors.slice() }; },
-    clear() { stream = null; rawTracks = null; picture = null; decisions = []; errors = []; },
+    /** What an add-on answered when asked for subtitles: a count, or the failure (an Error or text, URLs cut out). null starts a fresh list. */
+    subtitleAddon(name, result) {
+      if (name === null) { subtitleAddons = []; return; }
+      const text = typeof result === 'number' ? result + ' found'
+        : 'failed: ' + String(result && result.message ? result.message : result).replace(/\S*:\/\/\S*/g, '').trim().slice(0, 60);
+      subtitleAddons.push({ name: String(name), text });
+    },
+    snapshot() { return { stream, rawTracks, picture, decisions: decisions.slice(), errors: errors.slice(), subtitleAddons: subtitleAddons.slice() }; },
+    clear() { stream = null; rawTracks = null; picture = null; decisions = []; errors = []; subtitleAddons = []; },
   };
 }
 
