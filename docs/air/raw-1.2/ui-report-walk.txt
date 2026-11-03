@@ -1,0 +1,6 @@
+log: boot: html
+log: boot: bridge loaded
+log: boot: app.js loaded
+log: boot: first screen
+nav: finished
+log: player stub: playback not available yet

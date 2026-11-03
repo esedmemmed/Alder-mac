@@ -30,11 +30,11 @@ BIN=$APP/Contents/MacOS/AlderProof
 swiftc -target x86_64-apple-macos11.0 -O -swift-version 5 \
   -Xfrontend -disable-implicit-concurrency-module-import \
   -import-objc-header "$HERE/bridging.h" -Xcc "-I$STACK/include" \
-  -framework AppKit -framework WebKit -framework OpenGL -framework QuartzCore \
+  -framework AppKit -framework WebKit -framework OpenGL -framework QuartzCore -framework CoreAudio \
   -L"$STACK/lib" -lmpv \
   -o "$BIN" \
   "$HERE/main.swift" "$HERE/Options.swift" "$HERE/Selftest.swift" "$HERE/Player.swift" \
-  "$HERE/VideoView.swift" "$HERE/WebHost.swift"
+  "$HERE/VideoView.swift" "$HERE/WebHost.swift" "$HERE/Recorder.swift"
 
 # libmpv and whatever of the stack it still links go to Contents/libs, install names rewritten to the bundle.
 dylibbundler -od -b -x "$BIN" -d "$APP/Contents/libs" -p @executable_path/../libs/ -s "$STACK/lib" -ns

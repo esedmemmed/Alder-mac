@@ -1,10 +1,12 @@
 // Page side of the Alder bridge. Classic script + CommonJS, so it runs from file://, the app scheme and node --test.
 // JS to native: window.webkit.messageHandlers.alder.postMessage({id, cmd, args})
 // Native to JS: window.alderNative.onEvent({type, ...})
-// Args:   load {url} · pause {paused} · seek {seconds} · setProp {name, value} · getProp {name} · quit {}
+// Args:   load {url, headers?, start?} · pause {paused} · seek {seconds} · observe {names} · setProp {name, value}
+//         getProp {name} · subAdd {text, lang?, title?} · fullscreen {on} · saveFile {name, text} · quit {}
 //         log {line} · report {text}  (text for the shell's --report file; scrubbed of links like everything else)
 // Events: reply {id, ok, value|error} · prop {name, value} · fileLoaded · playbackRestart
 //         endFile {reason: eof|stop|quit|error|redirect, error?: mpv error code, message?}
+//         sleep · wake · audioDevice · willQuit        (full wire: docs/ops/INDEX.md, Bridge v2 wire)
 // Events never carry the link. Native must not send one; scrubbing here is the second line, not the contract.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -12,8 +14,10 @@
 })(this, function () {
   'use strict';
 
-  var COMMANDS = ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report'];
-  var EVENT_TYPES = ['reply', 'prop', 'fileLoaded', 'playbackRestart', 'endFile'];
+  var COMMANDS = ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report',
+    'observe', 'subAdd', 'fullscreen', 'saveFile'];
+  var EVENT_TYPES = ['reply', 'prop', 'fileLoaded', 'playbackRestart', 'endFile',
+    'sleep', 'wake', 'audioDevice', 'willQuit'];
   var LINK_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]*|\bmagnet:\?[^\s"'<>]*/gi;
   var REDACTED = '[link]';
 
@@ -95,13 +99,26 @@
         };
       },
       pendingCount: function () { return pending.size; },
-      load: function (url) {
+      load: function (url, opts) {
         if (typeof url !== 'string' || !url) return Promise.reject(new Error('load needs a link'));
+        var args = { url: url };
+        if (opts && opts.headers && typeof opts.headers === 'object') {
+          args.headers = opts.headers;
+          Object.keys(opts.headers).forEach(function (k) {
+            var v = String(opts.headers[k]);
+            if (v.length >= 8 && known.indexOf(v) < 0) known.push(v); // tokens too; short values would shred logs
+          });
+        }
+        if (opts && typeof opts.start === 'number' && opts.start > 0) args.start = opts.start;
         [url, encodeURIComponent(url)].forEach(function (form) {
           if (known.indexOf(form) < 0) known.push(form);
         });
-        return send('load', { url: url });
+        return send('load', args);
       },
+      observe: function (names) { return send('observe', { names: names }); },
+      subAdd: function (text, lang, title) { return send('subAdd', { text: text, lang: lang || '', title: title || '' }); },
+      fullscreen: function (on) { return send('fullscreen', { on: !!on }); },
+      saveFile: function (name, text) { return send('saveFile', { name: name, text: text }); },
       pause: function (paused) { return send('pause', { paused: !!paused }); },
       seek: function (seconds) { return send('seek', { seconds: seconds }); },
       setProp: function (name, value) { return send('setProp', { name: name, value: value }); },

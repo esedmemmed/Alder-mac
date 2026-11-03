@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { actionFor, attachKeys, registerKeys, REGISTER_KEYS } from '../../src/platform/mac/keys.js';
 import { deviceProfile, describeDevice } from '../../src/platform/mac/device.js';
 import { createTvLanguage, twoLetters } from '../../src/platform/mac/language.js';
-import { createPlayerScreen, PLAYBACK_MESSAGE } from '../../src/platform/mac/player.js';
 import { macQuit, resetMacBridge } from '../../src/platform/mac/bridge.js';
 import { buildMac } from '../../scripts/build.mjs';
 
@@ -64,7 +63,7 @@ test('Mac keys: Backspace and Space stay the text field\'s own while it has focu
 test('Mac device: conservative profile with the Tizen shape, no webapis needed', () => {
   const lines = [];
   const d = deviceProfile({ webapis: { throws: true }, av1: true, log: (m) => lines.push(m) });
-  assert.equal(d.hevc, false);
+  assert.equal(d.hevc, true); // listed as a manual pick; autoOk keeps auto-play on H.264
   assert.equal(d.av1, false);
   assert.equal(d.dolbyVision, false);
   assert.equal(d.hdr, false);
@@ -74,7 +73,7 @@ test('Mac device: conservative profile with the Tizen shape, no webapis needed',
   assert.ok(d.audio instanceof Set && d.audio.has('AAC'));
   assert.ok(Array.isArray(d.notes) && typeof d.source === 'string');
   assert.ok(d.notes.some((n) => /manual picks/.test(n)));
-  assert.match(describeDevice(d), /^1080p30 H\.264 8-bit/);
+  assert.match(describeDevice(d), /^1080p30 HEVC H\.264 8-bit/);
   assert.ok(lines.length >= 1);
   assert.doesNotThrow(() => deviceProfile());
 });
@@ -85,45 +84,6 @@ test('Mac language: two letters from navigator.language, en when empty', () => {
   assert.equal(createTvLanguage({ navigator: {} }).get(), 'en');
   assert.equal(twoLetters(''), '');
   return createTvLanguage({ navigator: { language: 'fr' } }).ready.then((v) => assert.equal(v, 'fr'));
-});
-
-function fakeDocument() {
-  const node = (tag) => ({
-    tag, attrs: {}, children: [], style: {}, text: '',
-    classList: { items: [], add(c) { this.items.push(c); } },
-    setAttribute(k, v) { this.attrs[k] = v; },
-    appendChild(c) { this.children.push(c); return c; },
-  });
-  return { createElement: node, createTextNode: (t) => ({ text: String(t) }) };
-}
-
-function textOf(n) { return n.text !== undefined && n.text !== '' ? n.text : (n.children || []).map(textOf).join(''); }
-
-test('Mac player stub: says playback is not there, tells the shell, Back pops, no engine, no failover', async () => {
-  const { win, mock } = macWindow();
-  globalThis.window = win;
-  globalThis.document = fakeDocument();
-  resetMacBridge();
-  try {
-    const popped = [];
-    const screen = createPlayerScreen();
-    const el = document.createElement('div');
-    screen.mount(el, {}, { router: { pop: () => popped.push(1) } });
-    assert.equal(textOf(el), PLAYBACK_MESSAGE);
-    assert.equal(PLAYBACK_MESSAGE, 'Playback comes in the next version');
-    await settle();
-    assert.deepEqual(mock.posted.map((m) => m.cmd), ['log']);
-    assert.equal(screen.onKey({ type: 'press', action: 'ok' }), true);
-    assert.equal(popped.length, 0);
-    assert.equal(screen.onKey({ type: 'press', action: 'back', repeat: false }), true);
-    assert.equal(popped.length, 1);
-    await new Promise((r) => setTimeout(r, 60));
-    assert.deepEqual(mock.posted.map((m) => m.cmd), ['log']); // nothing was loaded
-  } finally {
-    delete globalThis.window;
-    delete globalThis.document;
-    resetMacBridge();
-  }
 });
 
 test('Mac exit: macQuit sends quit over the bridge; without a native shell it is a quiet no-op', async () => {
@@ -143,5 +103,5 @@ test('build:mac output holds no Tizen or webapis calls', async () => {
   // (the Diagnostics screen's "AVPLAY TRACKS" heading is a label, not a call; the bare name `webapis` survives only as a parameter name)
   assert.ok(!/tizen/i.test(js), 'app.js mentions tizen');
   assert.ok(!/webapis\.|window\.webapis|application\/avplayer/.test(js), 'app.js reaches for webapis');
-  assert.ok(js.includes('Playback comes in the next version'));
+  assert.ok(js.includes('panscan 1'), 'the mpv adapter replaces avplay.js');
 });

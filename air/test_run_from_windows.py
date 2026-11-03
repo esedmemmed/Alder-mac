@@ -501,5 +501,178 @@ class UiCheck(unittest.TestCase):
         self.assertIn("log: plain run", report)
 
 
+class PlayCheck(unittest.TestCase):
+    def write(self, out, name, text):
+        with open(os.path.join(out, name), "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def summary(self, drop="0.00", hwdec="videotoolbox", real="0.999", stalls="0", seconds="600.0"):
+        return "label=x mode=m seconds=%s drops=0 drop_pct=%s hwdec=%s realtime=%s stalls=%s fps=24.000\n" % (seconds, drop, hwdec, real, stalls)
+
+    def test_classify_60fps(self):
+        self.assertEqual(set(rw.classify("Movie.2019.1080p.60fps.WEB.x264-GRP")), {"1080p60-h264"})
+        self.assertEqual(set(rw.classify("Movie.2019.1080p60.WEB-DL.H264")), {"1080p60-h264"})
+        self.assertEqual(set(rw.classify("Movie 1080p 60p h264")), {"1080p60-h264"})
+        self.assertEqual(set(rw.classify("Movie.2019.1080p.WEB.x264-GRP")), {"1080p-h264"})
+        self.assertIn("1080p60-h264", rw.PLAY_LABELS)
+
+    def test_rows_and_plan(self):
+        rows = rw.play_rows()
+        ids = [r.id for r in rows]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(ids[:3], ["1080p-h264-win", "1080p-h264-fs", "1080p-h264"])
+        by = {r.id: r for r in rows}
+        self.assertEqual([by[i].secs for i in ("1080p-h264-win", "1080p-h264-fs", "1080p-h264", "dts-app", "dts", "failover")], [600, 600, 600, 180, 180, 60])
+        self.assertTrue(by["1080p-h264-fs"].fs)
+        self.assertEqual([by[i].opts for i in ("1080p-h264-audio-buffer", "1080p-h264-resample", "1080p-h264-framedrop")],
+                         [("audio-buffer=1",), ("video-sync=display-resample",), ("framedrop=decoder+vo",)])
+        self.assertEqual(by["dts-app"].bare, "dts")
+        self.assertEqual({r.link for r in rows}, set(rw.PLAY_LABELS))
+        todo, secs = rw.play_plan(rows, {"1080p-h264": "u"}, 180)
+        self.assertEqual([r.id for r in todo], ["1080p-h264-win", "1080p-h264-fs", "1080p-h264", "1080p-h264-audio-buffer",
+                                                "1080p-h264-resample", "1080p-h264-framedrop", "failover"])
+        self.assertEqual(secs, 6 * 600 + 60 + 6 * 180)
+        self.assertEqual([r.secs for r in rw.play_rows(5)], [5] * len(rows))
+
+    def test_script_render_and_syntax(self):
+        rows = rw.play_rows(7)
+        s = rw.play_script("http://h:1/tok", rows, ["1080p-h264", "dts"], "https://x/AlderProof.dmg", "app-bbb")
+        for bad in ("__BASE__", "__LABELS__", "__APP", "__ROWS__", "__TOTAL__", "__INSTALL__", "__CIFETCH__"):
+            self.assertNotIn(bad, s)
+        self.assertIn('appurl="https://x/AlderProof.dmg"; apptag="app-bbb"', s)
+        self.assertIn("1080p-h264-win|app|1080p-h264|7|0||0", s)
+        self.assertIn("1080p-h264-fs|app|1080p-h264|7|1||0", s)
+        self.assertIn("1080p-h264-resample|app|1080p-h264|7|0|video-sync=display-resample|0", s)
+        self.assertIn("failover|app|1080p-h264|7|0||1", s)
+        self.assertIn("link/$link?fresh=1", s)
+        self.assertIn("http://127.0.0.1:9/dead", s)
+        self.assertIn("hdiutil attach", s)  # the install block of UI_SCRIPT
+        self.assertIn("fetching ci-mpv", s)
+        bash = shutil.which("bash")
+        if bash:
+            p = subprocess.run([bash, "-n"], input=s.encode(), capture_output=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            fn = re.search(r"^urlenc\(\) \{.*?^\}", s, re.S | re.M).group(0)
+            p = subprocess.run([bash, "-c", fn + '\nurlenc "http://a.b/c d?e=1&f=ü"'], capture_output=True)
+            self.assertEqual(p.stdout.decode(), "http%3A%2F%2Fa.b%2Fc%20d%3Fe%3D1%26f%3D%C3%BC")
+
+    def files(self, out, app_real="0.999", bare_real="0.999", **kw):
+        self.write(out, "1080p-h264-win.shell-shown.summary.txt", self.summary(real=app_real, **kw))
+        self.write(out, "1080p-h264.bare.summary.txt", self.summary(real=bare_real, hwdec="videotoolbox"))
+
+    def test_verdict_pass_and_each_limit(self):
+        rows = [r for r in rw.play_rows() if r.id in ("1080p-h264-win", "1080p-h264")]
+        cases = [({}, True), ({"drop": "1.00"}, False), ({"hwdec": "no"}, False), ({"stalls": "1"}, False),
+                 ({"app_real": "0.985", "bare_real": "0.985"}, False), ({"app_real": "0.999", "bare_real": "0.996"}, False),
+                 ({"app_real": "0.999", "bare_real": "0.997"}, True), ({"stalls": "unavailable"}, False)]
+        for kw, want in cases:
+            out = tempfile.mkdtemp()
+            try:
+                self.files(out, **kw)
+                lines, ok = rw.verdict(rows, out)
+                self.assertEqual(ok, want, (kw, lines))
+                self.assertIn("1080p-h264-win: " + ("PASS" if want else "FAIL"), lines[1])
+                self.assertEqual(lines[-1], "OVERALL: " + ("PASS" if want else "FAIL"))
+            finally:
+                shutil.rmtree(out, ignore_errors=True)
+
+    def test_verdict_missing_and_failover_and_non_h264(self):
+        out = tempfile.mkdtemp()
+        try:
+            rows = rw.play_rows()
+            self.write(out, "failover.shell-shown.summary.txt", self.summary(seconds="48.0"))
+            self.write(out, "dts-app.shell-shown.summary.txt", self.summary(hwdec="unavailable"))
+            self.write(out, "dts.bare.summary.txt", self.summary(hwdec="unavailable"))
+            lines, ok = rw.verdict(rows, out)
+            text = "\n".join(lines)
+            self.assertIn("failover: PASS", text)
+            self.assertIn("dts-app: PASS", text)  # hwdec is judged for H.264 labels only
+            self.assertIn("1080p-h264-win: FAIL no result", text)
+            self.assertFalse(ok)
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_answers_written_and_used(self):
+        out = tempfile.mkdtemp()
+        try:
+            rows = [r for r in rw.play_rows() if r.id in ("1080p-h264-win", "1080p-h264", "1080p-h264-fs")]
+            self.files(out)
+            self.write(out, "1080p-h264-fs.shell-shown.summary.txt", self.summary())
+            replies = iter(["loud", "clean", "gaps", "smooth"])  # the first is not an answer
+            prompts = []
+
+            def fake_input(p):
+                prompts.append(p)
+                return next(replies)
+            said = []
+            ok = rw.finish_play_check(rows, out, said.append, input_fn=fake_input)
+            self.assertEqual(len(prompts), 4)
+            self.assertIn("Please type one of: clean, gaps, no sound", said)
+            self.assertEqual(open(os.path.join(out, "answers.tsv"), encoding="utf-8").read(),
+                             "row\tanswer\n1080p-h264-win\tclean\n1080p-h264-fs\tgaps\npicture\tsmooth\n")
+            v = open(os.path.join(out, "verdict.txt"), encoding="utf-8").read()
+            self.assertIn("1080p-h264-win: PASS", v)
+            self.assertIn("1080p-h264-fs: FAIL", v)
+            self.assertIn("sound gaps", v)
+            self.assertIn("OVERALL: FAIL", v)
+            self.assertFalse(ok)
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_main_play_check_flow(self):
+        f = Fake(["Movie.2019.1080p.BluRay.x264-GRP.mkv"])
+        out = tempfile.mkdtemp()
+        buf = hold_output()
+        rc = {}
+
+        def run():
+            with contextlib.redirect_stdout(buf):
+                rc["rc"] = rw.main(["--play-check", "--host", "127.0.0.1", "--api", f.api, "--cooldown", "2", "--end", "5", "--out", out,
+                                    "--port", "18811", "--idle", "60"], creds=("a@b.c", "pw"), play_input=lambda p: "clean" if "sound" in p else "smooth")
+        t = threading.Thread(target=run)
+        t.start()
+        try:
+            line = None
+            for _ in range(300):
+                m = re.search(r"curl -sS (http://\S+) \| bash", buf.getvalue())
+                if m:
+                    line = m.group(1)
+                    break
+                time.sleep(0.1)
+            self.assertTrue(line, buf.getvalue())
+            self.assertIn("7 plays", buf.getvalue())
+            self.assertIn("0 h 00 min in all", buf.getvalue())  # 7 x 5 s + 6 x 2 s
+            code, script = fetch(line)
+            self.assertEqual(code, 200)
+            self.assertIn(b"1080p-h264-win|app|1080p-h264|5|0||0", script)
+            self.assertEqual(fetch(line + "/link/1080p-h264?fresh=1")[0], 200)
+            buf2 = io.BytesIO()
+            with tarfile.open(fileobj=buf2, mode="w:gz") as tf:
+                for name, text in (("results/1080p-h264-win.shell-shown.summary.txt", "seconds=5.0 drop_pct=0.00 hwdec=videotoolbox realtime=0.999 stalls=0\n"),
+                                   ("results/1080p-h264.bare.summary.txt", "seconds=5.0 drop_pct=0.00 hwdec=videotoolbox realtime=0.999 stalls=0\n")):
+                    b = text.encode()
+                    ti = tarfile.TarInfo(name)
+                    ti.size = len(b)
+                    tf.addfile(ti, io.BytesIO(b))
+            self.assertEqual(fetch(line + "/results", buf2.getvalue())[0], 200)
+            t.join(30)
+            self.assertFalse(t.is_alive(), buf.getvalue())
+            self.assertEqual(rc.get("rc"), 0)
+            self.assertEqual(sorted(os.listdir(out)), ["1080p-h264-win.shell-shown.summary.txt", "1080p-h264.bare.summary.txt", "answers.tsv", "verdict.txt"])
+            with open(os.path.join(out, "verdict.txt"), encoding="utf-8") as v:
+                text = v.read()
+            self.assertIn("1080p-h264-win: PASS", text)
+            self.assertIn("1080p-h264-fs: FAIL no result", text)
+        finally:
+            f.close()
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_closed_input_is_unanswered(self):
+        def eof(_):
+            raise EOFError
+        rows = [r for r in rw.play_rows() if r.id == "1080p-h264-win"]
+        self.assertEqual(rw.ask_answers(rows, eof), [("1080p-h264-win", "unanswered"), ("picture", "unanswered")])
+
+
 if __name__ == "__main__":
     unittest.main()

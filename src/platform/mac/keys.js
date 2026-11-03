@@ -1,6 +1,6 @@
 /*
  * Mac keys, for the module swap in scripts/build.mjs (npm run build:mac): same exports as src/lib/keys.js, no registration.
- * Esc = back, Return = OK, arrows move. Backspace and Space are Back and Play/Pause only while no text field has focus.
+ * Esc = back, Return = OK, arrows move, F = fullscreen (player), E = save the report (Diagnostics). Backspace and Space are Back and Play/Pause only while no text field has focus.
  */
 import { createKeyDispatcher, isDigit, HOLD_MS } from '../../lib/keys.js';
 
@@ -12,6 +12,8 @@ export const KEY_ACTIONS = {
   27: 'back', 8: 'back',
   32: 'playpause',
   221: 'ff', 219: 'rw',
+  70: 'fullscreen', // F: the player screen
+  69: 'export', // E: the Diagnostics screen saves its report
 };
 for (let d = 0; d <= 9; d++) { KEY_ACTIONS[48 + d] = String(d); KEY_ACTIONS[96 + d] = String(d); }
 
@@ -42,6 +44,7 @@ export function attachKeys({ target, onAction, holdMs = HOLD_MS, timers, isTypin
   function resolve(e) {
     const action = actionFor(e.keyCode);
     if (!action) return null;
+    if ((action === 'fullscreen' || action === 'export') && (e.metaKey || e.ctrlKey || e.altKey)) return null; // Cmd-F and friends are the system's
     if (isTyping(e) && (e.keyCode === 8 || !TYPING_OK[action])) return null;
     return action;
   }

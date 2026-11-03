@@ -6,3 +6,4 @@
 export const PLATFORM = 'mac';
 
 export { installPointer } from './pointer.js'; // mouse and trackpad -> focus, OK and scrolling; main.js's Mac patch calls it with the focus engine
+export { installPlayHook } from './play-hook.js'; // the air/ play check: ?play=<url> in the shell's --page opens the player (main.js's Mac patch)

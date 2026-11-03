@@ -50,7 +50,7 @@ test('Mac sign-in: a wrong password shows Stremio\'s own text, as the Tizen e-ma
 
 test('Mac sign-in: an unreachable Stremio, an empty e-mail and an empty password give the Tizen texts', async () => {
   const down = make({ overrides: { 'https://api.strem.io/api/login': new Error('offline') } });
-  assert.deepEqual(await passwordSignIn(down.session, EMAIL, PASSWORD, down.log), { error: "Can't reach Stremio. Check the TV's connection." });
+  assert.deepEqual(await passwordSignIn(down.session, EMAIL, PASSWORD, down.log), { error: "Can't reach Stremio. Check the Mac's internet connection." });
   const { session } = make();
   assert.deepEqual(await passwordSignIn(session, 'nobody', PASSWORD), { error: 'Enter the e-mail address.' });
   assert.deepEqual(await passwordSignIn(session, EMAIL, ''), { error: 'Enter the password.' });

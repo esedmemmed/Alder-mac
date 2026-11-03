@@ -1,6 +1,7 @@
 // Command line of the shell. Shape is the contract in the phase plan:
 // AlderProof [--url <link>] [--overlay shown|hidden] [--end <seconds>] [--measure <script> --label <label>]
 //            [--hwdec <value>] [--selftest <file>] [--page <file[?query]>] [--report <path>] [--quit-after <seconds>]
+//            [--mpv-opt <key=value>]...   (repeatable; appended after the shell's own mpv options, so it wins)
 import Foundation
 
 struct Options {
@@ -14,10 +15,11 @@ struct Options {
     var page = "index.html"
     var report: String?
     var quitAfter: Double?
+    var mpvOpts: [(String, String)] = []
 
     static let usage = "usage: AlderProof [--url <link>] [--overlay shown|hidden] [--end <seconds>] "
         + "[--measure <script> --label <label>] [--hwdec <value>] [--selftest <file>] "
-        + "[--page <file[?query]>] [--report <path>] [--quit-after <seconds>]"
+        + "[--page <file[?query]>] [--report <path>] [--quit-after <seconds>] [--mpv-opt <key=value>]..."
 
     /// Parses the arguments; prints the usage and exits 64 on anything it does not know.
     static func parse(_ argv: [String]) -> Options {
@@ -50,6 +52,10 @@ struct Options {
             case "--selftest": o.selftest = value(a)
             case "--page": o.page = value(a)
             case "--report": o.report = value(a)
+            case "--mpv-opt":
+                let v = value(a)
+                guard let eq = v.firstIndex(of: "="), eq != v.startIndex else { fail("--mpv-opt needs key=value") }
+                o.mpvOpts.append((String(v[..<eq]), String(v[v.index(after: eq)...])))
             case "--quit-after":
                 guard let d = Double(value(a)), d > 0 else { fail("--quit-after needs seconds > 0") }
                 o.quitAfter = d

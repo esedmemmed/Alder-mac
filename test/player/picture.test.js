@@ -8,7 +8,7 @@ import {
 import { createAvplay, FIT_METHOD, FILL_ENABLED, fillOffered } from '../../src/player/avplay.js';
 import { createAvplayMock, createRegistry, DISPLAY_METHODS, buildTrackInfo, resolveTracks } from '../../dev/mock-tizen.js';
 import { createFakeClock } from '../../dev/fake-clock.js';
-import { makeEngine, stream } from './helpers.js';
+import { both, makeEngine, stream } from './helpers.js';
 
 const video = (info, index = 0) => ({ index, type: 'VIDEO', extra_info: typeof info === 'string' ? info : JSON.stringify(info) });
 const shapeOf = (width, height, extra = {}) => parseVideoShape([video(Object.assign({ Width: String(width), Height: String(height) }, extra))]);
@@ -111,6 +111,7 @@ test('normalisePicture: only "fill" is Fill', () => {
   assert.deepEqual(['fill', 'fit', '', 'stretch', null, undefined, 'FILL'].map(normalisePicture), ['fill', 'fit', 'fit', 'fit', 'fit', 'fit', 'fit']);
 });
 
+// Tizen only (to the end of the AVPlay wrapper tests): pure fillRoi maths and AVPlay's setVideoRoi / display methods mean nothing on the Mac.
 // ---- Fill as a crop, never a stretch ---------------------------------------------------------------------------------
 
 test('fillRoi: the middle of the frame that has the screen\'s shape', () => {
@@ -249,7 +250,7 @@ test('the mock reports a video\'s shape the way a scenario says', () => {
 
 const WIDE = { res: '1920x800' };
 
-test('the engine reads the shape after prepare, starts in Fit by default and logs it for Diagnostics', async () => {
+both('the engine reads the shape after prepare, starts in Fit by default and logs it for Diagnostics', async (adapter) => {
   const t = makeEngine({ sources: [stream('Dune 1080p DDP5.1', WIDE)], fill: true });
   await t.start();
   await t.advance(3000);
@@ -260,16 +261,18 @@ test('the engine reads the shape after prepare, starts in Fit by default and log
   assert.equal(info.bars, true);
   assert.match(info.note, /black bars above and below are part of the film/);
   assert.equal(info.crop, 26);
-  assert.equal(t.callsOf('setVideoRoi').length, 0);
-  assert.equal(t.av.__mock.display.method, 'PLAYER_DISPLAY_MODE_LETTER_BOX');
+  assert.equal(t.cropped(), false, 'Fit never crops');
+  if (adapter === 'avplay') { assert.equal(t.callsOf('setVideoRoi').length, 0); assert.equal(t.av.__mock.display.method, 'PLAYER_DISPLAY_MODE_LETTER_BOX'); }
+  else assert.equal(t.mpv.prop('panscan'), 0);
   assert.ok(t.log.some((l) => /picture: source 1920×800 · 2\.40:1/.test(l)), t.log.join('\n'));
   const snap = t.diag.snapshot();
   assert.equal(snap.picture.text, '1920×800 · 2.40:1');
   assert.match(pictureLines(snap.picture).join('\n'), /source {3}1920×800 · 2\.40:1/);
   assert.match(pictureLines(snap.picture).join('\n'), /asked {4}Fit/);
-  assert.match(pictureLines(snap.picture).join('\n'), /showing {2}Fit via LETTER_BOX/);
+  assert.match(pictureLines(snap.picture).join('\n'), /showing {2}Fit via (LETTER_BOX|panscan 0)/);
 });
 
+// Tizen only: `noshape` (a TV that does not report the size) is an AVPlay mock URL option.
 test('a 16:9 file has no note, and a TV that does not say its size gets text saying nothing and Fit', async () => {
   const a = makeEngine({ sources: [stream('A 1080p DDP5.1', { res: '1920x1080' })] });
   await a.start(); await a.advance(3000);
@@ -285,45 +288,57 @@ test('a 16:9 file has no note, and a TV that does not say its size gets text say
   assert.match(pictureLines(info).join('\n'), /size not reported by the TV/);
 });
 
-test('the profile\'s default starts the film in Fill: the crop is set before play, at the start', async () => {
+both('the profile\'s default starts the film in Fill: the crop is set before play, at the start', async (adapter) => {
   const t = makeEngine({ sources: [stream('Dune 1080p DDP5.1', WIDE)], fill: true, settings: { pictureSize: 'fill' } });
   await t.start();
   await t.advance(3000);
   assert.equal(t.engine.pictureInfo().showing, 'fill');
-  const roi = t.callsOf('setVideoRoi');
-  assert.equal(roi.length, 1);
-  assert.ok(roi[0].t <= t.callsOf('play')[0].t, 'set before the picture starts');
-  assert.deepEqual(t.av.__mock.display.roi, fillRoi(shapeOf(1920, 800)));
-  assert.equal(t.av.__mock.display.method, 'PLAYER_DISPLAY_MODE_LETTER_BOX');
+  assert.equal(t.cropped(), true);
+  if (adapter === 'avplay') {
+    const roi = t.callsOf('setVideoRoi');
+    assert.equal(roi.length, 1);
+    assert.ok(roi[0].t <= t.callsOf('play')[0].t, 'set before the picture starts');
+    assert.deepEqual(t.av.__mock.display.roi, fillRoi(shapeOf(1920, 800)));
+    assert.equal(t.av.__mock.display.method, 'PLAYER_DISPLAY_MODE_LETTER_BOX');
+  } else {
+    const sent = t.mpv.posted;
+    const fill = sent.findIndex((m) => m.cmd === 'setProp' && m.args.name === 'panscan' && m.args.value === 1);
+    const play = sent.findIndex((m) => m.cmd === 'pause' && m.args.paused === false);
+    assert.ok(fill >= 0 && fill < play, 'set before the picture starts: panscan at ' + fill + ', play at ' + play);
+  }
   assert.equal(t.events.started.length, 1);
 });
 
-test('choosing Fill or Fit while watching applies at once, at the same second: no reload, no seek, remembered', async () => {
+both('choosing Fill or Fit while watching applies at once, at the same second: no reload, no seek, remembered', async (adapter) => {
   const t = makeEngine({ sources: [stream('Dune 1080p DDP5.1', WIDE)], fill: true, params: { resumeAt: 60000 } });
   await t.start();
   await t.advance(3000);
-  const opens = t.opens().length;
-  const seeks = t.callsOf('seekTo').length;
-  const here = t.av.__mock.position;
+  const opens = t.loads().length;
+  const seeks = t.seeks().length;
+  const here = t.position();
   const before = t.events.picture.length;
 
   assert.equal(t.engine.setPicture('fill'), true);
   assert.equal(t.engine.pictureInfo().showing, 'fill');
   assert.equal(t.engine.pictureInfo().mode, 'fill');
-  assert.deepEqual(t.av.__mock.display.roi, fillRoi(shapeOf(1920, 800)), 'on the screen immediately, without advancing the clock');
-  assert.equal(t.opens().length, opens, 'the source is not reopened');
-  assert.equal(t.callsOf('seekTo').length, seeks, 'and not sought');
-  assert.equal(t.av.__mock.position, here, 'the film is where it was');
+  if (adapter === 'avplay') assert.deepEqual(t.av.__mock.display.roi, fillRoi(shapeOf(1920, 800)), 'on the screen immediately, without advancing the clock');
+  assert.equal(t.loads().length, opens, 'the source is not reopened');
+  assert.equal(t.seeks().length, seeks, 'and not sought');
+  if (adapter === 'avplay') assert.equal(t.position(), here, 'the film is where it was'); // the Mac's panscan needs a tick to arrive, so the film moves
   assert.equal(t.events.picture.length, before + 1, 'the panel is told');
   assert.equal(t.store.get('settings/pictureSize@p1'), 'fill', 'kept as this profile\'s default');
+  await t.advance(50);
+  assert.equal(t.cropped(), true, 'Fill is on the screen');
 
   t.engine.setPicture('fit');
-  assert.deepEqual(t.av.__mock.display.roi, [0, 0, 1, 1]);
+  await t.advance(50);
+  assert.equal(t.cropped(), false, 'and Fit puts the whole frame back');
   assert.equal(t.engine.pictureInfo().showing, 'fit');
   assert.equal(t.store.get('settings/pictureSize@p1'), 'fit');
-  assert.equal(t.opens().length, opens);
+  assert.equal(t.loads().length, opens);
 });
 
+// Tizen only: Fill is a build flag there; the Mac always offers it.
 test('with Fill not offered the choice falls back to Fit and says why; the crop call never happens', async () => {
   const t = makeEngine({ sources: [stream('Dune 1080p DDP5.1', WIDE)] }); // the shipped flag: off
   await t.start();
@@ -339,21 +354,23 @@ test('with Fill not offered the choice falls back to Fit and says why; the crop 
   assert.match(pictureLines(info).join('\n'), /Fill is not offered on this TV/);
 });
 
-test('a choice made before AVPlay has prepared is applied when it has; a suspend and restore say it again', async () => {
+both('a choice made before AVPlay has prepared is applied when it has; a suspend and restore say it again', async (adapter) => {
   const t = makeEngine({ sources: [stream('Dune 1080p DDP5.1', WIDE)], fill: true });
   t.engine.setPicture('fill'); // before start(): only kept
-  assert.equal(t.callsOf('setVideoRoi').length, 0);
+  assert.equal(t.cropped(), false);
   await t.start();
   await t.advance(3000);
-  assert.equal(t.callsOf('setVideoRoi').length, 1);
+  if (adapter === 'avplay') assert.equal(t.callsOf('setVideoRoi').length, 1);
+  assert.equal(t.cropped(), true);
   assert.equal(t.engine.pictureInfo().showing, 'fill');
   t.engine.suspend();
   t.engine.resume();
-  assert.equal(t.callsOf('setVideoRoi').length, 2, 'applied again after the app comes back');
-  assert.deepEqual(t.av.__mock.display.roi, fillRoi(shapeOf(1920, 800)));
+  await t.advance(50);
+  if (adapter === 'avplay') assert.equal(t.callsOf('setVideoRoi').length, 2, 'applied again after the app comes back'); // mpv keeps its panscan, nothing to resend
+  assert.equal(t.cropped(), true, 'Fill is still on the screen after the app comes back');
 });
 
-test('a failed source gives way to the next, and the picture follows the new file\'s own shape', async () => {
+both('a failed source gives way to the next, and the picture follows the new file\'s own shape', async (adapter) => {
   const t = makeEngine({
     sources: [stream('A 1080p DDP5.1', { res: '1920x800', start: 'never' }), stream('B 1080p DDP5.1', { res: '1920x1080' })],
     fill: true, settings: { pictureSize: 'fill' },
@@ -363,5 +380,5 @@ test('a failed source gives way to the next, and the picture follows the new fil
   assert.equal(t.engine.state.at, 1);
   assert.equal(t.engine.pictureInfo().text, '1920×1080 · 1.78:1');
   assert.equal(t.engine.pictureInfo().showing, 'fill');
-  assert.deepEqual(t.av.__mock.display.roi, [0, 0, 1, 1], 'a 16:9 film has nothing to cut, and the new session is whole');
+  if (adapter === 'avplay') assert.deepEqual(t.av.__mock.display.roi, [0, 0, 1, 1], 'a 16:9 film has nothing to cut, and the new session is whole'); // mpv: panscan 1 on a 16:9 window cuts nothing
 });

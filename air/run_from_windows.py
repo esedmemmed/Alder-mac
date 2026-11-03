@@ -12,7 +12,11 @@ Usage:  python air/run_from_windows.py        (see air/RECIPE.md, "The easy way"
 With --shell-check (T7.1): steps 1 and 2 for SHELL_LABELS only, then the line typed on the Air plays
 docs/air/webview-1.1.md steps 7-11 in order, asking the add-on again for a fresh link before each play
 (GET /<token>/link/<label>?fresh=1), and sends the results back as above. Links stay in ~/AlderProof/{.link,.fresh,logs}.
-With --ui-check [--probe] (T2): no Stremio login and no links. The Air installs the newest app build and either runs
+With --play-check (1.3 T6): steps 1 and 2 for PLAY_LABELS; the Air installs the newest app build and plays the matrix
+    in PLAY_SCRIPT (the app through ?play=, fullscreen, mpv option variants, every file again in bare mpv, a failover row),
+    cooling between plays; the total run time is printed first. When the results arrive Windows asks one line per sound
+    row and one for the picture (answers.tsv), then compares each app row with the bare-mpv row of its file (verdict.txt).
+    With --ui-check [--probe] (T2): no Stremio login and no links. The Air installs the newest app build and either runs
 the page probe twice (?probe=1, ?probe=2; the second launch shows whether localStorage kept its value) or opens
 the app plain for the user to try. Its --report text comes back with keys and links stripped, to --out/ui-report.txt.
 Python standard library only. Test hooks: --host, --api, --cooldown, --end, --out.
@@ -39,6 +43,7 @@ ROOT = os.path.dirname(HERE)
 API = "https://api.strem.io/api/"
 PORT = 8765
 LABELS = ["720p-h264", "1080p-h264", "1080p-hevc8", "1080p-hevc10", "4k-hevc", "4k-h264", "dts", "truehd"]
+PLAY_LABELS = LABELS + ["1080p60-h264"]  # --play-check (T6): the 1.3 matrix, plus a 1080p60 H.264 file
 SHELL_LABELS = ["1080p-h264", "4k-hevc"]  # what docs/air/webview-1.1.md plays
 LINK_RE = re.compile(r"(?i)\b(?:https?|ftp)://\S*")
 KEY_RE = re.compile(r"(?i)\b(auth_?key|password|token|api_?key)\b([\"']?\s*[:=]\s*[\"']?)[^\s,;\"']+")
@@ -70,17 +75,18 @@ def tags(text):
     hdr = bool(re.search(r"\bhdr|\bhlg\b", w))
     ten = bool(re.search(r"\b10 ?bit|\bhi10|\bmain ?10\b", w)) or hdr
     eight = bool(re.search(r"\b8 ?bit\b", w))
+    fast = bool(re.search(r"\b(?:50|59|60) ?fps\b|\b(?:50|60)p\b|\b\d{3,4}p(?:50|60)\b", w))  # more than 30 frames a second
     truehd = bool(re.search(r"true ?hd", w))
     dts = bool(re.search(r"\bdts\b", w))
     bad = bool(re.search(r"\b(cam|camrip|hdcam|ts|hdts|telesync|tc|telecine|scr|screener|dvdscr|3d)\b", w))
-    return dict(heights=heights, hevc=hevc, h264=h264, av1=av1, dv_only=dv and not hdr, ten=ten, eight=eight,
+    return dict(heights=heights, hevc=hevc, h264=h264, av1=av1, dv_only=dv and not hdr, fast=fast, ten=ten, eight=eight,
                 truehd=truehd, dts=dts, bad=bad)
 
 
 def classify(text):
     """The labels a stream could be measured for, as {label: explicit}; explicit=True when the name states the
     bit depth. A stream of doubtful content (cam, 3D, Dolby Vision without HDR10, AV1, two resolutions or two
-    codecs, TrueHD with DTS) gets nothing."""
+    codecs, TrueHD with DTS) gets nothing. A 1080p H.264 name that says 50/60 fps is "1080p60-h264", not "1080p-h264"."""
     t = tags(text)
     if t["bad"] or t["av1"] or t["dv_only"] or len(t["heights"]) != 1 or (t["hevc"] and t["h264"]):
         return {}
@@ -95,7 +101,7 @@ def classify(text):
         if h == 720:
             out["720p-h264"] = True
         if h == 1080:
-            out["1080p-h264"] = True
+            out["1080p60-h264" if t["fast"] else "1080p-h264"] = True
         if h == 2160:
             out["4k-h264"] = True
     if t["truehd"] != t["dts"] and h in (720, 1080, 2160):
@@ -494,6 +500,143 @@ main "$@"
 '''
 
 
+# The app's install block (UI_SCRIPT) and the ci-mpv fetch (SHELL_SCRIPT), reused as they are for --play-check.
+_APP_INSTALL = UI_SCRIPT[UI_SCRIPT.index('appurl="__APPURL__"'):UI_SCRIPT.index("# Strip keys")]
+_CI_FETCH = SHELL_SCRIPT[SHELL_SCRIPT.index('if [ ! -x "$ci" ]; then\n    say "fetching ci-mpv"'):SHELL_SCRIPT.index("# Strip anything URL-like")]
+
+PLAY_SCRIPT = r'''#!/bin/bash
+# Alder Air play check (1.3 T6). Served by run_from_windows.py --play-check; bash 3.2.
+main() {
+base="__BASE__"
+labels="__LABELS__"
+dir=${ALDERPROOF_DIR:-$HOME/AlderProof}
+cool=${ALDER_COOLDOWN:-180}
+ci=${CI_MPV_BIN:-$dir/ci-mpv/mpv}
+ALDERPROOF_BIN=${ALDERPROOF_BIN:-/Applications/AlderProof.app/Contents/MacOS/AlderProof}; export ALDERPROOF_BIN
+umask 077
+say() { curl -s -m 20 -X POST --data-binary "$1" "$base/status" >/dev/null 2>&1 </dev/null; echo "$1"; }
+cleanup() { rm -rf "$dir/.link" "$dir/logs" "$dir/results.tgz"; [ -n "${cafpid:-}" ] && kill "$cafpid" 2>/dev/null; }
+trap cleanup EXIT
+mkdir -p "$dir/logs" || { say "cannot make $dir"; return 1; }
+if command -v caffeinate >/dev/null 2>&1; then caffeinate -disu -w $$ & cafpid=$!; fi
+if command -v pmset >/dev/null 2>&1 && pmset -g ps 2>/dev/null | grep -q "Battery Power"; then
+    say "warning: the Air is on battery; plug in the charger (going on anyway)"
+fi
+say "air started: $(sw_vers -productVersion 2>/dev/null) $(sysctl -n hw.model 2>/dev/null)"
+curl -fsS -m 60 "$base/measure.sh" -o "$dir/measure.sh" </dev/null && curl -fsS -m 60 "$base/measure.lua" -o "$dir/measure.lua" </dev/null \
+    || { say "could not fetch the kit from Windows"; echo "Could not reach the Windows computer. Same Wi-Fi? Firewall prompt allowed?"; return 1; }
+say "kit fetched"
+
+__INSTALL__
+__CIFETCH__
+# Strip anything URL-like from text before it is sent.
+nolink() { sed -E 's#[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]]*#[link]#g'; }
+# Percent-encode $1 for a query value.
+urlenc() {
+    local LC_ALL=C s=$1 i=0 c o=""
+    while [ $i -lt ${#s} ]; do
+        c=${s:$i:1}
+        case $c in [A-Za-z0-9.~_-]) o=$o$c ;; *) o="$o$(printf '%%%02X' "'$c")" ;; esac
+        i=$((i+1))
+    done
+    printf '%s' "$o"
+}
+first=1
+rest() { if [ $first -eq 0 ]; then say "cooling for $cool seconds"; sleep "$cool"; fi; first=0; }
+bare_extra=${MEASURE_EXTRA:---no-fs --geometry=1280x720}
+[ -d "$dir/results" ] && mv "$dir/results" "$dir/results.old.$(date +%s)"
+
+n=0; total=__TOTAL__
+# One row per play: id|kind(app/bare)|link label|seconds|fullscreen(0/1)|mpv options (;-separated)|failover(0/1)
+while IFS='|' read -r id kind link secs fs opts fo <&3; do
+    [ -n "$id" ] || continue
+    n=$((n+1))
+    case " $labels " in *" $link "*) ;; *) say "$id: no $link file was found, skipped ($n of $total)"; continue ;; esac
+    rest
+    if ! curl -fsS -m 60 "$base/link/$link?fresh=1" -o "$dir/.link" </dev/null 2>/dev/null; then say "$id: no link from Windows, skipped"; continue; fi
+    say "$id: playing $secs s ($n of $total)"
+    if [ "$kind" = "bare" ]; then
+        out=$(MEASURE_END="$secs" MPV_BIN="$ci" MEASURE_EXTRA="$bare_extra" bash "$dir/measure.sh" "$id" "$(cat "$dir/.link")" bare </dev/null 2>&1); rc=$?
+        log="$dir/logs/$id.bare.player.log"
+    else
+        page="index.html?play=$(urlenc "$(cat "$dir/.link")")"
+        if [ "$fo" = "1" ]; then page="index.html?play=$(urlenc http://127.0.0.1:9/dead)&play=$(urlenc "$(cat "$dir/.link")")"; fi
+        if [ "$fs" = "1" ]; then page="$page&fs=1"; fi
+        args=(--page "$page" --measure "$dir/measure.lua" --label "$id" --end "$secs" --quit-after "$((secs+300))")
+        oldifs=$IFS; IFS=';'; for o in $opts; do args[${#args[@]}]=--mpv-opt; args[${#args[@]}]=$o; done; IFS=$oldifs
+        log="$dir/logs/$id.player.log"
+        "$ALDERPROOF_BIN" "${args[@]}" > "$log" 2>&1 </dev/null; rc=$?
+        out=""
+    fi
+    rm -f "$dir/.link"
+    if [ $rc -eq 0 ]; then say "$id: done: $(echo "$out" | head -n 1)"
+    else say "$id: failed (exit $rc). Player log, error-like lines: $( [ -f "$log" ] && grep -iE 'error|fail|http|403|404|refused|end-file' "$log" | tail -n 5 | cut -c1-200 | nolink | tr '\n' '|')"; fi
+done 3<<ROWS_END
+__ROWS__
+ROWS_END
+
+say "sending results"
+if [ -d "$dir/results" ] && (cd "$dir" && tar czf results.tgz results) && \
+   curl -fsS -m 300 --data-binary @"$dir/results.tgz" "$base/results" >/dev/null </dev/null; then
+    say "results sent"
+else
+    say "results could not be sent; they stay in $dir/results"
+fi
+cleanup
+echo
+echo "Finished. The links are deleted from this Air. You can close this window."
+}
+main "$@"
+'''.replace("__INSTALL__", _APP_INSTALL).replace("__CIFETCH__", _CI_FETCH)
+
+
+class Row:
+    """One play of the --play-check matrix. kind app: the shell with ?play=; kind bare: ci-mpv with measure.lua."""
+    def __init__(self, id, kind, link, secs, fs=False, opts=(), bare=None, failover=False, sound=False):
+        self.id, self.kind, self.link, self.secs, self.fs = id, kind, link, secs, fs
+        self.opts, self.bare, self.failover, self.sound = tuple(opts), bare, failover, sound
+
+    def line(self):
+        return "|".join([self.id, self.kind, self.link, str(self.secs), "1" if self.fs else "0", ";".join(self.opts),
+                         "1" if self.failover else "0"])
+
+
+def play_rows(end=None):
+    """The 1.3 matrix in play order. `end` (a test hook) replaces every row's seconds."""
+    long_, short = 600, 180
+    rows = []
+
+    def add(*a, **k):
+        r = Row(*a, **k)
+        if end:
+            r.secs = end
+        rows.append(r)
+    add("1080p-h264-win", "app", "1080p-h264", long_, bare="1080p-h264", sound=True)
+    add("1080p-h264-fs", "app", "1080p-h264", long_, fs=True, bare="1080p-h264", sound=True)
+    add("1080p-h264", "bare", "1080p-h264", long_)
+    for name, opt in (("audio-buffer", "audio-buffer=1"), ("resample", "video-sync=display-resample"),
+                      ("framedrop", "framedrop=decoder+vo")):
+        add("1080p-h264-" + name, "app", "1080p-h264", long_, opts=[opt], bare="1080p-h264", sound=True)
+    for label in PLAY_LABELS:
+        if label == "1080p-h264":
+            continue
+        add(label + "-app", "app", label, short, bare=label, sound=label in ("dts", "truehd"))
+        add(label, "bare", label, short)
+    add("failover", "app", "1080p-h264", 60, failover=True)
+    return rows
+
+
+def play_plan(rows, found, cooldown):
+    """(rows that will play, total seconds): plays plus a cooldown between each."""
+    todo = [r for r in rows if r.link in found]
+    return todo, sum(r.secs for r in todo) + cooldown * max(len(todo) - 1, 0)
+
+
+def play_script(base, rows, found, app_url="", app_tag=""):
+    text = air_script(base, found, PLAY_SCRIPT, app_url, app_tag)
+    return text.replace("__TOTAL__", str(len(rows))).replace("__ROWS__", "\n".join(r.line() for r in rows))
+
+
 def air_script(base, labels, template=AIR_SCRIPT, app_url="", app_tag=""):
     return (template.replace("__BASE__", base).replace("__LABELS__", " ".join(labels))
             .replace("__APPURL__", app_url).replace("__APPTAG__", app_tag))
@@ -584,6 +727,128 @@ def keep_ui_report(data, out_dir):
     return 1, n + k
 
 
+# ---------------------------------------------------------------- play-check answers and verdict
+SOUND_ANSWERS = ("clean", "gaps", "no sound")
+PICTURE_ANSWERS = ("smooth", "judder", "broken")
+LIMITS = "drop_pct<1, hwdec videotoolbox for H.264, stalls 0, realtime>=0.99, |app-bare realtime|<=0.002"
+
+
+def ask_answers(rows, input_fn=input, say=print):
+    """One line per sound row (clean / gaps / no sound) and one for the picture. Returns [(row id, answer)].
+    A closed input gives "unanswered"."""
+    out = []
+
+    def ask(id, prompt, valid):
+        while True:
+            try:
+                a = input_fn("%s (%s): " % (prompt, " / ".join(valid))).strip().lower()
+            except EOFError:
+                return "unanswered"
+            if a in valid:
+                return a
+            say("Please type one of: " + ", ".join(valid))
+    for r in rows:
+        if r.sound and r.kind == "app":
+            out.append((r.id, ask(r.id, "Row %s: how did the sound play" % r.id, SOUND_ANSWERS)))
+    out.append(("picture", ask("picture", "Overall: how did the picture look", PICTURE_ANSWERS)))
+    return out
+
+
+def write_answers(answers, out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "answers.tsv"), "w", encoding="utf-8", newline="") as f:
+        f.write("row\tanswer\n" + "".join("%s\t%s\n" % a for a in answers))
+
+
+def read_summary(out_dir, stem_glob):
+    """key=value pairs of the first <stem_glob>.summary.txt in out_dir, else None."""
+    for name in sorted(os.listdir(out_dir)) if os.path.isdir(out_dir) else []:
+        if re.fullmatch(stem_glob + r"\.summary\.txt", name):
+            with open(os.path.join(out_dir, name), encoding="utf-8", errors="replace") as f:
+                return dict(kv.split("=", 1) for kv in f.read().split() if "=" in kv)
+    return None
+
+
+def num(d, key):
+    try:
+        return float(d.get(key, ""))
+    except ValueError:
+        return None
+
+
+def judge_row(row, app, bare, answer=None):
+    """(ok, [reasons], detail) for one app row against the bare-mpv row of the same file."""
+    why = []
+    drop, real, stalls = num(app, "drop_pct"), num(app, "realtime"), num(app, "stalls")
+    if drop is None or not drop < 1:
+        why.append("drop_pct %s" % app.get("drop_pct"))
+    if row.link.endswith("h264") and app.get("hwdec") != "videotoolbox":
+        why.append("hwdec %s" % app.get("hwdec"))
+    if stalls is None or stalls != 0:
+        why.append("stalls %s" % app.get("stalls"))
+    if real is None or real < 0.99:
+        why.append("realtime %s" % app.get("realtime"))
+    diff = None
+    if row.bare:
+        breal = num(bare, "realtime") if bare else None
+        if real is None or breal is None:
+            why.append("no bare realtime to compare")
+        else:
+            diff = round(abs(real - breal), 6)  # three-decimal inputs: 0.002 must not fail on float noise
+            if diff > 0.002:
+                why.append("|app-bare| %.3f" % diff)
+    if answer is not None and answer != "clean":
+        why.append("sound " + answer)
+    detail = "drop_pct=%s hwdec=%s stalls=%s realtime=%s" % tuple(app.get(k) for k in ("drop_pct", "hwdec", "stalls", "realtime"))
+    if diff is not None:
+        detail += " bare=%s diff=%.3f" % (bare.get("realtime"), diff)
+    return not why, why, detail
+
+
+def verdict(rows, out_dir, answers=()):
+    """Each app row against the bare row of its file: PASS/FAIL with numbers. Returns (lines, all passed).
+    The failover row has no bare partner: it passes when something played (seconds >= 30) after the dead source."""
+    said = dict(answers)
+    lines, good = ["Play check verdict (" + LIMITS + ")"], True
+    for r in rows:
+        if r.kind != "app":
+            continue
+        app = read_summary(out_dir, re.escape(r.id) + r"\.shell-[a-z]+")
+        if app is None:
+            lines.append("%s: FAIL no result (no file, or the run did not get there)" % r.id)
+            good = False
+            continue
+        if r.failover:
+            sec = num(app, "seconds")
+            ok = sec is not None and sec >= 30
+            lines.append("%s: %s played after the dead source: seconds=%s" % (r.id, "PASS" if ok else "FAIL", app.get("seconds")))
+            good = good and ok
+            continue
+        bare = read_summary(out_dir, re.escape(r.bare) + r"\.bare") if r.bare else None
+        ok, why, detail = judge_row(r, app, bare, said.get(r.id))
+        lines.append("%s: %s %s%s" % (r.id, "PASS" if ok else "FAIL", detail, "" if ok else "  <- " + "; ".join(why)))
+        good = good and ok
+    if "picture" in said:
+        ok = said["picture"] == "smooth"
+        lines.append("picture: %s (you said %s)" % ("PASS" if ok else "FAIL", said["picture"]))
+        good = good and ok
+    lines.append("OVERALL: " + ("PASS" if good else "FAIL"))
+    return lines, good
+
+
+def finish_play_check(rows, out_dir, say, input_fn=input):
+    """After the results arrive: ask the sound and picture questions, write answers.tsv, then verdict.txt."""
+    present = [r for r in rows if read_summary(out_dir, re.escape(r.id) + r"\.(?:shell-[a-z]+|bare)")]
+    answers = ask_answers(present, input_fn, say)
+    write_answers(answers, out_dir)
+    lines, good = verdict(rows, out_dir, answers)
+    with open(os.path.join(out_dir, "verdict.txt"), "w", encoding="utf-8", newline="") as f:
+        f.write("\n".join(lines) + "\n")
+    for l in lines:
+        say(l)
+    return good
+
+
 def make_handler(st):
     class H(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -621,9 +886,11 @@ def make_handler(st):
         def do_POST(self):
             r = self._route()
             n = int(self.headers.get("Content-Length") or 0)
-            if r is None or n > 50_000_000:
+            if n > 50_000_000:
                 return self._send(404)
-            body = self.rfile.read(n)
+            body = self.rfile.read(n)  # before any reply: a 404 sent with the body unread resets the client's connection (flaky test)
+            if r is None:
+                return self._send(404)
             if r == ["status"]:
                 st.say("Air: " + scrub(body.decode("utf-8", "replace"))[:300])
                 return self._send(200)
@@ -669,18 +936,19 @@ def lan_addresses():
     return best or (found[0] if found else None), found
 
 
-def main(argv=None, creds=None):
+def main(argv=None, creds=None, play_input=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--host", help="address to serve on (default: the Wi-Fi address)")
     ap.add_argument("--api", default=API, help="Stremio API base (tests)")
     ap.add_argument("--cooldown", type=int, default=180, help="seconds between files on the Air")
     ap.add_argument("--end", type=int, help="seconds each file plays (default 600; tests use a few)")
-    ap.add_argument("--out", default=os.path.join(ROOT, ".run", "1.1", "air-results"))
+    ap.add_argument("--out", default=os.path.join(ROOT, ".run", "1.3", "air-results"))
     ap.add_argument("--idle", type=int, default=3 * 3600, help="give up after this many seconds without the Air")
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--ui-check", action="store_true", help="T2: install the app on the Air and check its page (no login)")
     ap.add_argument("--probe", action="store_true", help="with --ui-check: run the page probe twice instead of opening the app")
     ap.add_argument("--shell-check", action="store_true", help="T7.1: the AlderProof shell check (webview-1.1 steps 7-11)")
+    ap.add_argument("--play-check", action="store_true", help="1.3 T6: the play matrix through the app and bare mpv, then questions and a verdict")
     a = ap.parse_args(argv)
 
     def say(s):
@@ -688,7 +956,9 @@ def main(argv=None, creds=None):
 
     if a.probe and not a.ui_check:
         ap.error("--probe goes with --ui-check")
-    wanted = SHELL_LABELS if a.shell_check else LABELS
+    if a.play_check and (a.ui_check or a.shell_check):
+        ap.error("--play-check stands alone")
+    wanted = PLAY_LABELS if a.play_check else SHELL_LABELS if a.shell_check else LABELS
     if a.ui_check:
         links, sources, found = {}, {}, []  # no login, no links: nothing to find
     else:
@@ -732,7 +1002,7 @@ def main(argv=None, creds=None):
         return 1
     base = "http://%s:%d/%s" % (host, server.server_address[1], token)
     app_tag, app_url = "", ""
-    if a.shell_check or a.ui_check:
+    if a.shell_check or a.ui_check or a.play_check:
         rel = find_app_release()
         if rel:
             app_tag, app_url = rel
@@ -740,8 +1010,14 @@ def main(argv=None, creds=None):
         else:
             say("Could not look up the newest AlderProof build; the Air will use the app in Applications.")
     template = UI_SCRIPT if a.ui_check else SHELL_SCRIPT if a.shell_check else AIR_SCRIPT
-    script = air_script(base, found, template, app_url, app_tag).replace("__UIMODE__", "probe" if a.probe else "open")
-    if a.end:
+    rows, plan = [], 0
+    if a.play_check:
+        rows = play_rows(a.end)
+        todo, plan = play_plan(rows, links, a.cooldown)
+        script = play_script(base, rows, found, app_url, app_tag)
+    else:
+        script = air_script(base, found, template, app_url, app_tag).replace("__UIMODE__", "probe" if a.probe else "open")
+    if a.end and not a.play_check:
         script = script.replace('main "$@"', 'MEASURE_END=%d; export MEASURE_END\nmain "$@"' % a.end)
     script = script.replace("cool=${ALDER_COOLDOWN:-180}", "cool=${ALDER_COOLDOWN:-%d}" % a.cooldown)
     st = State(token, links, script, a.out, say, sources=sources)
@@ -762,6 +1038,10 @@ def main(argv=None, creds=None):
             print("The Air opens the app twice for a few seconds each. Leave both computers alone; this window ends by itself.")
         else:
             print("The Air opens the app for you to use. Quit it with Cmd-Q when done; this window then ends by itself.")
+    elif a.play_check:
+        print("The play check: %d plays and their cooldowns, %d h %02d min in all (%d min of playing, %d min of cooling). Leave both computers alone;"
+              % (len(todo), plan // 3600, plan % 3600 // 60, sum(r.secs for r in todo) // 60, a.cooldown * max(len(todo) - 1, 0) // 60))
+        print("when the results arrive this window asks a few questions about what you heard and saw.")
     elif a.shell_check:
         print("The check takes about an hour. Leave both computers alone; this window ends by itself.")
     else:
@@ -781,6 +1061,9 @@ def main(argv=None, creds=None):
     files, removed = st.kept
     say("Results kept: %d file(s), %d link(s) stripped." % (files, removed))
     say("They are in " + os.path.abspath(a.out))
+    if a.play_check:
+        finish_play_check(todo, a.out, say, input_fn=play_input or input)
+        say("Answers and verdict are in " + os.path.abspath(a.out))
     return 0
 
 

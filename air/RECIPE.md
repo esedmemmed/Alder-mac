@@ -21,6 +21,15 @@ Checks the Alder page inside the Mac web view: the engine versions, which Stremi
 4. The Air downloads the newest app build and opens it twice, a few seconds each; a full-screen window appears and closes by itself. If a window stays open, press Cmd-Q. Without `--probe` the app opens once and stays until you press Cmd-Q; use it as you like (the page's errors are reported too).
 5. The Air says it has finished. The Windows window then prints where the report is: `.run/1.1/air-results/ui-report.txt` (use `--out <folder>` to choose). Tell Claude it is there. Links and keys are removed on the Air and again on Windows; the report holds engine versions, reachability verdicts, error lines and the localStorage verdict.
 
+## The play check (from Windows, 1.3)
+
+Plays the 1.3 matrix through the real app and through bare mpv, so the app's picture and sound can be judged against mpv itself. It needs the Stremio login (typed on Windows, never saved) and the Air on the same Wi-Fi, plugged in, lid open.
+
+1. On Windows run `python air/run_from_windows.py --play-check` (the Python named in `.claude/pa.json`), type the Stremio e-mail and password. It looks for a file of each kind (the usual eight labels plus a 1080p 60 fps H.264 one), then prints the line to type on the Air and the total time up front: the plays plus 180 s of cooling between them, about three hours with every file found.
+2. On the Air type that line in Terminal as above. It installs the newest app build, then plays: 1080p H.264 in the app windowed, in the app fullscreen, and in bare mpv (600 s each); the app again with `audio-buffer=1`, `video-sync=display-resample` and `framedrop=decoder+vo` (600 s each); 720p H.264, 4k H.264, 1080p HEVC 8 and 10 bit, 4k HEVC, 1080p60 H.264, DTS and TrueHD, each in the app and in bare mpv (180 s each); and a failover play (a dead address first, then the 1080p file, 60 s). Each file's link is asked of its add-on again just before it plays.
+3. Listen and watch while it runs. When the results arrive the Windows window asks one line per sound row (`clean`, `gaps` or `no sound`) and one for the picture (`smooth`, `judder` or `broken`). Answers go to `answers.tsv`.
+4. It then writes `verdict.txt` in the results folder (default `.run/1.3/air-results`): each app row against the bare-mpv row of the same file, PASS or FAIL with the numbers. A row passes when drop_pct < 1, hwdec is videotoolbox (H.264 files), stalls are 0, realtime is at least 0.99 and the app's realtime is within 0.002 of mpv's; a sound answer other than `clean` fails the row. The failover row passes when it kept playing after the dead address.
+
 ## The manual way (fallback)
 
 This takes one 10-minute run per file, plus a few minutes of cooling between files. Each step says where to type. "Air Terminal" means press Cmd-Space on the Air, type Terminal, press Return.

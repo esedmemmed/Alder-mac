@@ -1,7 +1,7 @@
 // Progress (tick 10 s, push 60 s), resume, stalls, Up next, Skip intro, suspend: the rest of PlayerActivity.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeEngine, stream, libraryItem, severanceMeta } from './helpers.js';
+import { both, makeEngine, stream, libraryItem, severanceMeta } from './helpers.js';
 import { PLAYER, upNextWindow } from '../../src/core/playback.js';
 
 const FILM = 5400000;
@@ -11,7 +11,7 @@ test('constants are Alder\'s', () => {
     [10000, 10000, 10000, 600, 10000, 5000, 12000, 2, 1500, 3]);
 });
 
-test('progress: recorded every 10 s, pushed to Stremio every 60 s', async () => {
+both('progress: recorded every 10 s, pushed to Stremio every 60 s', async () => {
   const t = makeEngine({ sources: [stream('Film')], item: libraryItem({ state: { timeOffset: 0, duration: 0, video_id: null } }) });
   await t.start();
   await t.advance(9900);
@@ -37,51 +37,51 @@ test('progress: recorded every 10 s, pushed to Stremio every 60 s', async () => 
   assert.equal(t.puts[1].at, 120000);
 });
 
-test('a seek is not watched time: the jump moves the position but not timeWatched', async () => {
+both('a seek is not watched time: the jump moves the position but not timeWatched', async () => {
   const t = makeEngine({ sources: [stream('Film')], item: libraryItem({ state: { timeOffset: 0, duration: 0, video_id: null } }) });
   await t.start();
   await t.advance(10100);
   const before = t.item.state.timeWatched;
   t.engine.scrub(600000);
   await t.advance(700); // SEEK_SETTLE = 600 ms
-  assert.equal(t.callsOf('seekTo').filter((c) => c.args[0] > 500000).length, 1, 'one seek after the presses stop');
+  assert.equal(t.seeks().filter((ms) => ms > 500000).length, 1, 'one seek after the presses stop');
   await t.advance(10000);
   assert.ok(t.item.state.timeOffset > 600000, 'the position is after the jump: ' + t.item.state.timeOffset);
   assert.ok(t.item.state.timeWatched - before < 25000, 'watched time grew by one tick, not by 10 minutes: ' + (t.item.state.timeWatched - before));
 });
 
-test('scrub: presses within SEEK_SETTLE add up and make one seek', async () => {
+both('scrub: presses within SEEK_SETTLE add up and make one seek', async () => {
   const t = makeEngine({ sources: [stream('Film')] });
   await t.start();
   await t.advance(3000);
-  const here = t.av.__mock.position;
+  const here = t.position();
   t.engine.scrub(10000); await t.advance(200);
   t.engine.scrub(10000); await t.advance(200);
   t.engine.scrub(-10000); await t.advance(200);
   t.engine.scrub(30000);
-  assert.equal(t.callsOf('seekTo').length, 0 + 0, 'no seek while the presses go on (only the resume seek, which is 0 here)');
+  assert.equal(t.seeks().length, 0 + 0, 'no seek while the presses go on (only the resume seek, which is 0 here)');
   assert.equal(t.engine.snapshot().scrubbing, true);
   assert.ok(Math.abs(t.engine.snapshot().position - (here + 40000)) < 600, 'the bar shows the target at once');
   await t.advance(700);
-  const seeks = t.callsOf('seekTo');
+  const seeks = t.seeks();
   assert.equal(seeks.length, 1);
-  assert.ok(Math.abs(seeks[0].args[0] - (here + 40000)) < 1500, 'target ' + seeks[0].args[0]);
+  assert.ok(Math.abs(seeks[0] - (here + 40000)) < 1500, 'target ' + seeks[0]);
   assert.equal(t.engine.snapshot().scrubbing, false);
 });
 
-test('scrub is bounded by the length of the film', async () => {
+both('scrub is bounded by the length of the film', async () => {
   const t = makeEngine({ sources: [stream('Film', { duration: 100 })] });
   await t.start();
   await t.advance(2000);
   t.engine.scrub(10 * 60000);
   await t.advance(700);
-  assert.deepEqual(t.callsOf('seekTo').map((c) => c.args[0]), [99000], 'duration - 1 s');
+  assert.deepEqual(t.seeks(), [99000], 'duration - 1 s');
   t.engine.scrub(-10 * 60000);
   await t.advance(700);
-  assert.equal(t.callsOf('seekTo').pop().args[0], 0);
+  assert.equal(t.seeks().pop(), 0);
 });
 
-test('nothing is saved until a picture shows', async () => {
+both('nothing is saved until a picture shows', async () => {
   const t = makeEngine({ sources: [stream('Dead', { start: 'never' })], params: { picked: true }, item: libraryItem() });
   const original = JSON.parse(JSON.stringify(t.item));
   await t.start();
@@ -93,7 +93,7 @@ test('nothing is saved until a picture shows', async () => {
   assert.equal(t.item.state.timeOffset, original.state.timeOffset);
 });
 
-test('nothing is saved for a series stream shorter than two minutes (an add-on placeholder)', async () => {
+both('nothing is saved for a series stream shorter than two minutes (an add-on placeholder)', async () => {
   const meta = severanceMeta();
   const it = libraryItem({ id: 'tt11280740', type: 'series', state: { video_id: 'tt11280740:1:4', timeOffset: 840000, duration: 3000000 } });
   const t = makeEngine({ sources: [stream('Placeholder', { duration: 90 })], params: { type: 'series', metaId: 'tt11280740', videoId: 'tt11280740:1:4' }, item: it, meta });
@@ -103,19 +103,19 @@ test('nothing is saved for a series stream shorter than two minutes (an add-on p
   assert.equal(t.puts.length, 0);
 });
 
-test('a placeholder that ends moves on to the next source from the original resume point', async () => {
+both('a placeholder that ends moves on to the next source from the original resume point', async () => {
   const meta = severanceMeta();
   const it = libraryItem({ id: 'tt11280740', type: 'series', state: { video_id: 'tt11280740:1:4', timeOffset: 840000, duration: 3000000 } });
   const t = makeEngine({ sources: [stream('Placeholder', { duration: 30 }), stream('Real')], params: { type: 'series', metaId: 'tt11280740', videoId: 'tt11280740:1:4' }, item: it, meta, saved: it });
   await t.start();
   await t.advance(40000);
-  assert.equal(t.opens().length, 2);
-  assert.ok(/Real/.test(t.opens()[1].args[0]));
-  const seeks = t.callsOf('seekTo').map((c) => c.args[0]);
+  assert.equal(t.loads().length, 2);
+  assert.ok(/Real/.test(t.loads()[1].url));
+  const seeks = t.seeks();
   assert.deepEqual(seeks, [29000, 840000], 'the first is clamped to the 30 s placeholder; the next source starts from the resume point, not the placeholder\'s end');
 });
 
-test('stopped on exit: past the credits the film is finished and a series moves on to the next episode', async () => {
+both('stopped on exit: past the credits the film is finished and a series moves on to the next episode', async () => {
   const meta = severanceMeta();
   const it = libraryItem({ id: 'tt11280740', type: 'series', state: { video_id: 'tt11280740:1:4', timeOffset: 0, duration: 0 } });
   const t = makeEngine({ sources: [stream('Ep', { duration: 600 })], params: { type: 'series', metaId: 'tt11280740', videoId: 'tt11280740:1:4', resumeAt: 590000 }, item: it, meta });
@@ -128,10 +128,10 @@ test('stopped on exit: past the credits the film is finished and a series moves 
   assert.equal(t.puts.length, 1, 'pushed on the way out');
   assert.equal(t.puts[0].items[0].state.video_id, 'tt11280740:1:5');
   assert.equal(t.events.navigate[0].kind, 'exit');
-  assert.equal(t.av.getState(), 'NONE', 'AVPlay closed');
+  assert.equal(t.playState(), 'NONE', 'AVPlay closed');
 });
 
-test('exit mid-film saves the place without finishing it', async () => {
+both('exit mid-film saves the place without finishing it', async () => {
   const t = makeEngine({ sources: [stream('Film')], item: libraryItem({ state: { timeOffset: 0, duration: 0, video_id: null } }) });
   await t.start();
   await t.advance(25000);
@@ -145,33 +145,33 @@ test('exit mid-film saves the place without finishing it', async () => {
 
 // ---- resume ----
 
-test('resume: Library.resumeAt of the saved item starts the stream at once', async () => {
+both('resume: Library.resumeAt of the saved item starts the stream at once', async () => {
   const saved = libraryItem({ state: { timeOffset: 100000, duration: FILM, video_id: 'tt15239678' } });
   const t = makeEngine({ sources: [stream('Film')], saved, item: libraryItem({ state: { timeOffset: 100000, duration: FILM, video_id: 'tt15239678' } }), libraryDelay: 5000 });
   await t.start();
   await t.advance(1000);
-  assert.deepEqual(t.callsOf('seekTo').map((c) => c.args[0]), [100000], 'did not wait for the account');
+  assert.deepEqual(t.seeks(), [100000], 'did not wait for the account');
 });
 
-test('resume slack: Stremio says elsewhere (> 10 s apart) before the picture: start from there', async () => {
+both('resume slack: Stremio says elsewhere (> 10 s apart) before the picture: start from there', async () => {
   const saved = libraryItem({ state: { timeOffset: 100000, duration: FILM, video_id: 'tt15239678' } });
   const fresh = libraryItem({ state: { timeOffset: 300000, duration: FILM, video_id: 'tt15239678' } });
   const t = makeEngine({ sources: [stream('Film')], saved, item: fresh });
   await t.start();
   await t.advance(1500);
-  assert.deepEqual(t.callsOf('seekTo').map((c) => c.args[0]), [300000]);
+  assert.deepEqual(t.seeks(), [300000]);
 });
 
-test('resume slack: within 10 s, the TV\'s own copy stands', async () => {
+both('resume slack: within 10 s, the TV\'s own copy stands', async () => {
   const saved = libraryItem({ state: { timeOffset: 100000, duration: FILM, video_id: 'tt15239678' } });
   const fresh = libraryItem({ state: { timeOffset: 109000, duration: FILM, video_id: 'tt15239678' } });
   const t = makeEngine({ sources: [stream('Film')], saved, item: fresh });
   await t.start();
   await t.advance(3000);
-  assert.deepEqual(t.callsOf('seekTo').map((c) => c.args[0]), [100000]);
+  assert.deepEqual(t.seeks(), [100000]);
 });
 
-test('resume slack: a late answer moves a stream that has barely started, not one that has been watched', async () => {
+both('resume slack: a late answer moves a stream that has barely started, not one that has been watched', async () => {
   const mk = (delay) => makeEngine({
     sources: [stream('Film')],
     saved: libraryItem({ state: { timeOffset: 100000, duration: FILM, video_id: 'tt15239678' } }),
@@ -180,34 +180,34 @@ test('resume slack: a late answer moves a stream that has barely started, not on
   });
   const soon = mk(2500);
   await soon.start(); await soon.advance(5000);
-  assert.deepEqual(soon.callsOf('seekTo').map((c) => c.args[0]), [100000, 300000], 'a few seconds in: goes to where the phone got to');
+  assert.deepEqual(soon.seeks(), [100000, 300000], 'a few seconds in: goes to where the phone got to');
   const late = mk(20000);
   await late.start(); await late.advance(25000);
-  assert.deepEqual(late.callsOf('seekTo').map((c) => c.args[0]), [100000], 'already 19 s further on: stays');
+  assert.deepEqual(late.seeks(), [100000], 'already 19 s further on: stays');
 });
 
-test('resume: params win over the account (a lower-quality switch carries its own second); Start Over is 0', async () => {
+both('resume: params win over the account (a lower-quality switch carries its own second); Start Over is 0', async () => {
   const fresh = libraryItem({ state: { timeOffset: 300000, duration: FILM, video_id: 'tt15239678' } });
   const a = makeEngine({ sources: [stream('Film')], item: fresh, params: { resumeAt: 42000 } });
   await a.start(); await a.advance(2000);
-  assert.deepEqual(a.callsOf('seekTo').map((c) => c.args[0]), [42000]);
+  assert.deepEqual(a.seeks(), [42000]);
   const b = makeEngine({ sources: [stream('Film')], item: fresh, params: { startOver: true, resumeAt: 42000 } });
   await b.start(); await b.advance(2000);
-  assert.equal(b.callsOf('seekTo').length, 0, 'from the beginning: no seek at all');
+  assert.equal(b.seeks().length, 0, 'from the beginning: no seek at all');
 });
 
-test('resume: a finished film (past 90%) starts from the beginning; a different video id too', async () => {
+both('resume: a finished film (past 90%) starts from the beginning; a different video id too', async () => {
   const done = libraryItem({ state: { timeOffset: FILM * 0.95, duration: FILM, video_id: 'tt15239678' } });
   const t = makeEngine({ sources: [stream('Film')], item: done });
   await t.start(); await t.advance(2000);
-  assert.equal(t.callsOf('seekTo').length, 0);
+  assert.equal(t.seeks().length, 0);
   const other = libraryItem({ state: { timeOffset: 100000, duration: FILM, video_id: 'tt0000000' } });
   const u = makeEngine({ sources: [stream('Film')], item: other });
   await u.start(); await u.advance(2000);
-  assert.equal(u.callsOf('seekTo').length, 0);
+  assert.equal(u.seeks().length, 0);
 });
 
-test('when the library cannot be read the film still starts, and nothing is saved', async () => {
+both('when the library cannot be read the film still starts, and nothing is saved', async () => {
   const t = makeEngine({ sources: [stream('Film')], libraryFails: true });
   await t.start();
   await t.advance(70000);
@@ -217,7 +217,7 @@ test('when the library cannot be read the film still starts, and nothing is save
   assert.equal(t.puts.length, 0);
 });
 
-test('a title not in the library yet gets a temporary item (Stremio keeps those hidden)', async () => {
+both('a title not in the library yet gets a temporary item (Stremio keeps those hidden)', async () => {
   const t = makeEngine({ sources: [stream('Film')], item: null, params: { name: 'New Film', poster: 'https://p/x.jpg' } });
   await t.start();
   await t.advance(12000);
@@ -228,6 +228,7 @@ test('a title not in the library yet gets a temporary item (Stremio keeps those 
 
 // ---- stalls ----
 
+// Tizen only: the stalls are scheduled by the AVPlay mock's `stall` URL option (the Mac's stall is in engine.adapters.test.js).
 test('three stalls in a minute offer a lower quality, once', async () => {
   const t = makeEngine({ sources: [stream('Dune 2160p', { stall: '10:3,20:3,30:3,40:3' })] });
   await t.start();
@@ -242,6 +243,7 @@ test('three stalls in a minute offer a lower quality, once', async () => {
   assert.equal(t.engine.state.offeringLower, true);
 });
 
+// Tizen only: the stalls are scheduled by the AVPlay mock's `stall` URL option (the Mac's stall is in engine.adapters.test.js).
 test('stalls spread over more than a minute do not offer anything', async () => {
   const t = makeEngine({ sources: [stream('Dune 2160p', { stall: '5:2,40:2,80:2,120:2' })] });
   await t.start();
@@ -249,6 +251,7 @@ test('stalls spread over more than a minute do not offer anything', async () => 
   assert.equal(t.events.stall.length, 0);
 });
 
+// Tizen only: the stalls are scheduled by the AVPlay mock's `stall` URL option (the Mac's stall is in engine.adapters.test.js).
 test('no lower quality to offer from 480p and below', async () => {
   const t = makeEngine({ sources: [stream('Dune 480p', { stall: '5:1,10:1,15:1' })] });
   await t.start();
@@ -256,7 +259,7 @@ test('no lower quality to offer from 480p and below', async () => {
   assert.equal(t.events.stall.length, 0);
 });
 
-test('a buffering right after a seek is the seek, not a stall', async () => {
+both('a buffering right after a seek is the seek, not a stall', async () => {
   const t = makeEngine({ sources: [stream('Dune 2160p')] });
   await t.start();
   await t.advance(3000);
@@ -264,6 +267,7 @@ test('a buffering right after a seek is the seek, not a stall', async () => {
   assert.equal(t.events.stall.length, 0);
 });
 
+// Tizen only: the stalls are scheduled by the AVPlay mock's `stall` URL option (the Mac's stall is in engine.adapters.test.js).
 test('accepting the offer leaves for the sources page with the lower height and the same second', async () => {
   const t = makeEngine({ sources: [stream('Dune 2160p', { stall: '10:1,15:1,20:1' })] });
   await t.start();
@@ -277,6 +281,7 @@ test('accepting the offer leaves for the sources page with the lower height and 
   assert.ok(nav.resumeAt > 18000 && nav.resumeAt < 30000, 'resumeAt ' + nav.resumeAt);
 });
 
+// Tizen only: the stalls are scheduled by the AVPlay mock's `stall` URL option (the Mac's stall is in engine.adapters.test.js).
 test('declining resets the offer: keeping the quality hides the card', async () => {
   const t = makeEngine({ sources: [stream('Dune 1080p', { stall: '10:1,15:1,20:1' })] });
   await t.start();
@@ -286,7 +291,7 @@ test('declining resets the offer: keeping the quality hides the card', async () 
   assert.equal(t.engine.state.offeringLower, false);
 });
 
-test('Change stream leaves with the current second', async () => {
+both('Change stream leaves with the current second', async () => {
   const t = makeEngine({ sources: [stream('Film')] });
   await t.start();
   await t.advance(15000);
@@ -302,7 +307,7 @@ test('Change stream leaves with the current second', async () => {
 const EP4 = { type: 'series', metaId: 'tt11280740', videoId: 'tt11280740:1:4' };
 const noSegments = { get: async () => '{}' };
 
-test('Up next: offered in the last upNextWindow of the episode, from the episode list', async () => {
+both('Up next: offered in the last upNextWindow of the episode, from the episode list', async () => {
   assert.equal(upNextWindow(300000), 30000);
   const meta = severanceMeta();
   const it = libraryItem({ id: 'tt11280740', type: 'series', state: { video_id: 'tt11280740:1:4', timeOffset: 0, duration: 0 } });
@@ -317,7 +322,7 @@ test('Up next: offered in the last upNextWindow of the episode, from the episode
   assert.equal(t.events.upNext.length, 1, 'once');
 });
 
-test('Up next: IntroDB gives the credits, which is when it appears (the last minute at the earliest)', async () => {
+both('Up next: IntroDB gives the credits, which is when it appears (the last minute at the earliest)', async () => {
   const meta = severanceMeta();
   const it = libraryItem({ id: 'tt11280740', type: 'series', state: { video_id: 'tt11280740:1:4', timeOffset: 0, duration: 0 } });
   const http = { get: async () => JSON.stringify({ outro: { start_sec: 245, end_sec: 295 } }) };
@@ -329,7 +334,7 @@ test('Up next: IntroDB gives the credits, which is when it appears (the last min
   assert.equal(t.events.upNext.length, 1, 'credits at 245 s, 55 s from the end: now');
 });
 
-test('Up next: a film never shows it; neither does the last episode', async () => {
+both('Up next: a film never shows it; neither does the last episode', async () => {
   const film = makeEngine({ sources: [stream('Film', { duration: 300 })], params: { resumeAt: 280000 } });
   await film.start(); await film.advance(15000);
   assert.equal(film.events.upNext.length, 0);
@@ -341,7 +346,7 @@ test('Up next: a film never shows it; neither does the last episode', async () =
   assert.equal(t.events.upNext.length, 0, last.id + ' is not followed by an episode (specials do not count)');
 });
 
-test('Up next: Play now leaves for the next episode, with the one after it', async () => {
+both('Up next: Play now leaves for the next episode, with the one after it', async () => {
   const meta = severanceMeta();
   const it = libraryItem({ id: 'tt11280740', type: 'series', state: {} });
   const t = makeEngine({ sources: [stream('Ep', { duration: 300 })], params: Object.assign({ resumeAt: 280000 }, EP4), item: it, meta, http: noSegments });
@@ -355,7 +360,7 @@ test('Up next: Play now leaves for the next episode, with the one after it', asy
   assert.equal(nav.afterVideoId, 'tt11280740:1:6');
 });
 
-test('Up next: "Watch the credits" keeps playing and the end of the stream then leaves without starting the next', async () => {
+both('Up next: "Watch the credits" keeps playing and the end of the stream then leaves without starting the next', async () => {
   const meta = severanceMeta();
   const it = libraryItem({ id: 'tt11280740', type: 'series', state: {} });
   const t = makeEngine({ sources: [stream('Ep', { duration: 300 })], params: Object.assign({ resumeAt: 280000 }, EP4), item: it, meta, http: noSegments });
@@ -370,7 +375,7 @@ test('Up next: "Watch the credits" keeps playing and the end of the stream then 
   assert.equal(t.events.navigate[0].kind, 'exit');
 });
 
-test('end of an episode starts the next one on its own', async () => {
+both('end of an episode starts the next one on its own', async () => {
   const meta = severanceMeta();
   const it = libraryItem({ id: 'tt11280740', type: 'series', state: {} });
   const t = makeEngine({ sources: [stream('Ep', { duration: 300 })], params: Object.assign({ resumeAt: 285000 }, EP4), item: it, meta, http: noSegments });
@@ -391,7 +396,7 @@ function skipEngine(resumeAt, extra = {}) {
   return makeEngine(Object.assign({ sources: [stream('Ep', { duration: 600 })], params: Object.assign({ resumeAt }, EP4), item: it, meta, http: { get: async () => SEGMENTS } }, extra));
 }
 
-test('Skip intro: the pill shows inside the intro, for 10 s, once', async () => {
+both('Skip intro: the pill shows inside the intro, for 10 s, once', async () => {
   const t = skipEngine(60000);
   await t.start();
   await t.advance(1500);
@@ -406,26 +411,26 @@ test('Skip intro: the pill shows inside the intro, for 10 s, once', async () => 
   assert.equal(t.events.skip.filter((e) => e.visible).length, 1, 'not offered again');
 });
 
-test('Skip intro: OK jumps to the end of the intro', async () => {
+both('Skip intro: OK jumps to the end of the intro', async () => {
   const t = skipEngine(60000);
   await t.start();
   await t.advance(2000);
   assert.equal(t.engine.skipSegment(), true);
   await t.advance(500);
-  const seeks = t.callsOf('seekTo').map((c) => c.args[0]);
+  const seeks = t.seeks();
   assert.equal(seeks[seeks.length - 1], 128400);
   assert.equal(t.events.skip[t.events.skip.length - 1].visible, false);
   assert.equal(t.engine.skipSegment(), false, 'nothing to skip now');
 });
 
-test('Skip recap comes first at the start of an episode', async () => {
+both('Skip recap comes first at the start of an episode', async () => {
   const t = skipEngine(1000);
   await t.start();
   await t.advance(1500);
   assert.equal(t.events.skip.filter((e) => e.visible)[0].label, 'Skip recap');
 });
 
-test('Skip intro: the controls take over, and a seek back into the intro offers it again', async () => {
+both('Skip intro: the controls take over, and a seek back into the intro offers it again', async () => {
   const t = skipEngine(60000);
   await t.start();
   await t.advance(1500);
@@ -443,7 +448,7 @@ test('Skip intro: the controls take over, and a seek back into the intro offers 
   assert.equal(t.events.skip[t.events.skip.length - 1].visible, true, 'seeking back into the intro: offered again');
 });
 
-test('IntroDB failing changes nothing: no pill, and playing goes on', async () => {
+both('IntroDB failing changes nothing: no pill, and playing goes on', async () => {
   const t = skipEngine(60000, { http: { get: async () => { throw new Error('CORS'); } } });
   await t.start();
   await t.advance(5000);
@@ -451,7 +456,7 @@ test('IntroDB failing changes nothing: no pill, and playing goes on', async () =
   assert.equal(t.events.started.length, 1);
 });
 
-test('IntroDB is only asked for series with an IMDb id', async () => {
+both('IntroDB is only asked for series with an IMDb id', async () => {
   const asked = [];
   const http = { get: async (u) => { asked.push(u); return '{}'; } };
   const film = makeEngine({ sources: [stream('Film')], http });
@@ -464,13 +469,13 @@ test('IntroDB is only asked for series with an IMDb id', async () => {
 
 // ---- hiding the app ----
 
-test('suspend (the app was hidden): paused, progress saved and pushed; restore carries on from there', async () => {
+both('suspend (the app was hidden): paused, progress saved and pushed; restore carries on from there', async (adapter) => {
   const t = makeEngine({ sources: [stream('Film')], item: libraryItem({ state: { timeOffset: 0, duration: 0, video_id: null } }) });
   await t.start();
   await t.advance(15000);
   t.engine.suspend();
-  assert.equal(t.av.getState(), 'PAUSED');
-  assert.equal(t.callsOf('suspend').length, 1);
+  assert.equal(t.playState(), 'PAUSED');
+  if (adapter === 'avplay') assert.equal(t.callsOf('suspend').length, 1);
   assert.equal(t.puts.length, 1);
   const saved = t.item.state.timeOffset;
   assert.ok(saved > 13000);
@@ -478,30 +483,30 @@ test('suspend (the app was hidden): paused, progress saved and pushed; restore c
   assert.equal(t.puts.length, 1, 'no ticks while hidden');
   assert.equal(t.item.state.timeOffset, saved);
   t.engine.resume();
-  assert.equal(t.callsOf('restore').length, 1);
+  if (adapter === 'avplay') assert.equal(t.callsOf('restore').length, 1);
   await t.advance(11000);
-  assert.equal(t.av.getState(), 'PAUSED', 'Alder stays paused after the app comes back');
+  assert.equal(t.playState(), 'PAUSED', 'Alder stays paused after the app comes back');
   t.engine.play();
   await t.advance(21000);
   assert.ok(t.item.state.timeOffset > saved + 9000, 'ticks again');
 });
 
-test('play and pause', async () => {
+both('play and pause', async () => {
   const t = makeEngine({ sources: [stream('Film')] });
   await t.start();
   await t.advance(3000);
   t.engine.togglePlay();
-  assert.equal(t.av.getState(), 'PAUSED');
+  assert.equal(t.playState(), 'PAUSED');
   assert.equal(t.events.playing[t.events.playing.length - 1].playing, false);
-  const frozen = t.av.__mock.position;
+  const frozen = t.position();
   await t.advance(5000);
-  assert.equal(t.av.__mock.position, frozen);
+  assert.equal(t.position(), frozen);
   t.engine.togglePlay();
-  assert.equal(t.av.getState(), 'PLAYING');
+  assert.equal(t.playState(), 'PLAYING');
   assert.equal(t.events.playing[t.events.playing.length - 1].playing, true);
 });
 
-test('history is written onto this title\'s own library item, never onto another one the answer happens to list first', async () => {
+both('history is written onto this title\'s own library item, never onto another one the answer happens to list first', async () => {
   // Stremio is asked for one id and answers with that item; a server (or a fixture) that lists others too must not make the
   // first of them the item that gets the progress.
   const other = libraryItem({ id: 'tt0000001', type: 'movie' });

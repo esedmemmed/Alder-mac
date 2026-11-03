@@ -109,19 +109,29 @@ export async function build({ dev = false, log = console.log } = {}) {
   return { outDir, wgtPath, info: verdict.info, js: js.metafile, css: css.metafile };
 }
 
-// Shared modules the Mac build swaps for src/platform/mac/<file>: keys, device, language, and the player screen (a stub,
-// so no engine and no failover). The Mac modules may import the shared ones; nobody else gets the Tizen versions.
+// Shared modules the Mac build swaps for src/platform/mac/<file>: keys, device, language, and the AVPlay wrapper (mpv.js: the
+// same surface over the native bridge, so the shared player screen and engine run, failover included). The Mac modules may
+// import the shared ones; nobody else gets the Tizen versions.
 const MAC_SWAPS = {
-  'src/lib/keys.js': 'keys.js', 'src/core/device.js': 'device.js', 'src/player/language.js': 'language.js', 'src/player/screen.js': 'player.js',
+  'src/lib/keys.js': 'keys.js', 'src/core/device.js': 'device.js', 'src/player/language.js': 'language.js', 'src/player/avplay.js': 'mpv.js',
   'src/ui/osk.js': 'osk.js', // native text fields, no on-screen keyboard
 };
 // src/main.js is shared and holds the Tizen exit and key registration: the Mac plugin patches its text on load (and throws if a piece moved).
 const MAIN_PATCHES = [ // also diagnostics.js (webapis) and settings.js (the About text) below
-  ["import { installed as polyfilled } from './lib/compat.js';", "import { installed as polyfilled } from './lib/compat.js';\nimport { macQuit } from './platform/mac/bridge.js';\nimport './platform/mac/layout.js';\nimport { installPointer } from './platform/mac/index.js';"],
-  ['const engine = createFocusEngine({ root: document.body });', 'const engine = createFocusEngine({ root: document.body });\n  installPointer(engine);'],
+  ["import { installed as polyfilled } from './lib/compat.js';", "import { installed as polyfilled } from './lib/compat.js';\nimport { macExit, installMacLifecycle } from './platform/mac/lifecycle.js';\nimport './platform/mac/layout.js';\nimport { installPointer, installPlayHook } from './platform/mac/index.js';"],
+  ['const engine = createFocusEngine({ root: document.body });', 'const engine = createFocusEngine({ root: document.body });\n  installPointer(engine);\n  installMacLifecycle();'],
+  ['router.push(first.name, first.params);', 'router.push(first.name, first.params);\n  installPlayHook({ router, log });'], // the play check (?play= from the shell --page)
   ['registerKeys(window.tizen)', 'registerKeys()'],
   ['webapis: window.webapis,', 'webapis: null,'],
-  ['window.tizen.application.getCurrentApplication().exit();', "if (!macQuit()) log.info('app', 'exit requested (no native shell)');"],
+  ['window.tizen.application.getCurrentApplication().exit();', "if (!macExit()) log.info('app', 'exit requested (no native shell)');"], // saves the player's place first
+  ['Leave the app and go back to the TV.', 'Leave the app.'],
+];
+
+// Mac-only ranking: HEVC is listed (macProfile.hevc), but auto-play and BEST MATCH take only what the profile's autoOk accepts (H.264 8-bit
+// 1080p30). src/core/ranking.js stays untouched so the Tizen bundle is byte-identical; a no-op where the profile has no autoOk.
+export const RANKING_PATCHES = [
+  ['rank(streams.filter(s => playable(s) && wanted(s)))', 'rank(streams.filter(s => playable(s) && wanted(s) && (!tv.autoOk || tv.autoOk(s))))'],
+  ['const best = eligible.find(quiet) || null', 'const best = eligible.find(s => quiet(s) && (!tv.autoOk || tv.autoOk(s))) || null'],
 ];
 
 /** esbuild plugin: `#platform/<name>` resolves to src/platform/mac/<name>.js, so shared code never branches at run time. */
@@ -139,11 +149,60 @@ function macPlatform() {
         [join(ROOT, 'src/main.js'), MAIN_PATCHES],
         // Safari before 16.4 (Big Sur, the Air) throws a SyntaxError on a lookbehind regex, and this one is built at module load: the
         // whole bundle died before boot (black window, T3.1). Same word-start test without a lookbehind; Tizen's build keeps the original.
-        [join(ROOT, 'src/core/audio.js'), [["const START = '(?<![a-z0-9])'", "const START = '(?:^|[^a-z0-9])'"]]],
-        [join(ROOT, 'src/screens/diagnostics.js'), [['deviceProfile({ webapis: window.webapis })', 'deviceProfile({})']]],
-        [join(ROOT, 'src/screens/settings.js'), [['Alder for Tizen is a port of Alder', 'Alder for Mac is a port of Alder']]],
+        [join(ROOT, 'src/core/ranking.js'), RANKING_PATCHES],
+        [join(ROOT, 'src/core/audio.js'), [
+          ["const START = '(?<![a-z0-9])'", "const START = '(?:^|[^a-z0-9])'"],
+          ["NO_SOUND_TAG = 'No sound on this TV'", "NO_SOUND_TAG = 'No sound on this Mac'"],
+        ]],
+        // the Diagnostics export (E): the report as text to ~/Downloads through the bridge, scrubbed (platform/mac/diag-export.js)
+        [join(ROOT, 'src/screens/diagnostics.js'), [
+          ['deviceProfile({ webapis: window.webapis })', 'deviceProfile({})'],
+          ['export function createDiagnosticsScreen() {', "import { macDiagExporter } from '#platform/diag-export';\n" + "export function createDiagnosticsScreen() {\n  let macExport = null;"],
+          ['const report = buildReport({ log, diag: appDiag.snapshot(), device, version: VERSION, env: ENV, agent: navigator.userAgent });',
+            'const report = buildReport({ log, diag: appDiag.snapshot(), device, version: VERSION, env: ENV, agent: navigator.userAgent });\n      macExport = macDiagExporter({ context, build: () => buildReport({ log, diag: appDiag.snapshot(), device, version: VERSION, env: ENV, agent: navigator.userAgent }) });'],
+          ['OK Top / end   Back Close', 'OK Top / end   E Save to Downloads   Back Close'],
+          ['else return false; // Back (and anything else) falls through: the router pops', "else if (a === 'export') { if (!evt.repeat && macExport) macExport(); }\n      else return false; // Back (and anything else) falls through: the router pops"],
+        ]],
+        // add-on subtitles: the text the page fetched goes to mpv (adapter addSubtitle) and mpv draws it; mpv also draws the file's own
+        // tracks, so the DOM subtitle line stays hidden
+        [join(ROOT, 'src/player/engine.js'), [
+          ['parseSubtitles(await http.get(choice.sub.url), choice.sub.format)', 'parseSubtitles(((t) => { avplay.addSubtitle(t, choice.sub); return t; })(await http.get(choice.sub.url)), choice.sub.format)'],
+          ['avplay.subtitlesOn(false);', "avplay.subtitlesOn(subMode === 'addon');"],
+          ['in the TV language', 'in the Mac language'], // (decision lines on the Diagnostics screen)
+          ['by the TV', 'by the player'],
+          ["message: 'No sound on this TV'", "message: 'No sound on this Mac'"],
+        ]],
+        [join(ROOT, 'src/player/screen.js'), [
+          ["engine.on('subtitle', (d) => { if (d.lines && d.lines.length) subtitles.show(d.lines); else subtitles.hide(); });", "// Mac: mpv draws the subtitles, the DOM line stays hidden"],
+          // lifecycle (platform/mac/lifecycle.js): sleep, wake, audio device and quit act on this engine; F and Esc handle fullscreen first
+          ["import { createTvLanguage } from './language.js';", "import { createTvLanguage } from './language.js';\nimport { macBindPlayer, macFullscreenKey } from '#platform/lifecycle';"],
+          ['let closed = false;', 'let closed = false;\n  let macUnbind = null;\n  let macAv = null;'],
+          ['avplay: createAvplay({ log }), clock: realClock', 'avplay: (macAv = createAvplay({ log })), clock: realClock'],
+          ['engine = createEngine(params, deps);', 'engine = createEngine(params, deps);\n      macUnbind = macBindPlayer(engine, macAv);'],
+          ['if (engine) engine.destroy();', 'if (macUnbind) macUnbind();\n      if (engine) engine.destroy();'],
+          ['if (mediaKey(evt)) return true;', 'if (macFullscreenKey(evt)) return true;\n      if (mediaKey(evt)) return true;'],
+        ]],
+        // "TV" wording: the Mac build says Mac (and "Check the Mac's internet connection")
+        [join(ROOT, 'src/screens/home.js'), [["Check the TV's connection.", "Check the Mac's internet connection."]]],
+        [join(ROOT, 'src/screens/addons.js'), [["Check the TV's internet.", "Check the Mac's internet connection."]]],
+        [join(ROOT, 'src/screens/streams.js'), [['found for this TV.', 'found for this Mac.']]],
+        [join(ROOT, 'src/screens/profiles.js'), [['out on this TV.', 'out on this Mac.']]],
+        [join(ROOT, 'src/player/picture.js'), [
+          ['than your TV (16:9)', 'than your window'], ['on this TV', 'on this Mac'], ['by the TV', 'by the player'],
+        ]],
+        [join(ROOT, 'src/core/settings.js'), [
+          ["'TV language'", "'Mac language'"], ["in the TV's language", "in the Mac's language"], ['My TV plays AV1', 'My Mac plays AV1'], ['plays on this TV.', 'plays on this Mac.'],
+        ]],
+        [join(ROOT, 'src/screens/settings.js'), [
+          ['Alder for Tizen is a port of Alder', 'Alder for Mac is a port of Alder'],
+          ['this TV can play', 'this Mac can play'], ["the TV's language", "the Mac's language"], ['on this TV', 'on this Mac'],
+          ['This TV follows its order.', 'Alder follows its order.'], ["this TV's language", "this Mac's language"], ["the TV's own settings", "the Mac's own settings"],
+          ['from this TV.', 'from this Mac.'], ['TV interface', 'Mac interface'], ['this TV reported', 'this Mac reported'],
+        ]],
         // sign-in leads with e-mail + password in native fields (platform/mac/signin-form.js), Return continues the name step
         [join(ROOT, 'src/screens/signin.js'), [
+          ["Check the TV's connection.", "Check the Mac's internet connection."], ['sign in this TV.', 'sign in this Mac.'], ['brings them to the TV.', 'brings them to the Mac.'],
+          ["'This TV has '", "'This Mac has '"],
           ["import { qrSvg } from '../ui/qr.js';", "import { qrSvg } from '../ui/qr.js';\nimport { macSigninForm } from '#platform/signin-form';"],
           ["const emailChip = chip('Sign in with e-mail instead', { onClick: () => toState('email') });", "const emailChip = chip('Sign in with e-mail instead', { onClick: () => toState('email') });\n    const macForm = macSigninForm({ session, draftName: draft.name, onApproved: approved, log: log() });"],
           ["h('div', { class: 'ob-h1' }, 'Connect Stremio'),", "macForm.el,\n      h('div', { class: 't-title ob-or' }, 'Or connect with your phone'),"],

@@ -5,7 +5,7 @@ const test = (name, fn) => nodeTest(name, { timeout: 5000 }, fn);
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { createBridge, COMMANDS } = require('../bridge.js');
+const { createBridge, COMMANDS, EVENT_TYPES } = require('../bridge.js');
 const { installMock } = require('../mock-bridge.js');
 const { runProbe, TARGETS } = require('../probe.js');
 
@@ -43,7 +43,7 @@ function setup(mockOptions) {
   const mock = installMock({ win, clock, log, ...mockOptions });
   const bridge = createBridge({ win, log });
   const seen = [];
-  for (const t of ['reply', 'prop', 'fileLoaded', 'playbackRestart', 'endFile']) bridge.on(t, (e) => seen.push(e));
+  for (const t of EVENT_TYPES) bridge.on(t, (e) => seen.push(e));
   return { win, clock, lines, mock, bridge, seen };
 }
 
@@ -93,7 +93,7 @@ test('unknown commands never reach native', async () => {
   const { bridge, mock } = setup();
   await assert.rejects(bridge.send('rm', {}), /unknown command/);
   assert.equal(mock.posted.length, 0);
-  assert.deepEqual(COMMANDS, ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report']);
+  assert.deepEqual(COMMANDS, ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report', 'observe', 'subAdd', 'fullscreen', 'saveFile']);
 });
 
 test('no native handler: send rejects, no throw', async () => {

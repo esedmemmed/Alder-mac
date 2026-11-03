@@ -26,3 +26,6 @@ html, body, [data-focus] { cursor: default; }
 .ob-or { margin-top: 28px; }
 /* search: the letter grid is not built into the page on the Mac, so the recent searches move up under the field */
 .sr-recentbox { top: 300px; }
+
+/* Player: mpv draws on the layer behind the page (the shared screen sets html.av-live), so every layer above it is see-through */
+html.av-live, html.av-live body, html.av-live #app, html.av-live .pl-screen { background: transparent; }

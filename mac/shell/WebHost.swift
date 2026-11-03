@@ -14,6 +14,7 @@ final class AlderSchemeHandler: NSObject, WKURLSchemeHandler {
     private static let mime: [String: String] = [
         "html": "text/html", "js": "text/javascript", "css": "text/css", "json": "application/json",
         "svg": "image/svg+xml", "png": "image/png", "ico": "image/x-icon",
+        "woff": "font/woff", "woff2": "font/woff2", "webp": "image/webp",
     ]
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
@@ -38,11 +39,15 @@ final class AlderSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
 }
 
-/// JS to native dispatcher: load, pause, seek, setProp, getProp, quit, log, report. Every message gets one reply event.
+/// JS to native dispatcher (wire: docs/ops/INDEX.md, Bridge v2 wire): load, pause, seek, observe, setProp, getProp,
+/// subAdd, fullscreen, saveFile, quit, log, report. Every message gets one reply event.
 final class Bridge: NSObject, WKScriptMessageHandler {
     private let player: Player
     private let reportPath: String?
     weak var webView: WKWebView?
+    /// What the page's quit command does (the app sets it); without one the app terminates at once.
+    var onQuit: (() -> Void)?
+    private var subCount = 0
 
     init(player: Player, reportPath: String? = nil) {
         self.player = player
@@ -89,6 +94,17 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         handle.closeFile()
     }
 
+    /// A file name that stays inside one folder: no separators, no control characters, no leading dots.
+    private func sanitizedName(_ name: String) -> String {
+        var out = ""
+        for u in name.unicodeScalars {
+            if u == "/" || u == "\\" || u == ":" || u.value < 32 { out.append("_") } else { out.unicodeScalars.append(u) }
+        }
+        while out.hasPrefix(".") { out.removeFirst() }
+        if out.count > 120 { out = String(out.prefix(120)) }
+        return out.isEmpty ? "alder.txt" : out
+    }
+
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any],
               let idNum = body["id"] as? NSNumber, let cmd = body["cmd"] as? String else { return }
@@ -100,9 +116,23 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 reply(id, ok: false, error: "load needs a link")
                 return
             }
+            var headers: [String: String] = [:]
+            if let h = args["headers"] as? [String: Any] {
+                for (k, v) in h { if let text = mpvString(v) { headers[k] = text } }
+            }
+            var start: Double?
+            if let t = (args["start"] as? NSNumber)?.doubleValue, t.isFinite, t > 0 { start = t }
             // Async: the reply event (userdata = id) says whether mpv accepted it.
-            let rc = player.command(["loadfile", url, "replace"], replyID: UInt64(id))
+            let rc = player.load(url: url, headers: headers, start: start, replyID: UInt64(id))
             if rc < 0 { reply(id, ok: false, error: Player.errorText(rc)) }
+        case "observe":
+            guard let names = args["names"] as? [String], !names.isEmpty,
+                  names.allSatisfy({ Player.observable.contains($0) }) else {
+                reply(id, ok: false, error: "observe needs names the shell can observe")
+                return
+            }
+            for n in names { player.observe(n, forPage: true) }
+            reply(id, ok: true)
         case "seek":
             guard let s = (args["seconds"] as? NSNumber)?.doubleValue else {
                 reply(id, ok: false, error: "seek needs seconds")
@@ -119,11 +149,19 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 reply(id, ok: false, error: "setProp needs name and value")
                 return
             }
+            guard Player.settable.contains(name) else {
+                reply(id, ok: false, error: "property not settable")
+                return
+            }
             let rc = player.setString(name, value)
             reply(id, ok: rc >= 0, error: rc < 0 ? Player.errorText(rc) : nil)
         case "getProp":
             guard let name = args["name"] as? String else {
                 reply(id, ok: false, error: "getProp needs name")
+                return
+            }
+            guard Player.settable.contains(name) || Player.observable.contains(name) || Player.health.contains(name) else {
+                reply(id, ok: false, error: "property not readable")
                 return
             }
             if let v = player.getString(name) { reply(id, ok: true, value: v) }
@@ -133,18 +171,62 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 reply(id, ok: false, error: "log needs line")
                 return
             }
-            appendReport("log: " + line)
+            appendReport("log: " + stripURLs(line))
             reply(id, ok: true)
         case "report":
             guard let text = args["text"] as? String else {
                 reply(id, ok: false, error: "report needs text")
                 return
             }
-            appendReport(text)
+            appendReport(stripURLs(text))
             reply(id, ok: true)
+        case "subAdd":
+            guard let text = args["text"] as? String, !text.isEmpty else {
+                reply(id, ok: false, error: "subAdd needs text")
+                return
+            }
+            // The page fetched the subtitle; the shell only writes it where mpv can read it, and never fetches.
+            subCount += 1
+            let ext = text.hasPrefix("WEBVTT") ? "vtt" : "srt"
+            let caches = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first ?? NSTemporaryDirectory()
+            let dir = caches + "/" + (Bundle.main.bundleIdentifier ?? "Alder") + "/subs"
+            let path = dir + "/\(subCount).\(ext)"
+            do {
+                try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
+                try text.write(toFile: path, atomically: true, encoding: .utf8)
+            } catch {
+                reply(id, ok: false, error: "subAdd could not write the file")
+                return
+            }
+            let lang = args["lang"] as? String ?? ""
+            let title = args["title"] as? String ?? ""
+            var cmdArgs = ["sub-add", path, "select"]
+            if !title.isEmpty || !lang.isEmpty { cmdArgs.append(title) }
+            if !lang.isEmpty { cmdArgs.append(lang) }
+            let rc = player.command(cmdArgs, replyID: UInt64(id))
+            if rc < 0 { reply(id, ok: false, error: Player.errorText(rc)) }
+        case "fullscreen":
+            let on = (args["on"] as? NSNumber)?.boolValue ?? true
+            if let w = webView?.window, w.styleMask.contains(.fullScreen) != on { w.toggleFullScreen(nil) }
+            reply(id, ok: true)
+        case "saveFile":
+            guard let name = args["name"] as? String, let text = args["text"] as? String else {
+                reply(id, ok: false, error: "saveFile needs name and text")
+                return
+            }
+            let dir = NSHomeDirectory() + "/Downloads"
+            let path = dir + "/" + sanitizedName(name)
+            do {
+                try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
+                try text.write(toFile: path, atomically: true, encoding: .utf8)
+            } catch {
+                reply(id, ok: false, error: "saveFile could not write the file")
+                return
+            }
+            reply(id, ok: true, value: path)
         case "quit":
             reply(id, ok: true)
-            NSApp.terminate(nil)
+            if let q = onQuit { q() } else { NSApp.terminate(nil) }
         default:
             reply(id, ok: false, error: "unknown command")
         }

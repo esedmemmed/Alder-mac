@@ -7,7 +7,7 @@ import { h } from '../../lib/dom.js';
 import { pill } from '../../ui/button.js';
 import { createTextField } from './osk.js';
 
-const REACH = "Can't reach Stremio. Check the TV's connection.";
+const REACH = "Can't reach Stremio. Check the Mac's internet connection.";
 
 /** { authKey } or { error } (the text for the screen). The failure text is the one the Tizen e-mail path shows. */
 export async function passwordSignIn(session, emailText, password, log) {
