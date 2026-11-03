@@ -87,6 +87,20 @@ try {
   if (!state.children || state.w < 100 || state.h < 100 || state.display === 'none' || state.visibility === 'hidden' || Number(state.opacity) === 0) fail('#app is empty or not visible: ' + JSON.stringify(state));
   else if (!/welcome|sign in|connect|e-mail/i.test(state.text) || !state.inputs) fail('#app renders, but not the first screen of sign-in: ' + JSON.stringify(state));
   else ok('first (sign-in flow) screen renders: #app ' + state.w + 'x' + state.h + ', ' + state.inputs + ' input(s), "' + state.text + '"');
+  // The focus fill (components.css `X::before`, absolute, z-index -1) is sized by the nearest positioned ancestor: an unpositioned X
+  // let it cover its whole panel (Settings group list, T12: cream panel under light text). Every X that has such a ::before must be positioned.
+  const unpositioned = await page.evaluate(() => {
+    const bad = [];
+    for (const cls of ['chip', 'btn-round', 'avatar', 'nav-item', 'row-item', 'sg-group', 'sg-row', 'st-row', 'ad-row', 'eg-row', 'pl-row', 'osk-key', 'sr-key', 'dt-more', 'sr-clear', 'pin-box', 'pl-btn', 'pl-chip']) {
+      const el = document.createElement('div');
+      el.className = cls;
+      document.body.appendChild(el);
+      if (getComputedStyle(el, '::before').position === 'absolute' && getComputedStyle(el).position === 'static') bad.push('.' + cls);
+      el.remove();
+    }
+    return bad;
+  });
+  if (unpositioned.length) fail('focus-fill ::before is absolute but the element is not positioned (it would fill its panel): ' + unpositioned.join(' ')); else ok('focus-fill ::before: every host element is positioned');
   // the page log forwarder (mac/web/alder-index.html): boot stages arrive as bridge `log` commands, never with a link or a query string
   const posted = await page.evaluate(() => window.__posted);
   const lines = posted.filter((m) => m.cmd === 'log').map((m) => m.args.line);

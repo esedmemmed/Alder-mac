@@ -122,7 +122,10 @@ export function subtitleRows(textTracks, addonSubs) {
     const cut = full.indexOf(SEP);
     rows.push({ kind: 'file', index: t.index, name: full.slice(0, cut), tag: full.slice(cut + SEP.length), label: full });
   });
-  addonSubs.forEach((s, i) => rows.push({ kind: 'addon', sub: s, addonIndex: i, name: s.language, tag: s.addon, label: s.language + SEP + s.addon }));
+  addonSubs.forEach((s, i) => rows.push({
+    kind: 'addon', sub: s, addonIndex: i, name: s.language, tag: s.addon, label: s.language + SEP + s.addon,
+    header: i === 0 || addonSubs[i - 1].language !== s.language ? s.language : '', // a language heading before its first row
+  }));
   return rows;
 }
 

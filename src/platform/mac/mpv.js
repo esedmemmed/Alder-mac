@@ -342,6 +342,12 @@ export function createAvplay({ bridge = null, log = null } = {}) {
       return true;
     },
 
+    /** Output volume 0..100 (the player's volume keys and buttons). The wire has no `mute`: mute is 0 here, the level is kept by the caller. */
+    setVolume(v) {
+      send('volume', bridgeOrThrow().setProp('volume', Math.max(0, Math.min(100, Math.round(v)))));
+      return true;
+    },
+
     /** The file's own subtitles: mpv draws them (sub-visibility). */
     subtitlesOn(on) {
       send('sub-visibility', bridgeOrThrow().setProp('sub-visibility', !!on));

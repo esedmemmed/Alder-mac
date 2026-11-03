@@ -29,3 +29,24 @@ html, body, [data-focus] { cursor: default; }
 
 /* Player: mpv draws on the layer behind the page (the shared screen sets html.av-live), so every layer above it is see-through */
 html.av-live, html.av-live body, html.av-live #app, html.av-live .pl-screen { background: transparent; }
+
+/* Settings group list: .sg-group::before (the focus fill, components.css) is absolute but .sg-group is not positioned, so the fill
+   sized itself to the whole .sg-groups panel and painted it cream under light text (T12: white, unreadable). Contain it in its row. */
+.sg-group { position: relative; }
+
+/* Player pointer and volume (platform/mac/player-input.js): the bar's buttons take the mouse (the layers above the picture ignore it
+   otherwise), the cursor leaves with the bar (.mac-idle), the volume sits in the bar and its level shows briefly (.mac-osd). */
+.pl-controls.on .pl-btn, .pl-controls.on .pl-mainbar { pointer-events: auto; cursor: pointer; }
+.pl-screen.mac-idle, .pl-screen.mac-idle * { cursor: none; }
+.mac-vol { position: absolute; right: 96px; top: 130px; display: flex; align-items: center; pointer-events: auto; }
+.mac-vol-btn {
+  margin-left: 12px; min-width: 64px; height: 56px; padding: 0 20px; border-radius: 28px; border: var(--hairline) solid var(--glass-edge);
+  background: rgba(14, 12, 10, 0.6); color: var(--text); font: inherit; font-size: var(--fs-small); cursor: pointer;
+}
+.mac-vol-btn:hover { background: var(--focus-fill); color: var(--focus-ink); }
+.mac-vol-level { margin-left: 16px; min-width: 88px; color: var(--text-2); font-size: var(--fs-small); text-align: right; }
+.mac-osd {
+  position: absolute; left: 50%; top: 120px; width: 360px; margin-left: -180px; padding: 16px 0; border-radius: 20px; text-align: center;
+  background: rgba(14, 12, 10, 0.78); color: var(--text); font-size: var(--fs-body); opacity: 0; transition: opacity 150ms linear; pointer-events: none;
+}
+.mac-osd.on { opacity: 1; }

@@ -34,6 +34,7 @@ export function createOptions({ host, engine }) {
     into.appendChild(h('div', { class: 'caps pl-opt-heading', style: { color: 'var(--tungsten)' } }, heading));
     notes.filter(Boolean).forEach((text) => into.appendChild(h('div', { class: 'pl-opt-sub t-small t-2' }, text)));
     items.forEach((item, i) => {
+      if (item.header) into.appendChild(h('div', { class: 'pl-opt-sub t-small t-2' }, item.header));
       const dim = item.playable === false;
       const name = h('span', { class: 'pl-opt-name' }, item.name);
       const tag = item.tag ? h('span', { class: 'pl-opt-tag t-small t-3' }, item.tag) : null;
@@ -68,7 +69,7 @@ export function createOptions({ host, engine }) {
       if (r.kind === 'off') engine.selectSubtitle({ kind: 'off' });
       else if (r.kind === 'file') engine.selectSubtitle({ kind: 'file', index: r.index });
       else engine.selectSubtitle({ kind: 'addon', sub: r.sub });
-    });
+    }, t.addonSubs.length && t.deviceLanguage ? ['Device language: ' + t.deviceLanguage] : []);
 
     // Picture: Fit or Fill, with what the file says about its own shape (so black bars can be told from a small picture)
     const pic = engine.pictureInfo();

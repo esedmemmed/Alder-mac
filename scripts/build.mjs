@@ -175,12 +175,14 @@ function macPlatform() {
         [join(ROOT, 'src/player/screen.js'), [
           ["engine.on('subtitle', (d) => { if (d.lines && d.lines.length) subtitles.show(d.lines); else subtitles.hide(); });", "// Mac: mpv draws the subtitles, the DOM line stays hidden"],
           // lifecycle (platform/mac/lifecycle.js): sleep, wake, audio device and quit act on this engine; F and Esc handle fullscreen first
-          ["import { createTvLanguage } from './language.js';", "import { createTvLanguage } from './language.js';\nimport { macBindPlayer, macFullscreenKey } from '#platform/lifecycle';"],
-          ['let closed = false;', 'let closed = false;\n  let macUnbind = null;\n  let macAv = null;'],
+          ["import { createTvLanguage } from './language.js';", "import { createTvLanguage } from './language.js';\nimport { macBindPlayer, macFullscreenKey } from '#platform/lifecycle';\nimport { macBindInput, macPlayerKey } from '#platform/player-input';"],
+          ['let closed = false;', 'let closed = false;\n  let macUnbind = null;\n  let macUnbindInput = null;\n  let macAv = null;'],
           ['avplay: createAvplay({ log }), clock: realClock', 'avplay: (macAv = createAvplay({ log })), clock: realClock'],
           ['engine = createEngine(params, deps);', 'engine = createEngine(params, deps);\n      macUnbind = macBindPlayer(engine, macAv);'],
-          ['if (engine) engine.destroy();', 'if (macUnbind) macUnbind();\n      if (engine) engine.destroy();'],
-          ['if (mediaKey(evt)) return true;', 'if (macFullscreenKey(evt)) return true;\n      if (mediaKey(evt)) return true;'],
+          ['if (engine) engine.destroy();', 'if (macUnbind) macUnbind();\n      if (macUnbindInput) macUnbindInput();\n      if (engine) engine.destroy();'],
+          // mouse, trackpad and the volume keys (platform/mac/player-input.js): bound once the controls and the options panel exist
+          ['controls.setSubtitleRaise((up) => subtitles.raise(up));', 'controls.setSubtitleRaise((up) => subtitles.raise(up));\n      macUnbindInput = macBindInput({ root: el, controls, options, engine, avplay: macAv, fullscreen: macFullscreenKey });'],
+          ['if (mediaKey(evt)) return true;', 'if (macFullscreenKey(evt)) return true;\n      if (macPlayerKey(evt)) return true;\n      if (mediaKey(evt)) return true;'],
         ]],
         // "TV" wording: the Mac build says Mac (and "Check the Mac's internet connection")
         [join(ROOT, 'src/screens/home.js'), [["Check the TV's connection.", "Check the Mac's internet connection."]]],

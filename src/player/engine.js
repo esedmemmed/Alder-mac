@@ -55,7 +55,7 @@
 import { PLAYER, lowerSourceHeight, upNextWindow, plausibleEpisode, nextVideo as nextVideoIn, chooseAddonSubtitles, parseSegments, introDbUrl } from '../core/playback.js';
 import { parseAudioTracks, decideAudio, afterAudioError, describeTracks } from '../core/audio.js';
 import { Stream, runtime } from '../core/addon.js';
-import { toIso1 } from '../core/lang.js';
+import { toIso1, languageName } from '../core/lang.js';
 import { errorCode } from './avplay.js';
 import { parseTextTracks, startSubtitle } from './tracks.js';
 import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';
@@ -805,8 +805,8 @@ export function createEngine(params, deps) {
       try { all = await stremio.addons(authKey, true); } catch (e) { warn('add-on list refresh failed, using the cached one: ' + (e && e.message ? e.message : e)); all = await stremio.addons(authKey); }
       const addons = all.filter((a) => a.serves('subtitles', type, videoId));
       if (diag) diag.subtitleAddon(null);
-      const lists = await Promise.all(addons.map((a) => Promise.resolve().then(() => a.subtitles(type, videoId)).then((subs) => { if (diag) diag.subtitleAddon(a.name, subs.length); return subs; }).catch((e) => { warn('subtitles from ' + a.name + ' failed: ' + (e && e.message ? e.message : e)); if (diag) diag.subtitleAddon(a.name, e); return []; })));
-      // ponytail: the TV's language and English, three files each, shared round-robin between the add-ons; a language picker if asked
+      const lists = await Promise.all(addons.map((a) => Promise.resolve().then(() => a.subtitles(type, videoId)).then((subs) => { say('subtitles from ' + a.name + ' (' + type + ' ' + videoId + '): ' + subs.length); if (diag) diag.subtitleAddon(a.name, subs.length); return subs; }).catch((e) => { warn('subtitles from ' + a.name + ' (' + type + ' ' + videoId + ') failed: ' + (e && e.message ? e.message : e)); if (diag) diag.subtitleAddon(a.name, e); return []; })));
+      // every language from every add-on: the device language first, then English, then the rest by name; the add-ons take turns
       addonSubs = chooseAddonSubtitles(addons.map((a, i) => ({ addon: a.name, subs: lists[i] })), tvLanguage());
       say('add-on subtitles: ' + addonSubs.length);
       emit('tracks');
@@ -1006,7 +1006,7 @@ export function createEngine(params, deps) {
     },
     /** What the options panel lists. */
     tracks() {
-      return { audio: audioTracks, audioIndex, text: textTracks, textIndex, subMode, addonSubs, chosenSub, subDelay, canShift: subMode === 'addon' && !!subCues };
+      return { audio: audioTracks, audioIndex, text: textTracks, textIndex, subMode, addonSubs, deviceLanguage: languageName(tvLanguage()), chosenSub, subDelay, canShift: subMode === 'addon' && !!subCues };
     },
     /** The source playing, for the "Change stream" row of the options panel. */
     currentSource() { return source() || null; },

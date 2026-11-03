@@ -52,27 +52,31 @@ test('nextVideo: the next episode, not from the finale into specials, null at th
   assert.equal(nextVideo([], 's:1:1'), null)
 })
 
-test('chooseAddonSubtitles: three in the TV\'s language, then three English, add-on order kept', () => {
+test('chooseAddonSubtitles: device language, then English, then the rest by name; every file kept', () => {
   const sub = (lang, n) => new Subtitle(`https://s/${lang}${n}.srt`, lang, 'OS')
   const all = [sub('eng', 1), sub('ger', 1), sub('eng', 2), sub('ger', 2), sub('fre', 1), sub('ger', 3), sub('ger', 4), sub('eng', 3), sub('eng', 4), sub('en', 5)]
-  assert.deepEqual(chooseAddonSubtitles(all, 'de').map(s => s.url.split('/').pop()),
-    ['ger1.srt', 'ger2.srt', 'ger3.srt', 'eng1.srt', 'eng2.srt', 'eng3.srt'])
-  assert.deepEqual(chooseAddonSubtitles(all, 'en').map(s => s.url.split('/').pop()), ['eng1.srt', 'eng2.srt', 'eng3.srt']) // English is the local one: no extra
-  assert.deepEqual(chooseAddonSubtitles(all, 'fr').map(s => s.url.split('/').pop()), ['fre1.srt', 'eng1.srt', 'eng2.srt', 'eng3.srt'])
+  const names = (tv) => chooseAddonSubtitles(all, tv).map(s => s.url.split('/').pop())
+  assert.deepEqual(names('de'), ['ger1.srt', 'ger2.srt', 'ger3.srt', 'ger4.srt', 'eng1.srt', 'eng2.srt', 'eng3.srt', 'eng4.srt', 'en5.srt', 'fre1.srt'])
+  assert.deepEqual(names('en'), ['eng1.srt', 'eng2.srt', 'eng3.srt', 'eng4.srt', 'en5.srt', 'fre1.srt', 'ger1.srt', 'ger2.srt', 'ger3.srt', 'ger4.srt'])
+  assert.deepEqual(names('fr').slice(0, 2), ['fre1.srt', 'eng1.srt'])
   assert.deepEqual(chooseAddonSubtitles([], 'en'), [])
 })
 
-test('chooseAddonSubtitles: a second add-on contributes when the first alone would fill 3+3; order kept; add-on name on entries', () => {
+test('chooseAddonSubtitles: add-ons take turns in a language, a third add-on with only another language appears, >6 kept, cap 10', () => {
   const sub = (lang, n, addon) => new Subtitle(`https://${addon}/${lang}${n}.srt`, lang, addon)
   const groups = [
     { addon: 'A', subs: [1, 2, 3, 4].map(n => sub('ger', n, 'A')).concat([1, 2, 3, 4].map(n => sub('eng', n, 'A'))) },
     { addon: 'B', subs: [sub('eng', 1, 'B'), sub('ger', 1, 'B'), sub('ger', 2, 'B')] },
-    { addon: 'C', subs: [sub('fre', 1, 'C')] },
+    { addon: 'C', subs: [sub('aze', 1, 'C')] },
   ]
   const got = chooseAddonSubtitles(groups, 'de')
   assert.deepEqual(got.map(s => s.addon + ':' + s.url.split('/').pop()),
-    ['A:ger1.srt', 'B:ger1.srt', 'A:ger2.srt', 'A:eng1.srt', 'B:eng1.srt', 'A:eng2.srt'])
+    ['A:ger1.srt', 'B:ger1.srt', 'A:ger2.srt', 'B:ger2.srt', 'A:ger3.srt', 'A:ger4.srt',
+      'A:eng1.srt', 'B:eng1.srt', 'A:eng2.srt', 'A:eng3.srt', 'A:eng4.srt', 'C:aze1.srt'])
+  assert.ok(got.length > 6)
   assert.ok(got.every(s => typeof s.addon === 'string' && s.addon))
+  const many = [{ addon: 'A', subs: Array.from({ length: 14 }, (_, n) => sub('ger', n, 'A')) }, { addon: 'B', subs: [sub('ger', 1, 'B')] }]
+  assert.equal(chooseAddonSubtitles(many, 'de').filter(s => s.addon === 'A').length, 10)
 })
 
 test('parseSegments: IntroDB seconds -> milliseconds, recap before intro, outro start', () => {

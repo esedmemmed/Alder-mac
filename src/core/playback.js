@@ -1,6 +1,7 @@
 // The pure helpers of Alder's PlayerActivity.kt (the player itself is Phase 3), kept in core so they are unit-tested in Node:
 // constants, lowerSourceHeight, upNextWindow, plausibleEpisode, nextVideo, the add-on subtitle choice and IntroDB's answer.
 // bestAudio (the audio track order) lives in core/audio.js because it also has to skip tracks the TV can't decode.
+import { stableSort } from './util.js'
 
 /** PlayerActivity's companion constants, in milliseconds (RETRIES and TRY are counts). */
 export const PLAYER = Object.freeze({
@@ -45,22 +46,34 @@ export function nextVideo(videos, videoId) {
   return next && (next.season !== 0 || videos[at].season === 0) ? next : null
 }
 
+/** Most files kept per language from one add-on. */
+export const SUBS_PER_LANGUAGE_PER_ADDON = 10
+
 /**
- * The TV's language and English, three files each (a language picker if asked). [groups] is [{ addon, subs }] in the
- * account's add-on order (a flat Subtitle[] is one group): the files are taken round-robin, so every add-on with a match
- * gets one before any gets a second, and each add-on's own order is kept. Each Subtitle carries its add-on's name.
+ * Every subtitle from every add-on, every language. [groups] is [{ addon, subs }] in the account's add-on order (a flat
+ * Subtitle[] is one group). Order: the device language, then English, then the other languages by language name; inside a
+ * language the add-ons take turns (round-robin, add-on order), each add-on's own order kept and at most 10 of its files.
+ * Each Subtitle carries its add-on's name.
  */
 export function chooseAddonSubtitles(groups, tvLanguage) {
   const lists = (groups.length && Array.isArray(groups[0].subs) ? groups.map(g => g.subs) : [groups])
-  const share = keep => {
-    const per = lists.map(l => l.filter(keep))
-    const out = []
-    for (let round = 0; out.length < 3 && round < 3; round++) {
-      per.forEach(l => { if (out.length < 3 && round < l.length) out.push(l[round]) })
-    }
-    return out
+  const byLang = new Map() // language name -> one list per add-on
+  lists.forEach((l, a) => l.forEach(s => {
+    const name = s.language
+    if (!byLang.has(name)) byLang.set(name, lists.map(() => []))
+    const mine = byLang.get(name)[a]
+    if (mine.length < SUBS_PER_LANGUAGE_PER_ADDON) mine.push(s)
+  }))
+  const rank = ([name, per]) => {
+    const first = per.reduce((f, l) => f || l[0], null)
+    return first.isLocal(tvLanguage) ? 0 : first.isEnglish() ? 1 : 2
   }
-  return share(s => s.isLocal(tvLanguage)).concat(share(s => !s.isLocal(tvLanguage) && s.isEnglish()))
+  const order = stableSort(Array.from(byLang.entries()), (x, y) => rank(x) - rank(y) || (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0))
+  const out = []
+  order.forEach(([, per]) => {
+    for (let round = 0; per.some(l => round < l.length); round++) per.forEach(l => { if (round < l.length) out.push(l[round]) })
+  })
+  return out
 }
 
 /**
