@@ -1,0 +1,68 @@
+== probe 1 ==
+page: script start
+probe 1: started
+userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)
+WebKit version: 605.1.15
+Safari version: unknown
+origin: [link]
+js Promise.allSettled: yes
+js Promise.any: yes
+js Object.fromEntries: yes
+js Object.hasOwn: no
+js String.replaceAll: yes
+js String.matchAll: yes
+js Array.at: no
+js Array.findLast: no
+js Array.toSorted: no
+js structuredClone: no
+js globalThis: yes
+js WeakRef: yes
+css display: grid: yes
+css position: sticky: yes
+css aspect-ratio: 16 / 9: no
+css inset: 0: yes
+css backdrop-filter: blur(4px): no
+css -webkit-backdrop-filter: blur(4px): yes
+css selector(:focus-visible): no
+localStorage: written
+nav: finished
+api.strem.io: reached, status 200
+link.stremio.com: reached, status 200
+Cinemeta: reached, status 200
+OpenSubtitles v3: reached, status 200
+Torrentio: reached, status 200
+probe 1: done
+== probe 2 ==
+page: script start
+probe 2: started
+userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)
+WebKit version: 605.1.15
+Safari version: unknown
+origin: [link]
+js Promise.allSettled: yes
+js Promise.any: yes
+js Object.fromEntries: yes
+js Object.hasOwn: no
+js String.replaceAll: yes
+js String.matchAll: yes
+js Array.at: no
+js Array.findLast: no
+js Array.toSorted: no
+js structuredClone: no
+js globalThis: yes
+js WeakRef: yes
+css display: grid: yes
+css position: sticky: yes
+css aspect-ratio: 16 / 9: no
+css inset: 0: yes
+css backdrop-filter: blur(4px): no
+css -webkit-backdrop-filter: blur(4px): yes
+css selector(:focus-visible): no
+localStorage after relaunch: present
+nav: finished
+api.strem.io: reached, status 200
+link.stremio.com: reached, status 200
+Cinemeta: reached, status 200
+OpenSubtitles v3: reached, status 200
+Torrentio: reached, status 200
+probe 2: done
