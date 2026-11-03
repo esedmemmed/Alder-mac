@@ -1,0 +1,13 @@
+wall_s	time_pos	frame_drops	decoder_drops	hwdec	fps_est	paused_for_cache	cpu_total_pct
+15.8	8.884	142	0	videotoolbox	23.976	no	74.5
+25.8	19.061	282	0	videotoolbox	23.976	no	58.5
+35.8	28.987	399	0	videotoolbox	23.976	no	57.7
+45.9	38.956	469	0	videotoolbox	23.976	no	66.8
+55.8	48.799	544	0	videotoolbox	23.976	no	66.7
+65.9	58.642	624	0	videotoolbox	23.976	no	57.3
+75.8	67.567	761	0	videotoolbox	23.976	no	24.8
+85.8	77.369	915	0	videotoolbox	23.976	no	44.0
+95.8	87.087	1070	0	videotoolbox	23.976	no	38.0
+105.8	96.805	1225	0	videotoolbox	23.976	no	29.6
+115.9	105.439	1351	0	videotoolbox	23.976	no	35.3
+125.8	113.613	1464	0	videotoolbox	23.976	no	31.9

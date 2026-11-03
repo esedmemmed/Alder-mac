@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "id": "tt1856101",
+    "type": "movie",
+    "name": "Blade Runner 2049",
+    "poster": "https://images.metahub.space/poster/medium/tt1856101/img",
+    "posterShape": "poster",
+    "imdbRating": "8.0",
+    "releaseInfo": "2017",
+    "genres": [
+      "Action",
+      "Drama",
+      "Mystery"
+    ],
+    "description": "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard.",
+    "runtime": "164 min",
+    "imdb_id": "tt1856101",
+    "background": "https://images.metahub.space/background/medium/tt1856101/img",
+    "logo": "https://images.metahub.space/logo/medium/tt1856101/img"
+  }
+}

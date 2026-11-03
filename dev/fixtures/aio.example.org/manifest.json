@@ -1,0 +1,17 @@
+{
+  "id": "org.example.aiostreams",
+  "version": "2.4.0",
+  "name": "AIOStreams (example)",
+  "description": "Fixture add-on that mixes debrid streams, headers and an action placeholder.",
+  "resources": [
+    "stream"
+  ],
+  "types": [
+    "movie",
+    "series"
+  ],
+  "idPrefixes": [
+    "tt"
+  ],
+  "catalogs": []
+}

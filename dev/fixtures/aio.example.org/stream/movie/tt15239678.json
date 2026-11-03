@@ -1,0 +1,53 @@
+{
+  "streams": [
+    {
+      "name": "Example Trakt",
+      "description": "Mark Watched\nTap to mark this title as watched on Trakt",
+      "url": "https://trakt.example.org/actions/watched/tt15239678",
+      "behaviorHints": {
+        "videoSize": 27648,
+        "filename": "mark-watched.mp4"
+      }
+    },
+    {
+      "name": "AIOStreams (example)\n[DL] 2160p",
+      "description": "Dune.Part.Two.2024.2160p.WEB-DL.DDP5.1.HDR10.H.265-FLUX.mkv\n💾 21.8 GB 🔊 DD+ 5.1",
+      "url": "https://media.fixture.test/stream/dune-part-two-2160p-referer.mkv",
+      "behaviorHints": {
+        "videoSize": 23407571763,
+        "filename": "Dune.Part.Two.2024.2160p.WEB-DL.DDP5.1.HDR10.H.265-FLUX.mkv",
+        "bingeGroup": "aio|2160p|hdr10",
+        "proxyHeaders": {
+          "request": {
+            "User-Agent": "Mozilla/5.0 (Linux; Tizen 5.5)",
+            "Referer": "https://debrid.example.org/"
+          }
+        }
+      }
+    },
+    {
+      "name": "AIOStreams (example)\n[DL] 1080p",
+      "description": "Dune.Part.Two.2024.1080p.WEB-DL.AAC2.0.H.264-GRP.mkv\n💾 7.4 GB 🔊 AAC 2.0",
+      "url": "https://media.fixture.test/stream/dune-part-two-1080p-ua.mkv",
+      "behaviorHints": {
+        "videoSize": 7945689498,
+        "filename": "Dune.Part.Two.2024.1080p.WEB-DL.AAC2.0.H.264-GRP.mkv",
+        "bingeGroup": "aio|1080p|aac",
+        "proxyHeaders": {
+          "request": {
+            "User-Agent": "Mozilla/5.0 (Linux; Tizen 5.5)"
+          }
+        }
+      }
+    },
+    {
+      "name": "AIOStreams (example)\n[DL] sample",
+      "description": "Dune.Part.Two.2024.1080p.sample.mkv\n💾 38 MB",
+      "url": "https://media.fixture.test/stream/dune-part-two-sample.mkv",
+      "behaviorHints": {
+        "videoSize": 39845888,
+        "filename": "Dune.Part.Two.2024.1080p.sample.mkv"
+      }
+    }
+  ]
+}

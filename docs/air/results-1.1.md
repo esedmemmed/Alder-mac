@@ -2,10 +2,10 @@
 
 Input for the 1.3 device profile. No links, ever. Machine facts, copied once from a `*.machine.txt`:
 
-- product_version:
-- build:
-- model:
-- ram_bytes:
+- product_version: 11.7.11
+- build: 20G1443
+- model: MacBookAir6,2
+- ram_bytes: 4294967296 (AC power at every T7 run start)
 
 ## Results
 
@@ -21,10 +21,15 @@ Values come from each file's `*.summary.txt`. Bar proposed in R0-005, confirmed 
 | 4k-h264 | bare | | | | | | | | | | | | |
 | dts | bare | | | | | | | | | | | | |
 | truehd | bare | | | | | | | | | | | | |
-| 1080p-h264 (T7, 1280x720 window, CI mpv) | bare | | | | | | | | | | | | |
-| 1080p-h264 (T7, 1280x720 window) | shell-hidden | | | | | | | | | | | | |
-| 1080p-h264 (T7, 1280x720 window) | shell-shown | | | | | | | | | | | | |
-| 4k-hevc (T7, 120 s counter check) | shell-shown | | | | | | | | | | | | |
+| 1080p-h264 (T7, 1280x720 window, CI mpv) | bare | 599.9 | 10 | 0 | 0.07 | videotoolbox | 0.999 | 0 | 23.976 | 39.3 | not noted | yes | smooth (developer watched) |
+| 1080p-h264 (T7, 1280x720 window) | shell-hidden | 599.9 | 21 | 0 | 0.15 | videotoolbox | 0.992 | 0 | 23.976 | 41.0 | not noted | not noted | not watched |
+| 1080p-h264 (T7, 1280x720 window) | shell-shown | 599.9 | 9 | 0 | 0.06 | videotoolbox | 0.992 | 0 | 23.976 | 45.3 | not noted | not noted | not watched |
+| 4k-hevc (T7, 120 s counter check) | shell-shown | 120.0 | 1560 | 0 | 54.24 | videotoolbox | 0.952 | 0 | 23.976 | 48.8 | not noted | not noted | not watched; T7.1 run (no numbers) froze a bit |
+
+T7 rows: run 2026-11-03, app `app-7f04732`, stack `stack-158edb7e678b`; source `docs/air/raw-1.1/*.summary.txt` (raw outputs, never edited).
+- 1080p shell vs bare: drop_pct within 0.1, hwdec videotoolbox in the shell, so the web view costs ~2-6 cpu points and no smoothness. realtime 0.992 is under the 1.0 bar by 0.8%; T8 judges it (stalls 0).
+- 4k-hevc: unwatchable (54% drops). The frame-drop counter moves under `vo=libmpv`, so the shell's drop counts are evidence. `hwdec=videotoolbox` for HEVC on this GPU is likely VideoToolbox's software decoder (unverified).
+- Developer accepted the numbers without watching the shell plays (2026-11-03).
 
 ## What the columns mean
 

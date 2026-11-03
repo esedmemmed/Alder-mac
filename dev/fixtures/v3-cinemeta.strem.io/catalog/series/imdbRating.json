@@ -1,0 +1,131 @@
+{
+  "metas": [
+    {
+      "id": "tt10986410",
+      "type": "series",
+      "name": "Ted Lasso",
+      "poster": "https://images.metahub.space/poster/medium/tt10986410/img",
+      "posterShape": "poster",
+      "imdbRating": "8.8",
+      "releaseInfo": "2020–2023",
+      "genres": [
+        "Comedy",
+        "Drama",
+        "Sport"
+      ],
+      "description": "An American football coach leads a British soccer team to the top of the table.",
+      "runtime": "30 min"
+    },
+    {
+      "id": "tt12637874",
+      "type": "series",
+      "name": "Fallout",
+      "poster": "https://images.metahub.space/poster/medium/tt12637874/img",
+      "posterShape": "poster",
+      "imdbRating": "8.3",
+      "releaseInfo": "2024–",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "description": "In a future, post-nuclear Los Angeles, citizens of a vault return to the irradiated surface.",
+      "runtime": "60 min"
+    },
+    {
+      "id": "tt5875444",
+      "type": "series",
+      "name": "Slow Horses",
+      "poster": "https://images.metahub.space/poster/medium/tt5875444/img",
+      "posterShape": "poster",
+      "imdbRating": "8.2",
+      "releaseInfo": "2022–",
+      "genres": [
+        "Comedy",
+        "Crime",
+        "Drama"
+      ],
+      "description": "Intelligence agents who have fallen from grace are relegated to a dumping ground department.",
+      "runtime": "45 min"
+    },
+    {
+      "id": "tt9253284",
+      "type": "series",
+      "name": "Andor",
+      "poster": "https://images.metahub.space/poster/medium/tt9253284/img",
+      "posterShape": "poster",
+      "imdbRating": "8.4",
+      "releaseInfo": "2022–",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "description": "The tale of the birth of the Rebellion, centered on Cassian Andor.",
+      "runtime": "40 min"
+    },
+    {
+      "id": "tt2788316",
+      "type": "series",
+      "name": "Shōgun",
+      "poster": "https://images.metahub.space/poster/medium/tt2788316/img",
+      "posterShape": "poster",
+      "imdbRating": "8.7",
+      "releaseInfo": "2024–",
+      "genres": [
+        "Adventure",
+        "Drama",
+        "History"
+      ],
+      "description": "In 1600 Japan, a mysterious European ship is found marooned in a nearby fishing village.",
+      "runtime": "59 min"
+    },
+    {
+      "id": "tt14452776",
+      "type": "series",
+      "name": "The Bear",
+      "poster": "https://images.metahub.space/poster/medium/tt14452776/img",
+      "posterShape": "poster",
+      "imdbRating": "8.6",
+      "releaseInfo": "2022–",
+      "genres": [
+        "Comedy",
+        "Drama"
+      ],
+      "description": "A young chef from the fine dining world returns to Chicago to run his family's sandwich shop.",
+      "runtime": "30 min"
+    },
+    {
+      "id": "tt0903747",
+      "type": "series",
+      "name": "Breaking Bad",
+      "poster": "https://images.metahub.space/poster/medium/tt0903747/img",
+      "posterShape": "poster",
+      "imdbRating": "9.5",
+      "releaseInfo": "2008–2013",
+      "genres": [
+        "Crime",
+        "Drama",
+        "Thriller"
+      ],
+      "description": "A high school chemistry teacher diagnosed with cancer teams up with a former student to secure his family's future.",
+      "runtime": "49 min"
+    },
+    {
+      "id": "tt11280740",
+      "type": "series",
+      "name": "Severance",
+      "poster": "https://images.metahub.space/poster/medium/tt11280740/img",
+      "posterShape": "poster",
+      "imdbRating": "8.7",
+      "releaseInfo": "2022–",
+      "genres": [
+        "Drama",
+        "Mystery",
+        "Sci-Fi"
+      ],
+      "description": "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+      "runtime": "55 min"
+    }
+  ]
+}

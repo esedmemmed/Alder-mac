@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "id": "tt15398776",
+    "type": "movie",
+    "name": "Oppenheimer",
+    "poster": "https://images.metahub.space/poster/medium/tt15398776/img",
+    "posterShape": "poster",
+    "imdbRating": "8.3",
+    "releaseInfo": "2023",
+    "genres": [
+      "Biography",
+      "Drama",
+      "History"
+    ],
+    "description": "The story of American scientist J. Robert Oppenheimer and his role in the development of the atomic bomb.",
+    "runtime": "180 min",
+    "imdb_id": "tt15398776",
+    "background": "https://images.metahub.space/background/medium/tt15398776/img",
+    "logo": "https://images.metahub.space/logo/medium/tt15398776/img"
+  }
+}

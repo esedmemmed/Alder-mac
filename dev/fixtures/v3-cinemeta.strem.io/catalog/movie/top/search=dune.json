@@ -1,0 +1,35 @@
+{
+  "metas": [
+    {
+      "id": "tt15239678",
+      "type": "movie",
+      "name": "Dune: Part Two",
+      "poster": "https://images.metahub.space/poster/medium/tt15239678/img",
+      "posterShape": "poster",
+      "imdbRating": "8.5",
+      "releaseInfo": "2024",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "description": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.",
+      "runtime": "166 min"
+    },
+    {
+      "id": "tt1160419",
+      "type": "movie",
+      "name": "Dune",
+      "poster": "https://images.metahub.space/poster/medium/tt1160419/img",
+      "posterShape": "poster",
+      "imdbRating": "8.0",
+      "releaseInfo": "2021",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "runtime": "155 min"
+    }
+  ]
+}

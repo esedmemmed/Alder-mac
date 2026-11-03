@@ -1,0 +1,200 @@
+{
+  "result": [
+    {
+      "_id": "tt15239678",
+      "name": "Dune: Part Two",
+      "type": "movie",
+      "poster": "https://images.metahub.space/poster/medium/tt15239678/img",
+      "posterShape": "poster",
+      "removed": false,
+      "temp": false,
+      "_ctime": "2026-09-18T20:15:00.000Z",
+      "_mtime": "2026-10-27T20:15:00.000Z",
+      "behaviorHints": {
+        "defaultVideoId": "tt15239678",
+        "featuredVideoId": null,
+        "hasScheduledVideos": false
+      },
+      "state": {
+        "lastWatched": "2026-10-28T17:15:00.000Z",
+        "timeWatched": 3960000,
+        "timeOffset": 3960000,
+        "overallTimeWatched": 3960000,
+        "timesWatched": 0,
+        "flaggedWatched": 0,
+        "duration": 9960000,
+        "video_id": "tt15239678",
+        "watched": null,
+        "noNotif": false
+      }
+    },
+    {
+      "_id": "tt11280740",
+      "name": "Severance",
+      "type": "series",
+      "poster": "https://images.metahub.space/poster/medium/tt11280740/img",
+      "posterShape": "poster",
+      "removed": false,
+      "temp": false,
+      "_ctime": "2026-09-18T20:15:00.000Z",
+      "_mtime": "2026-10-27T20:15:00.000Z",
+      "behaviorHints": {
+        "defaultVideoId": null,
+        "featuredVideoId": null,
+        "hasScheduledVideos": true
+      },
+      "state": {
+        "lastWatched": "2026-10-27T18:15:00.000Z",
+        "timeWatched": 4140000,
+        "timeOffset": 840000,
+        "overallTimeWatched": 4140000,
+        "timesWatched": 0,
+        "flaggedWatched": 0,
+        "duration": 3000000,
+        "video_id": "tt11280740:1:4",
+        "watched": "tt11280740:1:3:4:eJzjAwAADwAP",
+        "noNotif": false
+      }
+    },
+    {
+      "_id": "tt0816692",
+      "name": "Interstellar",
+      "type": "movie",
+      "poster": "https://images.metahub.space/poster/medium/tt0816692/img",
+      "posterShape": "poster",
+      "removed": false,
+      "temp": false,
+      "_ctime": "2026-09-18T20:15:00.000Z",
+      "_mtime": "2026-10-27T20:15:00.000Z",
+      "behaviorHints": {
+        "defaultVideoId": "tt0816692",
+        "featuredVideoId": null,
+        "hasScheduledVideos": false
+      },
+      "state": {
+        "lastWatched": "2026-07-30T20:15:00.000Z",
+        "timeWatched": 9000000,
+        "timeOffset": 0,
+        "overallTimeWatched": 9000000,
+        "timesWatched": 1,
+        "flaggedWatched": 1,
+        "duration": 10140000,
+        "video_id": "tt0816692",
+        "watched": null,
+        "noNotif": false
+      }
+    },
+    {
+      "_id": "tt15398776",
+      "name": "Oppenheimer",
+      "type": "movie",
+      "poster": "https://images.metahub.space/poster/medium/tt15398776/img",
+      "posterShape": "poster",
+      "removed": false,
+      "temp": false,
+      "_ctime": "2026-09-18T20:15:00.000Z",
+      "_mtime": "2026-10-27T20:15:00.000Z",
+      "behaviorHints": {
+        "defaultVideoId": "tt15398776",
+        "featuredVideoId": null,
+        "hasScheduledVideos": false
+      },
+      "state": {
+        "lastWatched": "2026-09-18T20:15:00.000Z",
+        "timeWatched": 0,
+        "timeOffset": 0,
+        "overallTimeWatched": 0,
+        "timesWatched": 0,
+        "flaggedWatched": 0,
+        "duration": 0,
+        "video_id": null,
+        "watched": null,
+        "noNotif": false
+      }
+    },
+    {
+      "_id": "tt1745960",
+      "name": "Top Gun: Maverick",
+      "type": "movie",
+      "poster": "https://images.metahub.space/poster/medium/tt1745960/img",
+      "posterShape": "poster",
+      "removed": true,
+      "temp": true,
+      "_ctime": "2026-09-18T20:15:00.000Z",
+      "_mtime": "2026-10-27T20:15:00.000Z",
+      "behaviorHints": {
+        "defaultVideoId": "tt1745960",
+        "featuredVideoId": null,
+        "hasScheduledVideos": false
+      },
+      "state": {
+        "lastWatched": "2026-10-23T20:15:00.000Z",
+        "timeWatched": 1200000,
+        "timeOffset": 1200000,
+        "overallTimeWatched": 1200000,
+        "timesWatched": 0,
+        "flaggedWatched": 0,
+        "duration": 7800000,
+        "video_id": "tt1745960",
+        "watched": null,
+        "noNotif": false
+      }
+    },
+    {
+      "_id": "tt0468569",
+      "name": "The Dark Knight",
+      "type": "movie",
+      "poster": "https://images.metahub.space/poster/medium/tt0468569/img",
+      "posterShape": "poster",
+      "removed": true,
+      "temp": false,
+      "_ctime": "2026-09-18T20:15:00.000Z",
+      "_mtime": "2026-10-27T20:15:00.000Z",
+      "behaviorHints": {
+        "defaultVideoId": "tt0468569",
+        "featuredVideoId": null,
+        "hasScheduledVideos": false
+      },
+      "state": {
+        "lastWatched": "2026-04-11T20:15:00.000Z",
+        "timeWatched": 600000,
+        "timeOffset": 600000,
+        "overallTimeWatched": 0,
+        "timesWatched": 0,
+        "flaggedWatched": 0,
+        "duration": 9120000,
+        "video_id": "tt0468569",
+        "watched": null,
+        "noNotif": false
+      }
+    },
+    {
+      "_id": "yt_id:UCaldr0fixture",
+      "name": "Fixture channel",
+      "type": "other",
+      "poster": "https://images.metahub.space/poster/medium/yt_id:UCaldr0fixture/img",
+      "posterShape": "poster",
+      "removed": false,
+      "temp": false,
+      "_ctime": "2026-09-18T20:15:00.000Z",
+      "_mtime": "2026-10-27T20:15:00.000Z",
+      "behaviorHints": {
+        "defaultVideoId": null,
+        "featuredVideoId": null,
+        "hasScheduledVideos": false
+      },
+      "state": {
+        "lastWatched": "2026-09-18T20:15:00.000Z",
+        "timeWatched": 0,
+        "timeOffset": 120000,
+        "overallTimeWatched": 0,
+        "timesWatched": 0,
+        "flaggedWatched": 0,
+        "duration": 3600000,
+        "video_id": "yt_id:UCaldr0fixture:abc",
+        "watched": null,
+        "noNotif": false
+      }
+    }
+  ]
+}

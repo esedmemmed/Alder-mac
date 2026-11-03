@@ -1,0 +1,36 @@
+{
+  "id": "com.stremio.torrentio.addon",
+  "version": "0.0.15",
+  "name": "Torrentio",
+  "description": "Provides torrent streams from scraped torrent providers.",
+  "logo": "https://torrentio.strem.fun/images/logo_v1.png",
+  "resources": [
+    {
+      "name": "stream",
+      "types": [
+        "movie",
+        "series",
+        "anime"
+      ],
+      "idPrefixes": [
+        "tt",
+        "kitsu"
+      ]
+    }
+  ],
+  "types": [
+    "movie",
+    "series",
+    "anime",
+    "other"
+  ],
+  "idPrefixes": [
+    "tt",
+    "kitsu"
+  ],
+  "catalogs": [],
+  "behaviorHints": {
+    "configurable": true,
+    "configurationRequired": false
+  }
+}

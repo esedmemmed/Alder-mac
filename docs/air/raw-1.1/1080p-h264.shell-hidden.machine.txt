@@ -1,0 +1,5 @@
+product_version=11.7.11
+build=20G1443
+model=MacBookAir6,2
+ram_bytes=4294967296
+power=Now drawing from 'AC Power'

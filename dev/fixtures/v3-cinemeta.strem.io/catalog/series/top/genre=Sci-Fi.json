@@ -1,0 +1,35 @@
+{
+  "metas": [
+    {
+      "id": "tt0142032",
+      "type": "series",
+      "name": "Frank Herbert's Dune",
+      "poster": "https://images.metahub.space/poster/medium/tt0142032/img",
+      "posterShape": "poster",
+      "imdbRating": "7.3",
+      "releaseInfo": "2000",
+      "genres": [
+        "Drama",
+        "Sci-Fi"
+      ],
+      "description": "The saga of the Atreides family on the desert planet Arrakis, in three parts.",
+      "runtime": "90 min"
+    },
+    {
+      "id": "tt11280740",
+      "type": "series",
+      "name": "Severance",
+      "poster": "https://images.metahub.space/poster/medium/tt11280740/img",
+      "posterShape": "poster",
+      "imdbRating": "8.7",
+      "releaseInfo": "2022–",
+      "genres": [
+        "Drama",
+        "Mystery",
+        "Sci-Fi"
+      ],
+      "description": "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+      "runtime": "55 min"
+    }
+  ]
+}

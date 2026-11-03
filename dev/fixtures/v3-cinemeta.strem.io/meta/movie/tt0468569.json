@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "id": "tt0468569",
+    "type": "movie",
+    "name": "The Dark Knight",
+    "poster": "https://images.metahub.space/poster/medium/tt0468569/img",
+    "posterShape": "poster",
+    "imdbRating": "9.0",
+    "releaseInfo": "2008",
+    "genres": [
+      "Action",
+      "Crime",
+      "Drama"
+    ],
+    "description": "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest tests.",
+    "runtime": "152 min",
+    "imdb_id": "tt0468569",
+    "background": "https://images.metahub.space/background/medium/tt0468569/img",
+    "logo": "https://images.metahub.space/logo/medium/tt0468569/img"
+  }
+}

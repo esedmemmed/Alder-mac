@@ -1,0 +1,237 @@
+{
+  "meta": {
+    "id": "tt11280740",
+    "type": "series",
+    "name": "Severance",
+    "poster": "https://images.metahub.space/poster/medium/tt11280740/img",
+    "posterShape": "poster",
+    "imdbRating": "8.7",
+    "releaseInfo": "2022–",
+    "genres": [
+      "Drama",
+      "Mystery",
+      "Sci-Fi"
+    ],
+    "description": "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+    "runtime": "55 min",
+    "imdb_id": "tt11280740",
+    "background": "https://images.metahub.space/background/medium/tt11280740/img",
+    "logo": "https://images.metahub.space/logo/medium/tt11280740/img",
+    "cast": [
+      "Adam Scott",
+      "Britt Lower",
+      "Zach Cherry",
+      "Patricia Arquette",
+      "John Turturro"
+    ],
+    "director": [
+      "Ben Stiller"
+    ],
+    "videos": [
+      {
+        "id": "tt11280740:2:10",
+        "season": 2,
+        "episode": 10,
+        "title": "Cold Harbor",
+        "name": "Cold Harbor",
+        "released": "2025-03-21T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/10/w780.jpg",
+        "overview": "Season 2, episode 10: Cold Harbor."
+      },
+      {
+        "id": "tt11280740:0:1",
+        "season": 0,
+        "episode": 1,
+        "title": "Severance: A Look Behind the Scenes",
+        "name": "Severance: A Look Behind the Scenes",
+        "released": "2022-03-18T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/0/1/w780.jpg",
+        "overview": "A special about the making of the series."
+      },
+      {
+        "id": "tt11280740:1:1",
+        "season": 1,
+        "episode": 1,
+        "title": "Good News About Hell",
+        "name": "Good News About Hell",
+        "released": "2022-02-18T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/1/1/w780.jpg",
+        "overview": "Season 1, episode 1: Good News About Hell."
+      },
+      {
+        "id": "tt11280740:1:2",
+        "season": 1,
+        "episode": 2,
+        "title": "Half Loop",
+        "name": "Half Loop",
+        "released": "2022-02-25T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/1/2/w780.jpg",
+        "overview": "Season 1, episode 2: Half Loop."
+      },
+      {
+        "id": "tt11280740:1:3",
+        "season": 1,
+        "episode": 3,
+        "title": "In Perpetuity",
+        "name": "In Perpetuity",
+        "released": "2022-03-04T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/1/3/w780.jpg",
+        "overview": "Season 1, episode 3: In Perpetuity."
+      },
+      {
+        "id": "tt11280740:1:4",
+        "season": 1,
+        "episode": 4,
+        "title": "The You You Are",
+        "name": "The You You Are",
+        "released": "2022-03-11T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/1/4/w780.jpg",
+        "overview": "Season 1, episode 4: The You You Are."
+      },
+      {
+        "id": "tt11280740:1:5",
+        "season": 1,
+        "episode": 5,
+        "title": "The Grim Barbarity of Optics and Design",
+        "name": "The Grim Barbarity of Optics and Design",
+        "released": "2022-03-18T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/1/5/w780.jpg",
+        "overview": "Season 1, episode 5: The Grim Barbarity of Optics and Design."
+      },
+      {
+        "id": "tt11280740:1:6",
+        "season": 1,
+        "episode": 6,
+        "title": "Hide and Seek",
+        "name": "Hide and Seek",
+        "released": "2022-03-25T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/1/6/w780.jpg",
+        "overview": "Season 1, episode 6: Hide and Seek."
+      },
+      {
+        "id": "tt11280740:1:7",
+        "season": 1,
+        "episode": 7,
+        "title": "Defiant Jazz",
+        "name": "Defiant Jazz",
+        "released": "2022-04-01T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/1/7/w780.jpg",
+        "overview": "Season 1, episode 7: Defiant Jazz."
+      },
+      {
+        "id": "tt11280740:1:8",
+        "season": 1,
+        "episode": 8,
+        "title": "What's for Dinner?",
+        "name": "What's for Dinner?",
+        "released": "2022-04-08T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/1/8/w780.jpg",
+        "overview": "Season 1, episode 8: What's for Dinner?."
+      },
+      {
+        "id": "tt11280740:1:9",
+        "season": 1,
+        "episode": 9,
+        "title": "The We We Are",
+        "name": "The We We Are",
+        "released": "2022-04-15T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/1/9/w780.jpg",
+        "overview": "Season 1, episode 9: The We We Are."
+      },
+      {
+        "id": "tt11280740:2:1",
+        "season": 2,
+        "episode": 1,
+        "title": "Hello, Ms. Cobel",
+        "name": "Hello, Ms. Cobel",
+        "released": "2025-01-17T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/1/w780.jpg",
+        "overview": "Season 2, episode 1: Hello, Ms. Cobel."
+      },
+      {
+        "id": "tt11280740:2:2",
+        "season": 2,
+        "episode": 2,
+        "title": "Goodbye, Mrs. Selvig",
+        "name": "Goodbye, Mrs. Selvig",
+        "released": "2025-01-24T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/2/w780.jpg",
+        "overview": "Season 2, episode 2: Goodbye, Mrs. Selvig."
+      },
+      {
+        "id": "tt11280740:2:3",
+        "season": 2,
+        "episode": 3,
+        "title": "Who Is Alive?",
+        "name": "Who Is Alive?",
+        "released": "2025-01-31T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/3/w780.jpg",
+        "overview": "Season 2, episode 3: Who Is Alive?."
+      },
+      {
+        "id": "tt11280740:2:4",
+        "season": 2,
+        "episode": 4,
+        "title": "Woe's Hollow",
+        "name": "Woe's Hollow",
+        "released": "2025-02-07T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/4/w780.jpg",
+        "overview": "Season 2, episode 4: Woe's Hollow."
+      },
+      {
+        "id": "tt11280740:2:5",
+        "season": 2,
+        "episode": 5,
+        "title": "Trojan's Horse",
+        "name": "Trojan's Horse",
+        "released": "2025-02-14T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/5/w780.jpg",
+        "overview": "Season 2, episode 5: Trojan's Horse."
+      },
+      {
+        "id": "tt11280740:2:6",
+        "season": 2,
+        "episode": 6,
+        "title": "Attila",
+        "name": "Attila",
+        "released": "2025-02-21T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/6/w780.jpg",
+        "overview": "Season 2, episode 6: Attila."
+      },
+      {
+        "id": "tt11280740:2:7",
+        "season": 2,
+        "episode": 7,
+        "title": "Chikhai Bardo",
+        "name": "Chikhai Bardo",
+        "released": "2025-02-28T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/7/w780.jpg",
+        "overview": "Season 2, episode 7: Chikhai Bardo."
+      },
+      {
+        "id": "tt11280740:2:8",
+        "season": 2,
+        "episode": 8,
+        "title": "Sweet Vitriol",
+        "name": "Sweet Vitriol",
+        "released": "2025-03-07T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/8/w780.jpg",
+        "overview": "Season 2, episode 8: Sweet Vitriol."
+      },
+      {
+        "id": "tt11280740:2:9",
+        "season": 2,
+        "episode": 9,
+        "title": "The After Hours",
+        "name": "The After Hours",
+        "released": "2025-03-14T00:00:00.000Z",
+        "thumbnail": "https://episodes.metahub.space/tt11280740/2/9/w780.jpg",
+        "overview": "Season 2, episode 9: The After Hours."
+      }
+    ],
+    "slug": "series/severance-11280740",
+    "behaviorHints": {
+      "hasScheduledVideos": true
+    }
+  }
+}

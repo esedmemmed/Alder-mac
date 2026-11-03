@@ -1,0 +1,369 @@
+/*
+ * Components: card, row, pill (primary button), round button, chip, tag, progress, panel, toast, top bar.
+ * Focus is :focus (the engine uses real DOM focus). Only transform and opacity change on focus: the rim and the
+ * glow are drawn once and faded in, never animated (box-shadow animation is forbidden on this TV's budget).
+ *
+ * v0.2 focus language (docs/PLAN-v0.2.md section A): cards keep Alder's tungsten rim and lift; everything else that takes focus
+ * (nav tabs, chips, round buttons, rows, keys, PIN boxes) gets a SOLID warm-white fill with dark ink. The fill is a ::before
+ * layer faded in by opacity (z-index -1 inside the element's own stacking context, so it sits behind the text); the top-bar
+ * highlight is one element moved by transform (src/ui/navhl.js). The "focus scope" block at the end of this file re-declares
+ * the colour variables inside a focused item, so every secondary text, tag, tick and badge in it is recoloured at once.
+ */
+
+/* ---- the focus treatment shared by cards, pills and chips: a hairline rim and a tungsten glow ---- */
+.rim {
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  border-radius: inherit;
+  border: var(--hairline) solid var(--tungsten-rim);   /* lift(): a hairline, the glow and the lift carry focus */
+  box-shadow: 0 16px 48px var(--tungsten-glow);        /* the spot shadow, TUNGSTEN_GLOW */
+  opacity: 0;
+  transition: opacity var(--t-focus) ease-out;
+  pointer-events: none;
+}
+[data-focus]:focus > .rim { opacity: 1; }
+
+/* ---- card (a poster in a row) ---- */
+.card {
+  position: absolute;
+  top: 0;
+  border-radius: var(--card-radius);
+  background: var(--tile);
+  transition: transform var(--t-focus) ease-out;
+}
+.card:focus { transform: scale(var(--card-grow)); z-index: 3; }
+.card-clip {
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  border-radius: var(--card-radius);
+  overflow: hidden;
+}
+.card-img {
+  position: absolute;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 200ms linear;
+}
+.card-img.on { opacity: 1; }
+.card-name {                            /* until the poster is there (or when a title has none) */
+  position: absolute;
+  left: 20px; right: 20px; top: 24px;
+  font-family: var(--font-serif);
+  font-size: var(--fs-name);
+  line-height: var(--lh-name);
+  color: var(--text-2);
+  overflow: hidden;
+  max-height: 168px;
+}
+.card.has-img .card-name { display: none; }
+/* a thin watched-so-far bar over a dark track (progressBar) */
+.progress {
+  position: absolute;
+  left: 16px; right: 16px; bottom: 20px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--progress-track);
+  overflow: hidden;
+}
+.progress > i { display: block; height: 100%; background: var(--tungsten); border-radius: 3px; }
+.card-check {                           /* the watched tick: a small glass disc */
+  position: absolute;
+  right: 12px; top: 12px;
+  width: 48px; height: 48px;
+  border-radius: 24px;
+  background: rgba(14, 12, 10, 0.62);
+  border: var(--hairline) solid var(--glass-edge);
+  color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+}
+.card-check .icon { width: 28px; height: 28px; }
+.card.dim { opacity: 0.45; }
+
+/* ---- row: a heading and a horizontally virtualised strip ---- */
+.row { position: absolute; left: 0; width: 1920px; }
+.row-heading { padding-left: var(--pad); height: var(--lh-small); }
+.row-viewport { position: absolute; left: 0; width: 1920px; overflow: visible; }
+.row-track { position: absolute; left: var(--pad); top: 0; transition: transform 220ms ease-out; }
+.row-more { position: absolute; right: var(--pad); top: 0; }
+
+/* ---- pill: the warm-white primary action ---- */
+.pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: var(--button-h);
+  padding: 0 32px;
+  border-radius: 34px;
+  background: var(--text);
+  color: var(--base);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: transform var(--t-focus) ease-out;
+}
+.pill.has-icon { padding-left: 28px; }
+.pill .icon { width: 32px; height: 32px; margin-right: 12px; }
+.pill:focus { transform: scale(var(--pill-grow)); }
+/* already filled: a focused pill grows and gets a ring and a stronger glow (drawn once, faded in) */
+.pill > .rim {
+  left: -7px; top: -7px; right: -7px; bottom: -7px;
+  border-radius: 41px;
+  border: 3px solid var(--tungsten);
+  box-shadow: 0 18px 60px var(--focus-glow);
+}
+
+/* ---- round button: an icon on glass (the tick and info beside Play) ---- */
+.btn-round {
+  position: relative;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  width: var(--button-h); height: var(--button-h);
+  border-radius: 34px;
+  background: var(--glass-dark);
+  border: var(--hairline) solid var(--glass-edge);
+  box-shadow: inset 0 var(--hairline) 0 var(--glass-highlight);
+  color: var(--text);
+  transition: transform var(--t-focus) ease-out;
+}
+.btn-round:focus { transform: scale(var(--btn-grow)); }
+/* the name of the button, under it, only while the remote is on it (the aria-label is the text: no markup to add) */
+.btn-round[aria-label]::after, .avatar[aria-label]::after {
+  content: attr(aria-label);
+  position: absolute;
+  left: 50%; top: 100%;
+  width: 360px; margin-left: -180px; margin-top: 12px;
+  text-align: center;
+  white-space: nowrap;
+  font-size: var(--fs-small); line-height: var(--lh-small); font-weight: 600;
+  color: #f3eee6;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity var(--t-fill) linear;
+  pointer-events: none;
+}
+.btn-round:focus::after, .avatar:focus::after { opacity: 1; }
+
+/* ---- chip: a persistent choice; its dot stays after focus moves on ---- */
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  height: var(--chip-h);
+  padding: 0 32px;
+  border-radius: 24px;
+  background: transparent;                                       /* idle: an outline only */
+  border: var(--hairline) solid var(--chip-edge);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  color: var(--text-2);
+  white-space: nowrap;
+  transition: transform var(--t-focus) ease-out;
+}
+.chip.on { color: var(--text); background: var(--sel-fill); }   /* selected, not focused: a translucent fill and the dot */
+.chip .dot { color: var(--tungsten); margin-right: 12px; }
+.chip:focus { transform: scale(var(--chip-grow)); }              /* the solid fill (focus layer below) carries focus */
+
+/* ---- tag: a quiet outlined word beside a row's name ("Built-in", "THIS PROFILE") ---- */
+.tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border: var(--hairline) solid var(--glass-edge);
+  border-radius: 8px;
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.tag.accent { color: var(--tungsten); }
+
+/* ---- glass: the shared recipe (a pane the art shows through) ---- */
+.glass {
+  background: var(--glass);
+  border: var(--hairline) solid var(--glass-edge);
+  box-shadow: inset 0 var(--hairline) 0 var(--glass-highlight);
+}
+
+/* ---- list row focus (rowFocus) ---- */
+.row-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--tile-radius);
+  padding: 20px 32px;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+.row-item .grow { flex: 1; }
+.row-item .icon { width: 32px; height: 32px; color: var(--text); }
+
+/* ---- panel: the choose() dialog ---- */
+.scrim {
+  position: absolute;
+  left: 0; top: 0; width: 1920px; height: 1080px;
+  background: var(--scrim);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms linear;
+  pointer-events: auto;
+}
+.scrim.on { opacity: 1; }
+.panel {
+  width: var(--dialog-w);
+  max-height: 880px;
+  overflow: hidden;
+  border-radius: 32px;
+  background: var(--pane);
+  border: var(--hairline) solid var(--glass-edge);
+  box-shadow: inset 0 var(--hairline) 0 var(--glass-highlight);
+  padding: 32px 24px 24px 24px;
+}
+.panel-words { padding: 0 32px 20px 32px; }
+.panel-words .message { margin-top: 12px; }
+.panel-list { overflow: hidden; }
+
+/* ---- toast: a short note at the bottom (caption) ---- */
+#toast {
+  z-index: 101;
+  position: absolute;
+  left: 0; right: 0; bottom: 96px;
+  display: flex; justify-content: center;
+  pointer-events: none;
+}
+.toast {
+  padding: 12px 28px;
+  border-radius: 32px;
+  background: var(--pane);
+  border: var(--hairline) solid var(--glass-edge);
+  box-shadow: inset 0 var(--hairline) 0 var(--glass-highlight);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  opacity: 0;
+  transition: opacity 200ms linear;
+}
+.toast.on { opacity: 1; }
+
+/* ---- key hint: "[OK] Play / pause" (keyHint) ---- */
+.keyhint { display: inline-flex; align-items: center; color: var(--text-2); font-size: var(--fs-small); line-height: var(--lh-small); }
+.keyhint .key {
+  background: var(--text-2);
+  color: var(--base);
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  margin-right: 12px;
+}
+
+/* ---- the top bar of Home: profile disc, nav pill, clock ---- */
+.topbar { position: absolute; left: 0; top: 0; width: 1920px; height: 176px; }
+.avatar {
+  position: absolute;
+  left: var(--pad); top: 58px;
+  width: 60px; height: 60px;
+  border-radius: 30px;
+  background: var(--glass-dark);
+  border: var(--hairline) solid var(--glass-edge);
+  color: var(--tungsten);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform var(--t-focus) ease-out;
+}
+.avatar:focus { transform: scale(var(--btn-grow)); }   /* a round icon button: filled, grown, named under it */
+.navpill {
+  position: absolute;
+  left: 50%; top: 46px;
+  height: 84px;
+  transform: translateX(-50%);          /* centred on the screen, whatever its width */
+  border-radius: 42px;
+  display: flex; align-items: center;
+  padding: 0 12px;
+}
+.nav-item {
+  position: relative;
+  height: 84px;
+  padding: 0 28px;
+  margin: 0 4px;
+  display: flex; align-items: center;
+  font-size: var(--fs-body);
+  color: var(--text-2);
+}
+.nav-item.on { color: var(--text); -webkit-text-stroke: 0.8px currentColor; }   /* a bolder label without changing its width: the highlight is measured once */
+/* the current page: a translucent pill (the solid one is the sliding highlight, below) and a dot */
+.nav-item.on::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: 14px;
+  width: 8px; height: 8px;
+  margin-left: -4px;
+  border-radius: 4px;
+  background: var(--tungsten);
+}
+.nav-item:focus { -webkit-text-stroke: 0.8px currentColor; }
+/* ONE highlight for the whole bar (src/ui/navhl.js): a container moved by translateX, a middle scaled in X between two round
+   caps moved by translateX, so the ends stay round at any tab width and nothing but transform and opacity animates. */
+.nav-hl { position: absolute; left: 0; top: 8px; width: 0; height: 68px; opacity: 0; pointer-events: none;
+  transition: opacity 120ms linear, transform var(--t-slide) ease-out; }
+.nav-hl.on { opacity: 1; }
+.nav-hl i { position: absolute; top: 0; height: 68px; background: var(--focus-fill); transition: transform var(--t-slide) ease-out; }
+.nav-hl .l { left: 0; width: 34px; border-radius: 34px 0 0 34px; }
+.nav-hl .m { left: 0; width: 1px; transform-origin: 0 0; }
+.nav-hl .r { left: 0; width: 34px; border-radius: 0 34px 34px 0; }
+.nav-hl.snap, .nav-hl.snap i { transition: none; }
+.clock { position: absolute; right: 96px; top: 70px; font-size: var(--fs-body); color: var(--text-2); }
+
+/* ======================================================================================================================
+ * The focus fill, once for everything that takes it.
+ *
+ *   LAYER   a ::before behind the content, solid warm-white, faded in by opacity only (z-index -1 in the element's own
+ *           stacking context, so the label stays above it). Bordered shapes (chips, round buttons, PIN boxes) let it run
+ *           over their hairline, so no ring of glass shows round the fill.
+ *   SCOPE   inside a focused item the colour variables are re-declared: --text is the ink, --text-2 / --text-3 the
+ *           secondary ink, --tungsten the dark accent, --base the fill, --glass-edge the dark outline. Every text, tag,
+ *           icon, tick, track and badge that is written with those variables is >= 7:1 on the fill with no per-screen rule.
+ *   Player controls mark focus with a .focus class instead of :focus; they are listed beside the :focus ones.
+ * ==================================================================================================================== */
+.chip, .btn-round, .avatar, .nav-item, .row-item, .sg-group, .sg-row, .st-row, .ad-row, .eg-row, .pl-row, .osk-key, .sr-key,
+.dt-more, .sr-clear, .pin-box, .pl-btn, .pl-chip { isolation: isolate; }
+.osk-key, .sr-key, .sr-clear, .pin-box { position: relative; }
+
+.chip::before, .btn-round::before, .avatar::before, .nav-item::before, .row-item::before, .sg-group::before, .sg-row::before,
+.st-row::before, .ad-row::before, .eg-row::before, .pl-row::before, .osk-key::before, .sr-key::before, .dt-more::before,
+.sr-clear::before, .pin-box::before, .pl-btn::before, .pl-chip::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  border-radius: inherit;
+  background: var(--focus-fill);
+  opacity: 0;
+  z-index: -1;
+  transition: opacity var(--t-fill) ease-out;
+  pointer-events: none;
+}
+.chip::before, .btn-round::before, .avatar::before, .pin-box::before, .pl-btn::before, .pl-chip::before {
+  left: calc(-1 * var(--hairline)); top: calc(-1 * var(--hairline)); right: calc(-1 * var(--hairline)); bottom: calc(-1 * var(--hairline));
+}
+.chip:focus::before, .btn-round:focus::before, .avatar:focus::before, .row-item:focus::before, .sg-group:focus::before,
+.sg-row:focus::before, .st-row:focus::before, .ad-row:focus::before, .eg-row:focus::before, .pl-row.focus::before,
+.osk-key:focus::before, .sr-key:focus::before, .dt-more:focus::before, .sr-clear:focus::before, .pin-box.now::before,
+.pl-btn.focus::before, .pl-chip.focus::before { opacity: 1; }
+
+.chip:focus, .btn-round:focus, .avatar:focus, .nav-item:focus, .row-item:focus, .sg-group:focus, .sg-row:focus, .st-row:focus,
+.ad-row:focus, .eg-row:focus, .osk-key:focus, .sr-key:focus, .dt-more:focus, .sr-clear:focus, .pin-box.now,
+.pl-row.focus, .pl-btn:not(.primary).focus, .pl-chip.focus {
+  --text: var(--focus-ink);
+  --text-2: var(--focus-ink-2);
+  --text-3: var(--focus-ink-2);
+  --tungsten: var(--focus-accent);
+  --base: var(--focus-fill);
+  --glass-edge: var(--focus-edge);
+  color: var(--focus-ink);
+}
+.chip:focus .dot { color: var(--focus-accent); }
+/* a nav tab's own layer is the translucent "current page" pill (the solid fill is the sliding highlight) */
+.nav-item::before { top: 8px; bottom: 8px; border-radius: 34px; background: var(--sel-fill); }
+.nav-item.on::before { opacity: 1; }

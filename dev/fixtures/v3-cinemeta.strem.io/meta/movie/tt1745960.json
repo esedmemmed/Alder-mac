@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "id": "tt1745960",
+    "type": "movie",
+    "name": "Top Gun: Maverick",
+    "poster": "https://images.metahub.space/poster/medium/tt1745960/img",
+    "posterShape": "poster",
+    "imdbRating": "8.2",
+    "releaseInfo": "2022",
+    "genres": [
+      "Action",
+      "Drama"
+    ],
+    "description": "After more than thirty years of service as one of the Navy's top aviators, Pete Mitchell is where he belongs.",
+    "runtime": "130 min",
+    "imdb_id": "tt1745960",
+    "background": "https://images.metahub.space/background/medium/tt1745960/img",
+    "logo": "https://images.metahub.space/logo/medium/tt1745960/img"
+  }
+}

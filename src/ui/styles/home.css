@@ -1,0 +1,127 @@
+/*
+ * Home (Alder's MainActivity): one title's art across the screen, the focused title top left, one row of posters along the bottom,
+ * a top bar over it. Docs/home-dune.png and library.png at 1920 x 1080 (px = dp x 2).
+ *
+ * The top bar's own pieces (.topbar, .avatar, .navpill, .nav-item, .clock) are in components.css. Only transform and opacity move.
+ */
+.hm-screen { background: var(--base); }
+
+/* ---- pages: each page (rows or grid, chips, note, caption) is one element, kept alive but out of the document while another is open.
+   Showing it again plays one 150 ms fade and slide, from the side its tab is on; the a/b pair of names lets the same
+   animation start again without reading layout (changing animation-name restarts it). Opacity and transform only. ---- */
+.hm-page { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.hm-page.in-0-a { animation: hm-in-0-a 150ms linear backwards; }
+.hm-page.in-0-b { animation: hm-in-0-b 150ms linear backwards; }
+.hm-page.in-r-a { animation: hm-in-r-a 150ms ease-out backwards; }
+.hm-page.in-r-b { animation: hm-in-r-b 150ms ease-out backwards; }
+.hm-page.in-l-a { animation: hm-in-l-a 150ms ease-out backwards; }
+.hm-page.in-l-b { animation: hm-in-l-b 150ms ease-out backwards; }
+@keyframes hm-in-0-a { from { opacity: 0.2; } }
+@keyframes hm-in-0-b { from { opacity: 0.2; } }
+@keyframes hm-in-r-a { from { opacity: 0.2; transform: translate3d(56px, 0, 0); } }
+@keyframes hm-in-r-b { from { opacity: 0.2; transform: translate3d(56px, 0, 0); } }
+@keyframes hm-in-l-a { from { opacity: 0.2; transform: translate3d(-56px, 0, 0); } }
+@keyframes hm-in-l-b { from { opacity: 0.2; transform: translate3d(-56px, 0, 0); } }
+
+/* ---- the art and its shades (MainActivity `shaded`: the shades are painted into the bitmap on Android) ---- */
+.art { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: var(--base); overflow: hidden; }
+.art-img {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover;
+  opacity: 0; transition: opacity 600ms linear;
+}
+.art-img.on { opacity: 1; }
+.art-shade {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
+  background:
+    linear-gradient(to right, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0) 25%),
+    linear-gradient(to left, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0) 25%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0) 25%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0) 25%),
+    linear-gradient(to bottom, rgba(14, 12, 10, 0.55), rgba(14, 12, 10, 0) 14%),
+    linear-gradient(to top, rgba(14, 12, 10, 0.97), rgba(14, 12, 10, 0) 45%),
+    linear-gradient(to right, rgba(14, 12, 10, 0.92), rgba(14, 12, 10, 0) 55%);
+}
+/* Not glass: a light darkening of the art's top edge while the top bar shows. */
+.hm-topshade {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 512px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.4) 33%, rgba(0, 0, 0, 0.1) 66%, rgba(0, 0, 0, 0));
+}
+
+/* ---- the focused title, bottom-anchored above the row band (it grows upwards into the art, never down into the rows) ---- */
+.hm-hero {
+  position: absolute; left: 80px; bottom: 558px; width: 1088px; padding: 0 16px;
+  opacity: 0; transition: opacity 150ms linear;
+}
+.hm-hero.on { opacity: 1; }
+/* a new page's first title fades in with its rows (the a/b pair restarts the animation, as for .hm-page) */
+.hm-hero.swap-a.on { animation: hm-swap-a 150ms linear backwards; }
+.hm-hero.swap-b.on { animation: hm-swap-b 150ms linear backwards; }
+@keyframes hm-swap-a { from { opacity: 0.2; } }
+@keyframes hm-swap-b { from { opacity: 0.2; } }
+/* the description is cut to two lines in here, where nothing shows (fitAbout) */
+.hm-hero.hm-measure { visibility: hidden; pointer-events: none; }
+.hm-hero.grid { bottom: 640px; }
+.hm-title { position: relative; }
+.hm-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.hm-logobox { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: none; align-items: center; }
+.hm-logo { display: block; max-height: 110px; max-width: 720px; }
+.hm-title.has-logo { min-height: 110px; }
+.hm-title.has-logo .hm-name { visibility: hidden; }
+.hm-title.has-logo .hm-logobox { display: flex; }
+.hm-facts { display: flex; align-items: center; margin-top: 16px; min-height: var(--lh-small); white-space: nowrap; color: var(--text-2); }
+.hm-facts .imdb { margin: 0 10px 0 20px; }
+.hm-score { margin-right: 12px; }
+.hm-facts .imdb[hidden] + .hm-score { display: none; }
+.hm-added { margin-left: 4px; }
+.hm-about { margin-top: 16px; max-height: 80px; overflow: hidden; color: var(--text); }
+.hm-about[hidden] { display: none; }
+.imdb { background: var(--tungsten); color: var(--base); border-radius: 6px; padding: 0 8px; font-size: var(--fs-small); font-weight: 600; line-height: 34px; }
+
+/* ---- rows: one band, the row in use in it ---- */
+.hm-rows { position: absolute; left: 0; top: 588px; width: 1920px; height: 440px; transition: transform 260ms ease-out; }
+.hm-rows.held .row-track { transition: transform 60ms linear; }
+.hm-row { transition: opacity 260ms linear; }
+.hm-row.away { opacity: 0; }
+.hm-row .row-heading {
+  opacity: 0.65; transition: opacity 200ms linear;
+  max-width: 1136px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hm-row.lit .row-heading { opacity: 1; }
+.hm-row.below .row-heading { visibility: hidden; }   /* the next row's name is the hint on the right */
+
+/* The cards beside the focused one are dimmed with a shade, not transparency: a see-through card would let the art show through. */
+.hm-row .card-clip::after, .hm-grid .card-clip::after {
+  content: ''; position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: #000; opacity: 0; pointer-events: none;
+  transition: opacity 200ms linear;
+}
+.hm-row.lit .card .card-clip::after { opacity: 0.5; }
+.hm-row.lit .card:focus .card-clip::after { opacity: 0; }
+.hm-grid .card-clip::after { opacity: 0.5; }
+.hm-grid .card:focus .card-clip::after { opacity: 0; }
+/* a dark foot under the progress bar; a plain poster needs none */
+.card.has-foot .card-clip::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 40%; z-index: 1; pointer-events: none;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.4) 50%, rgba(0, 0, 0, 0));
+}
+.hm-row .progress, .hm-grid .progress { left: 24px; right: 24px; bottom: 22px; z-index: 2; }
+
+/* ---- the line under the focused card, and the next row's name ---- */
+.hm-caption { position: absolute; left: 96px; bottom: 32px; padding: 14px 28px; border-radius: 32px; white-space: nowrap; }
+.hm-next { position: absolute; right: 96px; bottom: 42px; white-space: nowrap; }
+.hm-note { position: absolute; left: 96px; top: 600px; width: 1100px; }
+.hm-note-act { margin-top: 24px; }
+
+/* ---- chips: genres on Shows and Movies; filter and sort on My List ---- */
+.hm-chips { position: absolute; left: 0; top: 184px; width: 1920px; height: 56px; padding-left: 96px; display: flex; align-items: center; }
+.hm-chips .chip { margin-right: 12px; }
+.hm-sort { margin: 0 12px 0 28px; color: var(--text-3); }
+
+/* ---- My List: six across, a row at a time ---- */
+.hm-grid { position: absolute; left: 0; top: 544px; width: 1920px; height: 536px; overflow: hidden; }
+.hm-grid-track { position: absolute; left: 0; top: 0; width: 1920px; transition: transform 200ms ease-out; }
+.hm-grid-row { position: absolute; left: 0; width: 1920px; height: 360px; }
+.hm-grid .card { border-radius: 12px; }
+.hm-grid .card:focus { z-index: 3; }
+.hm-count { position: absolute; left: 96px; top: 464px; }
+.hm-listhint { position: absolute; right: 96px; bottom: 36px; padding: 6px 28px 8px 28px; border-radius: 28px; }
+

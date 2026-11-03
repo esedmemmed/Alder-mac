@@ -1,0 +1,39 @@
+{
+  "id": "org.example.watchly",
+  "version": "0.9.0",
+  "name": "Watchly (example)",
+  "description": "Fixture: a personal recommendations add-on that is never shared between profiles.",
+  "resources": [
+    "catalog",
+    "stream"
+  ],
+  "types": [
+    "movie",
+    "series"
+  ],
+  "idPrefixes": [
+    "tt"
+  ],
+  "catalogs": [
+    {
+      "id": "watchly.rec",
+      "type": "movie",
+      "name": "Because you watched Dune",
+      "extra": [
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "watchly.item.tt0816692",
+      "type": "movie",
+      "name": "Because you watched Interstellar",
+      "extra": [
+        {
+          "name": "skip"
+        }
+      ]
+    }
+  ]
+}

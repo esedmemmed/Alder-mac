@@ -1,0 +1,17 @@
+{
+  "imdb_id": "tt11280740",
+  "season": 1,
+  "episode": 4,
+  "recap": {
+    "start_sec": 0,
+    "end_sec": 41.5
+  },
+  "intro": {
+    "start_sec": 52,
+    "end_sec": 128.4
+  },
+  "outro": {
+    "start_sec": 2958,
+    "end_sec": 3095
+  }
+}

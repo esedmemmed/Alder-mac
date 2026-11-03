@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "id": "tt1392190",
+    "type": "movie",
+    "name": "Mad Max: Fury Road",
+    "poster": "https://images.metahub.space/poster/medium/tt1392190/img",
+    "posterShape": "poster",
+    "imdbRating": "8.1",
+    "releaseInfo": "2015",
+    "genres": [
+      "Action",
+      "Adventure",
+      "Sci-Fi"
+    ],
+    "description": "In a post-apocalyptic wasteland, a woman rebels against a tyrannical ruler in search for her homeland.",
+    "runtime": "120 min",
+    "imdb_id": "tt1392190",
+    "background": "https://images.metahub.space/background/medium/tt1392190/img",
+    "logo": "https://images.metahub.space/logo/medium/tt1392190/img"
+  }
+}

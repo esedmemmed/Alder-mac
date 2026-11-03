@@ -7,7 +7,7 @@ You need the Air on the same Wi-Fi as this Windows computer, plugged in, with it
 1. On Windows, in the project folder, run `python air/run_from_windows.py` (use the Python named in `.claude/pa.json`). Type your Stremio email and password when asked. They are never saved or shown.
 2. After a few minutes it prints which kinds of file it found and which are missing (missing ones are skipped), then one line starting `curl -sS http://`. If Windows asks about its firewall, tick Public networks and press Allow.
 3. On the Air press Cmd-Space, type Terminal, press Return, type that line exactly and press Return.
-4. Leave both computers alone. The Air plays each file for 10 minutes with a cool-down in between, installs the player itself if needed (it never asks for a password), and sends the results back. At the end the Air says it has finished and the Windows window prints where the results are (`.run/1.1/air-results/`). The links are deleted from both computers. Fan noise: tell Claude by ear, quiet, audible or loud.
+4. Leave both computers alone. The Air plays each file for 10 minutes with a cool-down in between, installs the player itself if needed (it never asks for a password), and sends the results back. At the end the Air says it has finished and the Windows window prints where the results are (`.run/<phase>/air-results/`; keep them in `docs/air/raw-<phase>/`). The links are deleted from both computers. Fan noise: tell Claude by ear, quiet, audible or loud.
 
 If the Air says the player would not start, tell Claude; the status is already on the Windows window.
 

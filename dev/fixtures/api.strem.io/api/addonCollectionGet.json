@@ -1,0 +1,458 @@
+{
+  "result": {
+    "addons": [
+      {
+        "transportUrl": "https://v3-cinemeta.strem.io/manifest.json",
+        "transportName": "http",
+        "flags": {
+          "official": true,
+          "protected": true
+        },
+        "manifest": {
+          "id": "com.linvo.cinemeta",
+          "version": "3.0.12",
+          "name": "Cinemeta",
+          "description": "The official addon for movie and series catalogs",
+          "logo": "https://images.metahub.space/logo/medium/tt0111161/img",
+          "resources": [
+            "catalog",
+            {
+              "name": "meta",
+              "types": [
+                "movie",
+                "series"
+              ],
+              "idPrefixes": [
+                "tt"
+              ]
+            },
+            {
+              "name": "addon_catalog",
+              "types": [
+                "all"
+              ]
+            }
+          ],
+          "types": [
+            "movie",
+            "series"
+          ],
+          "idPrefixes": [
+            "tt"
+          ],
+          "catalogs": [
+            {
+              "id": "top",
+              "type": "movie",
+              "name": "Popular",
+              "extra": [
+                {
+                  "name": "genre",
+                  "options": [
+                    "Action",
+                    "Adventure",
+                    "Animation",
+                    "Biography",
+                    "Comedy",
+                    "Crime",
+                    "Documentary",
+                    "Drama",
+                    "Family",
+                    "Fantasy",
+                    "History",
+                    "Horror",
+                    "Mystery",
+                    "Romance",
+                    "Sci-Fi",
+                    "Sport",
+                    "Thriller",
+                    "War",
+                    "Western"
+                  ],
+                  "isRequired": false
+                },
+                {
+                  "name": "skip"
+                },
+                {
+                  "name": "search"
+                }
+              ]
+            },
+            {
+              "id": "top",
+              "type": "series",
+              "name": "Popular",
+              "genres": [
+                "Action",
+                "Adventure",
+                "Animation",
+                "Biography",
+                "Comedy",
+                "Crime",
+                "Documentary",
+                "Drama",
+                "Family",
+                "Fantasy",
+                "History",
+                "Horror",
+                "Mystery",
+                "Romance",
+                "Sci-Fi",
+                "Sport",
+                "Thriller",
+                "War",
+                "Western"
+              ],
+              "extraSupported": [
+                "search",
+                "genre",
+                "skip"
+              ],
+              "extraRequired": []
+            },
+            {
+              "id": "year",
+              "type": "movie",
+              "name": "New",
+              "extra": [
+                {
+                  "name": "genre",
+                  "options": [
+                    "Action",
+                    "Adventure",
+                    "Animation",
+                    "Biography",
+                    "Comedy",
+                    "Crime",
+                    "Documentary",
+                    "Drama",
+                    "Family",
+                    "Fantasy",
+                    "History",
+                    "Horror",
+                    "Mystery",
+                    "Romance",
+                    "Sci-Fi",
+                    "Sport",
+                    "Thriller",
+                    "War",
+                    "Western"
+                  ],
+                  "isRequired": true
+                },
+                {
+                  "name": "skip"
+                }
+              ]
+            },
+            {
+              "id": "imdbRating",
+              "type": "movie",
+              "name": "Featured",
+              "extra": [
+                {
+                  "name": "genre",
+                  "options": [
+                    "Action",
+                    "Adventure",
+                    "Animation",
+                    "Biography",
+                    "Comedy",
+                    "Crime",
+                    "Documentary",
+                    "Drama",
+                    "Family",
+                    "Fantasy",
+                    "History",
+                    "Horror",
+                    "Mystery",
+                    "Romance",
+                    "Sci-Fi",
+                    "Sport",
+                    "Thriller",
+                    "War",
+                    "Western"
+                  ],
+                  "isRequired": false
+                },
+                {
+                  "name": "skip"
+                }
+              ]
+            },
+            {
+              "id": "imdbRating",
+              "type": "series",
+              "name": "Featured",
+              "extra": [
+                {
+                  "name": "genre",
+                  "options": [
+                    "Action",
+                    "Adventure",
+                    "Animation",
+                    "Biography",
+                    "Comedy",
+                    "Crime",
+                    "Documentary",
+                    "Drama",
+                    "Family",
+                    "Fantasy",
+                    "History",
+                    "Horror",
+                    "Mystery",
+                    "Romance",
+                    "Sci-Fi",
+                    "Sport",
+                    "Thriller",
+                    "War",
+                    "Western"
+                  ],
+                  "isRequired": false
+                },
+                {
+                  "name": "skip"
+                }
+              ]
+            },
+            {
+              "id": "top",
+              "type": "movie",
+              "name": "Search",
+              "extra": [
+                {
+                  "name": "search",
+                  "isRequired": true
+                }
+              ]
+            },
+            {
+              "id": "top",
+              "type": "series",
+              "name": "Search",
+              "extra": [
+                {
+                  "name": "search",
+                  "isRequired": true
+                }
+              ]
+            }
+          ],
+          "behaviorHints": {
+            "newEpisodeNotifications": true
+          }
+        }
+      },
+      {
+        "transportUrl": "https://torrentio.strem.fun/manifest.json",
+        "transportName": "http",
+        "flags": {},
+        "manifest": {
+          "id": "com.stremio.torrentio.addon",
+          "version": "0.0.15",
+          "name": "Torrentio",
+          "description": "Provides torrent streams from scraped torrent providers.",
+          "logo": "https://torrentio.strem.fun/images/logo_v1.png",
+          "resources": [
+            {
+              "name": "stream",
+              "types": [
+                "movie",
+                "series",
+                "anime"
+              ],
+              "idPrefixes": [
+                "tt",
+                "kitsu"
+              ]
+            }
+          ],
+          "types": [
+            "movie",
+            "series",
+            "anime",
+            "other"
+          ],
+          "idPrefixes": [
+            "tt",
+            "kitsu"
+          ],
+          "catalogs": [],
+          "behaviorHints": {
+            "configurable": true,
+            "configurationRequired": false
+          }
+        }
+      },
+      {
+        "transportUrl": "https://aio.example.org/manifest.json",
+        "transportName": "http",
+        "flags": {},
+        "manifest": {
+          "id": "org.example.aiostreams",
+          "version": "2.4.0",
+          "name": "AIOStreams (example)",
+          "description": "Fixture add-on that mixes debrid streams, headers and an action placeholder.",
+          "resources": [
+            "stream"
+          ],
+          "types": [
+            "movie",
+            "series"
+          ],
+          "idPrefixes": [
+            "tt"
+          ],
+          "catalogs": []
+        }
+      },
+      {
+        "transportUrl": "https://opensubtitles-v3.strem.io/manifest.json",
+        "transportName": "http",
+        "flags": {},
+        "manifest": {
+          "id": "org.stremio.opensubtitlesv3",
+          "version": "1.0.0",
+          "name": "OpenSubtitles v3",
+          "description": "OpenSubtitles addon for Stremio.",
+          "resources": [
+            "subtitles"
+          ],
+          "types": [
+            "movie",
+            "series"
+          ],
+          "idPrefixes": [
+            "tt"
+          ],
+          "catalogs": []
+        }
+      },
+      {
+        "transportUrl": "https://catalogs.example.org/manifest.json",
+        "transportName": "http",
+        "flags": {},
+        "manifest": {
+          "id": "org.example.catalogs",
+          "version": "1.2.0",
+          "name": "Example Catalogs",
+          "description": "Fixture catalog add-on with its own search and \"more like this\".",
+          "resources": [
+            "catalog"
+          ],
+          "types": [
+            "movie",
+            "series"
+          ],
+          "idPrefixes": [
+            "tt"
+          ],
+          "catalogs": [
+            {
+              "id": "ex.trending",
+              "type": "movie",
+              "name": "Trending this week",
+              "extra": [
+                {
+                  "name": "skip"
+                }
+              ]
+            },
+            {
+              "id": "ex.trending",
+              "type": "series",
+              "name": "Trending this week",
+              "extra": [
+                {
+                  "name": "skip"
+                }
+              ]
+            },
+            {
+              "id": "ex.search",
+              "type": "movie",
+              "name": "Example search",
+              "extra": [
+                {
+                  "name": "search",
+                  "isRequired": true
+                }
+              ]
+            },
+            {
+              "id": "ex.search",
+              "type": "series",
+              "name": "Example search",
+              "extra": [
+                {
+                  "name": "search",
+                  "isRequired": true
+                }
+              ]
+            },
+            {
+              "id": "ex.similar",
+              "type": "movie",
+              "name": "More like this",
+              "idPrefixes": [
+                "tt"
+              ],
+              "extra": [
+                {
+                  "name": "similar",
+                  "isRequired": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "transportUrl": "https://watchly.example.org/manifest.json",
+        "transportName": "http",
+        "flags": {},
+        "manifest": {
+          "id": "org.example.watchly",
+          "version": "0.9.0",
+          "name": "Watchly (example)",
+          "description": "Fixture: a personal recommendations add-on that is never shared between profiles.",
+          "resources": [
+            "catalog",
+            "stream"
+          ],
+          "types": [
+            "movie",
+            "series"
+          ],
+          "idPrefixes": [
+            "tt"
+          ],
+          "catalogs": [
+            {
+              "id": "watchly.rec",
+              "type": "movie",
+              "name": "Because you watched Dune",
+              "extra": [
+                {
+                  "name": "skip"
+                }
+              ]
+            },
+            {
+              "id": "watchly.item.tt0816692",
+              "type": "movie",
+              "name": "Because you watched Interstellar",
+              "extra": [
+                {
+                  "name": "skip"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "lastModified": "2026-10-27T18:02:11.504Z"
+  }
+}

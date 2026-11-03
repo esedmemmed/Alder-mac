@@ -1,0 +1,157 @@
+/*
+ * The player (src/player): controls after docs/controls.jpg, the Audio & subtitles panel after docs/tracks.jpg. Sizes are
+ * Alder's dp x 2 on the fixed 1920 x 1080 page. No backdrop-filter and no gap (this TV's Chromium 69); panels are near
+ * opaque (92-95%) because video cannot be frosted. Imported by src/ui/styles/main.css.
+ */
+
+/* AVPlay's picture is on a plane behind the page: see-through wherever it should show (a production TV only). */
+html.av-live, html.av-live body { background: transparent; }
+.pl-screen { background: transparent; }
+/* the dev page has no AVPlay plane: the desktop browser would print "Couldn't load plugin" over the page */
+html:not(.av-live) .av-object { visibility: hidden; }
+.av-object { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.pl-subs-host, .pl-layers, .pl-controls, .pl-loading, .pl-pausedshade, .pl-options { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.pl-subs-host { pointer-events: none; }
+.pl-layers { pointer-events: none; }
+
+/* ---- subtitles drawn by us (add-on files and the file's own text) ---- */
+.subs { position: absolute; left: 96px; right: 96px; text-align: center; color: #fff; font-weight: 500; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.9); }
+.subs-line { display: block; }
+.subs-line span { padding: 0 12px; }
+.subs.with-bg .subs-line span { background: rgba(0, 0, 0, 0.7); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+
+/* ---- the controls ---- */
+.pl-pausedshade { background: rgba(0, 0, 0, 0.3); }
+/* The centre glyph: a pause (while paused) or play (a flash on resume) symbol in a dark disc. Opacity and transform only:
+   in 120 ms on pause; after the play flash (~600 ms, timed in controls.js) it fades out over 250 ms while growing a little. */
+.pl-centre {
+  position: absolute; left: 50%; top: 50%; width: 176px; height: 176px; margin: -88px 0 0 -88px; border-radius: 88px;
+  background: rgba(14, 12, 10, 0.62); display: flex; align-items: center; justify-content: center;
+  opacity: 0; transform: scale(0.88); transition: opacity 120ms linear, transform 120ms ease-out; pointer-events: none;
+}
+.pl-centre.on { opacity: 1; transform: scale(1); }
+.pl-centre.fade { opacity: 0; transform: scale(1.12); transition: opacity 250ms linear, transform 250ms ease-out; }
+.pl-controls { opacity: 0; transition: opacity 150ms linear; }
+.pl-controls.on { opacity: 1; }
+.pl-shade-top { position: absolute; left: 0; top: 0; width: 1920px; height: 240px; background: linear-gradient(to bottom, rgba(14, 12, 10, 0.6), rgba(14, 12, 10, 0)); }
+.pl-shade-bottom { position: absolute; left: 0; bottom: 0; width: 1920px; height: 440px; background: linear-gradient(to top, rgba(14, 12, 10, 0.9), rgba(14, 12, 10, 0.65) 45%, rgba(14, 12, 10, 0)); }
+.pl-logo { position: absolute; left: 96px; top: 52px; width: 300px; height: 100px; object-fit: contain; object-position: left top; }
+.pl-topname { position: absolute; left: 96px; top: 62px; width: 500px; }
+.pl-clock { position: absolute; right: 96px; top: 68px; }
+.pl-pauseinfo { position: absolute; left: 96px; bottom: 296px; width: 1040px; }
+.pl-pausetitle { width: 960px; margin-top: 12px; }
+.pl-pausefacts { margin-top: 10px; }
+
+.pl-bar { position: relative; height: 48px; }
+.pl-mainbar { position: absolute; left: 96px; bottom: 222px; }
+.bar-line { position: absolute; top: 22px; height: 6px; border-radius: 3px; transform-origin: 0 50%; }
+.bar-track { background: rgba(243, 238, 230, 0.25); }
+.bar-buffered { background: rgba(243, 238, 230, 0.45); transform: scaleX(0); }
+.bar-fill { background: var(--tungsten); transform: scaleX(0); }
+.pl-bar.focus .bar-line { top: 20px; height: 8px; border-radius: 4px; }
+.bar-knob { position: absolute; left: 0; top: 12px; width: 24px; height: 24px; border-radius: 12px; background: var(--text); }
+.pl-elapsed { position: absolute; left: 96px; bottom: 182px; }
+.pl-length { position: absolute; right: 96px; bottom: 182px; }
+
+.pl-buttons { position: absolute; left: 0; bottom: 22px; width: 1920px; height: 152px; display: flex; justify-content: center; align-items: flex-start; }
+.pl-cell { position: relative; flex: none; width: 124px; height: 152px; }
+.pl-cell.primary { width: 140px; }
+.pl-btn { position: absolute; left: 50%; top: 0; width: 80px; height: 80px; margin-left: -40px; border-radius: 40px; display: flex; align-items: center; justify-content: center;
+  background: var(--glass-dark); border: var(--hairline) solid var(--glass-edge); box-shadow: inset 0 var(--hairline) 0 var(--glass-highlight); color: var(--text); transition: transform var(--t-focus) ease-out; }
+.pl-btn .icon { width: 40px; height: 40px; }
+.pl-btn.primary { width: 100px; height: 100px; margin-left: -50px; border-radius: 50px; background: var(--text); color: var(--base); border-color: transparent; }
+.pl-btn.primary .icon { width: 50px; height: 50px; }
+/* v0.2 focus (components.css has the solid fill layer and the ink): a focused button grows, its name shows under it; the primary
+   one is already filled, so it gets a ring and a glow too (drawn once, faded in) */
+.pl-btn.focus { transform: scale(var(--btn-grow)); }
+.pl-btn.primary::after {
+  content: ''; position: absolute; left: -9px; top: -9px; right: -9px; bottom: -9px; border-radius: 50%;
+  border: 3px solid var(--tungsten); box-shadow: 0 18px 60px var(--focus-glow);
+  opacity: 0; transition: opacity var(--t-fill) ease-out; pointer-events: none;
+}
+.pl-btn.primary.focus::after { opacity: 1; }
+.pl-btn-label { position: absolute; left: 50%; top: 96px; width: 320px; margin-left: -160px; text-align: center; opacity: 0; white-space: nowrap; }
+.pl-cell.primary .pl-btn-label { top: 112px; }
+.pl-btn-label.on { opacity: 1; color: var(--text); font-weight: 600; }
+.pl-divider { flex: none; width: 2px; height: 44px; margin: 28px 20px 0 20px; background: var(--glass-edge); }
+.pl-hints { position: absolute; right: 96px; bottom: 70px; display: flex; flex-direction: column; align-items: flex-end; }
+.pl-hints .keyhint { margin-top: 6px; }
+
+/* ---- loading: a ring and what is happening, with the bar across the top ---- */
+.pl-loading-dim { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: rgba(14, 12, 10, 0.5); }
+.pl-loading-center { position: absolute; left: 50%; top: 50%; width: 900px; margin-left: -450px; margin-top: -80px; display: flex; flex-direction: column; align-items: center; }
+.pl-ring { width: 80px; height: 80px; border-radius: 40px; border: 6px solid rgba(243, 238, 230, 0.22); border-top-color: var(--tungsten); animation: pl-spin 1s linear infinite; }
+@keyframes pl-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.pl-status { margin-top: 24px; max-width: 880px; text-align: center; max-height: 80px; overflow: hidden; }
+.pl-loadingbar { position: absolute; left: 156px; top: 40px; }
+.pl-loading-start { position: absolute; left: 96px; top: 58px; }
+.pl-loading-left { position: absolute; right: 96px; top: 58px; }
+
+/* ---- the Skip intro pill ---- */
+.pl-skip { white-space: pre; position: absolute; right: 96px; bottom: 176px; padding: 18px 44px; border-radius: 20px; background: rgba(14, 12, 10, 0.78); }
+
+/* ---- cards: Up next, "Keeps buffering", "Source failed" ---- */
+.pl-cardhost { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.pl-card { position: absolute; right: 96px; border-radius: 28px; background: rgba(14, 12, 10, 0.88); border: var(--hairline) solid var(--glass-edge); box-shadow: inset 0 var(--hairline) 0 var(--glass-highlight); }
+.pl-upnext { width: 1000px; bottom: 136px; padding: 28px 36px; }
+.pl-stall { width: 920px; bottom: 96px; padding: 30px 32px 28px 32px; }
+.pl-error { width: 620px; bottom: 96px; padding: 36px; }
+.pl-card-title { margin-top: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pl-card-sub { margin-top: 10px; }
+.pl-card-text { margin-top: 10px; }
+.pl-card-actions { display: flex; align-items: center; margin-top: 28px; }
+.pl-card-actions > * { margin-right: 12px; }
+.pl-pill { position: relative; display: inline-flex; align-items: center; height: var(--button-h); padding: 0 32px; border-radius: 34px; background: var(--text); color: var(--base); font-size: var(--fs-small); line-height: var(--lh-small); font-weight: 600; white-space: nowrap; transition: transform var(--t-focus) ease-out; }
+.pl-pill .icon { width: 32px; height: 32px; margin-right: 12px; margin-left: -4px; }
+.pl-pill.focus { transform: scale(var(--pill-grow)); }
+.pl-pill::after {
+  content: ''; position: absolute; left: -7px; top: -7px; right: -7px; bottom: -7px; border-radius: 41px;
+  border: 3px solid var(--tungsten); box-shadow: 0 18px 60px var(--focus-glow);
+  opacity: 0; transition: opacity var(--t-fill) ease-out; pointer-events: none;
+}
+.pl-pill.focus::after { opacity: 1; }
+.pl-chip { position: relative; display: inline-flex; align-items: center; height: var(--chip-h); padding: 0 32px; border-radius: 24px; background: transparent; border: var(--hairline) solid var(--chip-edge); color: var(--text-2);
+  font-size: var(--fs-small); line-height: var(--lh-small); white-space: nowrap; transition: transform var(--t-focus) ease-out; }
+.pl-chip.focus { transform: scale(var(--chip-grow)); }
+
+/* ---- the Audio & subtitles panel ---- */
+.pl-opt-panel { position: absolute; left: 54px; top: 54px; width: 620px; height: 972px; border-radius: 28px; background: rgba(14, 12, 10, 0.94);
+  border: var(--hairline) solid var(--glass-edge); box-shadow: inset 0 var(--hairline) 0 var(--glass-highlight); padding: 40px 44px 44px 44px; overflow: hidden; }
+.pl-opt-scroll { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.pl-opt-list { transition: transform 150ms ease-out; }
+.pl-opt-title { white-space: nowrap; }
+.pl-opt-sub { margin-top: 10px; }
+.pl-opt-heading { margin: 36px 0 10px 0; }
+.pl-row { position: relative; display: flex; align-items: center; height: 64px; padding: 0 18px; border-radius: var(--tile-radius); font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-2); }
+.pl-row.chosen, .pl-row.focus { color: var(--text); }
+.pl-row.dim { opacity: 0.45; }
+.pl-row.dim.focus { opacity: 1; }          /* the fill and its ink need full strength to stay readable */
+.pl-opt-name { flex: none; white-space: nowrap; }
+.pl-opt-tag { flex: 1; min-width: 0; margin-left: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-opt-check { flex: none; width: 32px; height: 32px; color: var(--tungsten); }
+.pl-opt-rule { height: 2px; margin: 36px 0 20px 0; background: var(--glass-edge); }
+.pl-row.pl-stream { display: block; height: auto; padding: 10px 18px 12px 18px; }
+.pl-opt-bar { position: absolute; right: 96px; bottom: 84px; }
+.pl-opt-elapsed { position: absolute; right: 588px; bottom: 54px; }
+.pl-opt-left { position: absolute; right: 96px; bottom: 54px; }
+
+/* ---- Diagnostics (src/screens/diagnostics.js): large monospace, scrolled with the D-pad ---- */
+.dg-screen { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: var(--base); }
+.dg-title { position: absolute; left: 96px; top: 40px; }
+.dg-viewport { position: absolute; left: 96px; top: 130px; width: 1728px; height: 850px; overflow: hidden; }
+.dg-content { transition: transform 120ms ease-out; }
+.dg-heading { margin-top: 28px; font-family: 'DejaVu Sans Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 28px; line-height: 40px; font-weight: 600; letter-spacing: 0.08em; color: var(--tungsten); }
+.dg-line { font-family: 'DejaVu Sans Mono', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 28px; line-height: 40px; font-weight: 400; color: var(--text); white-space: pre-wrap; word-break: break-all; }
+.dg-line.debug { color: var(--text-3); }
+.dg-line.warn, .dg-line.error { color: var(--tungsten); font-weight: 600; }
+.dg-status { position: absolute; left: 96px; bottom: 36px; font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-2); }
+
+/* the Icons block of Diagnostics: every icon, light on dark and dark on light, three ways of drawing it */
+.dg-icons { margin-top: 6px; }
+.dg-strips { display: flex; margin: 4px 0 14px 0; }
+.dg-strip { display: flex; align-items: center; width: 844px; height: 60px; padding: 0 8px; border-radius: 10px; }
+.dg-strip + .dg-strip { margin-left: 40px; }
+.dg-strip.dark { background: #0e0c0a; border: 2px solid rgba(243, 238, 230, 0.3); color: #f3eee6; }
+.dg-strip.light { background: #f2e8d8; color: #15110e; }
+.dg-ic { flex: none; width: 46px; height: 40px; display: flex; align-items: center; justify-content: center; }
+.dg-ic .icon { width: 40px; height: 40px; }

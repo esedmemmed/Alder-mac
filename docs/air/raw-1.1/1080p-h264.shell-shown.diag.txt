@@ -1,0 +1,2 @@
+info: hwdec-current=videotoolbox
+2026-11-03 01:56:12.557 AlderProof[8810:641177] Persistent UI failed to open file [link] No such file or directory (2)

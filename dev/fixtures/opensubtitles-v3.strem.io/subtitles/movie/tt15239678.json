@@ -1,0 +1,84 @@
+{
+  "subtitles": [
+    {
+      "id": "9001",
+      "url": "https://subs.fixture.test/dune2/eng-1.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "eng",
+      "m": "i",
+      "g": "eng"
+    },
+    {
+      "id": "9002",
+      "url": "https://subs.fixture.test/dune2/eng-2.vtt",
+      "SubEncoding": "UTF-8",
+      "lang": "eng",
+      "m": "i",
+      "g": "eng"
+    },
+    {
+      "id": "9003",
+      "url": "https://subs.fixture.test/dune2/eng-3.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "eng",
+      "m": "i",
+      "g": "eng"
+    },
+    {
+      "id": "9004",
+      "url": "https://subs.fixture.test/dune2/eng-4.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "eng",
+      "m": "i",
+      "g": "eng"
+    },
+    {
+      "id": "9005",
+      "url": "https://subs.fixture.test/dune2/spa-1.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "spa",
+      "m": "i",
+      "g": "spa"
+    },
+    {
+      "id": "9006",
+      "url": "https://subs.fixture.test/dune2/fre-1.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "fre",
+      "m": "i",
+      "g": "fre"
+    },
+    {
+      "id": "9007",
+      "url": "https://subs.fixture.test/dune2/ger-1.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "ger",
+      "m": "i",
+      "g": "ger"
+    },
+    {
+      "id": "9008",
+      "url": "https://subs.fixture.test/dune2/hin-1.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "hin",
+      "m": "i",
+      "g": "hin"
+    },
+    {
+      "id": "9009",
+      "url": "https://subs.fixture.test/dune2/en-short-code.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "en",
+      "m": "i",
+      "g": "en"
+    },
+    {
+      "id": "9010",
+      "url": "https://subs.fixture.test/dune2/tur-1.ass",
+      "SubEncoding": "UTF-8",
+      "lang": "tur",
+      "m": "i",
+      "g": "tur"
+    }
+  ]
+}

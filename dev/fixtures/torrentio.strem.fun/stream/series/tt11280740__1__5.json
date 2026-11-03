@@ -1,0 +1,34 @@
+{
+  "streams": [
+    {
+      "name": "[TB+] Torrentio\n1080p",
+      "title": "Severance.S01E05.The.Grim.Barbarity.of.Optics.and.Design.1080p.ATVP.WEB-DL.DDP5.1.Atmos.H.264-NTb.mkv\n👤 88 💾 3.9 GB ⚙️ EZTV\nEnglish",
+      "url": "https://torrentio.strem.fun/resolve/torbox/FIXTUREKEY/0000000000000000000000000000000000000055/null/0/Severance.S01E05.1080p.WEB-DL.mkv",
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|NTb",
+        "videoSize": 4187593114,
+        "filename": "Severance.S01E05.The.Grim.Barbarity.of.Optics.and.Design.1080p.ATVP.WEB-DL.DDP5.1.Atmos.H.264-NTb.mkv"
+      }
+    },
+    {
+      "name": "[TB+] Torrentio\n4k HDR",
+      "title": "Severance.S01E05.The.Grim.Barbarity.of.Optics.and.Design.2160p.ATVP.WEB-DL.DDP5.1.Atmos.DV.HDR.H.265-NTb.mkv\n👤 61 💾 11.2 GB ⚙️ TorrentGalaxy\nEnglish",
+      "url": "https://torrentio.strem.fun/resolve/torbox/FIXTUREKEY/0000000000000000000000000000000000000065/null/0/Severance.S01E05.2160p.WEB-DL.mkv",
+      "behaviorHints": {
+        "bingeGroup": "torrentio|4k|NTb",
+        "videoSize": 12025908429,
+        "filename": "Severance.S01E05.The.Grim.Barbarity.of.Optics.and.Design.2160p.ATVP.WEB-DL.DDP5.1.Atmos.DV.HDR.H.265-NTb.mkv"
+      }
+    },
+    {
+      "name": "[TB+] Torrentio\n720p",
+      "title": "Severance.S01E05.The.Grim.Barbarity.of.Optics.and.Design.720p.WEB.h264-ETHEL.mkv\n👤 40 💾 1.3 GB ⚙️ EZTV\nEnglish",
+      "url": "https://torrentio.strem.fun/resolve/torbox/FIXTUREKEY/0000000000000000000000000000000000000075/null/0/Severance.S01E05.720p.WEB.mkv",
+      "behaviorHints": {
+        "bingeGroup": "torrentio|720p|ETHEL",
+        "videoSize": 1395864371,
+        "filename": "Severance.S01E05.The.Grim.Barbarity.of.Optics.and.Design.720p.WEB.h264-ETHEL.mkv"
+      }
+    }
+  ]
+}

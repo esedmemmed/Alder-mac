@@ -1,0 +1,51 @@
+{
+  "metas": [
+    {
+      "id": "tt10986410",
+      "type": "series",
+      "name": "Ted Lasso",
+      "poster": "https://images.metahub.space/poster/medium/tt10986410/img",
+      "posterShape": "poster",
+      "imdbRating": "8.8",
+      "releaseInfo": "2020–2023",
+      "genres": [
+        "Comedy",
+        "Drama",
+        "Sport"
+      ],
+      "description": "An American football coach leads a British soccer team to the top of the table.",
+      "runtime": "30 min"
+    },
+    {
+      "id": "tt14452776",
+      "type": "series",
+      "name": "The Bear",
+      "poster": "https://images.metahub.space/poster/medium/tt14452776/img",
+      "posterShape": "poster",
+      "imdbRating": "8.6",
+      "releaseInfo": "2022–",
+      "genres": [
+        "Comedy",
+        "Drama"
+      ],
+      "description": "A young chef from the fine dining world returns to Chicago to run his family's sandwich shop.",
+      "runtime": "30 min"
+    },
+    {
+      "id": "tt5875444",
+      "type": "series",
+      "name": "Slow Horses",
+      "poster": "https://images.metahub.space/poster/medium/tt5875444/img",
+      "posterShape": "poster",
+      "imdbRating": "8.2",
+      "releaseInfo": "2022–",
+      "genres": [
+        "Comedy",
+        "Crime",
+        "Drama"
+      ],
+      "description": "Intelligence agents who have fallen from grace are relegated to a dumping ground department.",
+      "runtime": "45 min"
+    }
+  ]
+}

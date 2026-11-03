@@ -1,0 +1,36 @@
+{
+  "metas": [
+    {
+      "id": "tt0468569",
+      "type": "movie",
+      "name": "The Dark Knight",
+      "poster": "https://images.metahub.space/poster/medium/tt0468569/img",
+      "posterShape": "poster",
+      "imdbRating": "9.0",
+      "releaseInfo": "2008",
+      "genres": [
+        "Action",
+        "Crime",
+        "Drama"
+      ],
+      "description": "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest tests.",
+      "runtime": "152 min"
+    },
+    {
+      "id": "tt1877830",
+      "type": "movie",
+      "name": "The Batman",
+      "poster": "https://images.metahub.space/poster/medium/tt1877830/img",
+      "posterShape": "poster",
+      "imdbRating": "7.8",
+      "releaseInfo": "2022",
+      "genres": [
+        "Action",
+        "Crime",
+        "Drama"
+      ],
+      "description": "When a sadistic serial killer begins murdering key political figures in Gotham, Batman is forced to investigate the city's hidden corruption.",
+      "runtime": "176 min"
+    }
+  ]
+}

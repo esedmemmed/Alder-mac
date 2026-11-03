@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "id": "tt10986410",
+    "type": "series",
+    "name": "Ted Lasso",
+    "poster": "https://images.metahub.space/poster/medium/tt10986410/img",
+    "posterShape": "poster",
+    "imdbRating": "8.8",
+    "releaseInfo": "2020–2023",
+    "genres": [
+      "Comedy",
+      "Drama",
+      "Sport"
+    ],
+    "description": "An American football coach leads a British soccer team to the top of the table.",
+    "runtime": "30 min",
+    "imdb_id": "tt10986410",
+    "background": "https://images.metahub.space/background/medium/tt10986410/img",
+    "logo": "https://images.metahub.space/logo/medium/tt10986410/img",
+    "videos": []
+  }
+}

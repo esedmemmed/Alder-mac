@@ -1,0 +1,11 @@
+1
+00:00:01,000 --> 00:00:03,500
+Subtitulo de prueba: la especia debe fluir.
+
+2
+00:00:04,000 --> 00:00:06,200
+Segunda linea.
+
+3
+00:00:07,000 --> 00:00:09,000
+Tercera linea.

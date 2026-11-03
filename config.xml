@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="https://github.com/esedmemmed/alder-tizen" version="0.2.0" viewmodes="maximized">
+  <name>Alder</name>
+  <icon src="icon.png"/>
+  <content src="index.html"/>
+  <feature name="http://tizen.org/feature/screen.size.all"/>
+  <!-- A 10-character alphanumeric package id, stable across versions: an update reinstalls over the same tile.
+       Apps2Samsung reads id/package with a regex that expects exactly this attribute order, and re-signs the package
+       on install, so the .wgt is shipped unsigned. required_version 5.5: the 2020 TVs. -->
+  <tizen:application id="AldrTizen0.Alder" package="AldrTizen0" required_version="5.5"/>
+  <!-- Streams, add-ons and the Stremio API: any host. -->
+  <access origin="*" subdomains="true"/>
+  <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
+                 encryption="disable" install-location="auto" hwkey-event="enable"/>
+  <!-- Public-level privileges only (a Partner one makes Apps2Samsung ask for a Partner certificate; see
+       Apps2Samsung.Core/Packaging/WgtPrivileges.cs): network, the remote's extra keys, the device model and panel
+       (webapis.productinfo). AVPlay needs none. No on-boot / auto-restart (Partner-only launch settings). -->
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+  <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+  <tizen:profile name="tv-samsung"/>
+</widget>

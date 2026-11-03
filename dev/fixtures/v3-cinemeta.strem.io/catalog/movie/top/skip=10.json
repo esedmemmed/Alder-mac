@@ -1,0 +1,52 @@
+{
+  "metas": [
+    {
+      "id": "tt15239678",
+      "type": "movie",
+      "name": "Dune: Part Two",
+      "poster": "https://images.metahub.space/poster/medium/tt15239678/img",
+      "posterShape": "poster",
+      "imdbRating": "8.5",
+      "releaseInfo": "2024",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "description": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.",
+      "runtime": "166 min"
+    },
+    {
+      "id": "tt15398776",
+      "type": "movie",
+      "name": "Oppenheimer",
+      "poster": "https://images.metahub.space/poster/medium/tt15398776/img",
+      "posterShape": "poster",
+      "imdbRating": "8.3",
+      "releaseInfo": "2023",
+      "genres": [
+        "Biography",
+        "Drama",
+        "History"
+      ],
+      "description": "The story of American scientist J. Robert Oppenheimer and his role in the development of the atomic bomb.",
+      "runtime": "180 min"
+    },
+    {
+      "id": "tt1877830",
+      "type": "movie",
+      "name": "The Batman",
+      "poster": "https://images.metahub.space/poster/medium/tt1877830/img",
+      "posterShape": "poster",
+      "imdbRating": "7.8",
+      "releaseInfo": "2022",
+      "genres": [
+        "Action",
+        "Crime",
+        "Drama"
+      ],
+      "description": "When a sadistic serial killer begins murdering key political figures in Gotham, Batman is forced to investigate the city's hidden corruption.",
+      "runtime": "176 min"
+    }
+  ]
+}

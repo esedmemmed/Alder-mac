@@ -1,0 +1,3 @@
+● Video  --vid=1  --vlang=en  'The Shawshank Redemption (1994) /  Warner Bros. 2021 Blu-ray / c0kE' (h264 1920x1038 23.976 fps) [default]
+Using hardware decoding (videotoolbox).
+VO: [libmpv] 1920x1038 videotoolbox[nv12]

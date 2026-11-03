@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "id": "tt2543164",
+    "type": "movie",
+    "name": "Arrival",
+    "poster": "https://images.metahub.space/poster/medium/tt2543164/img",
+    "posterShape": "poster",
+    "imdbRating": "7.9",
+    "releaseInfo": "2016",
+    "genres": [
+      "Drama",
+      "Mystery",
+      "Sci-Fi"
+    ],
+    "description": "A linguist works with the military to communicate with alien lifeforms after twelve mysterious spacecraft appear around the world.",
+    "runtime": "116 min",
+    "imdb_id": "tt2543164",
+    "background": "https://images.metahub.space/background/medium/tt2543164/img",
+    "logo": "https://images.metahub.space/logo/medium/tt2543164/img"
+  }
+}

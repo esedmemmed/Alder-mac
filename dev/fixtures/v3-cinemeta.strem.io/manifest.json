@@ -1,0 +1,235 @@
+{
+  "id": "com.linvo.cinemeta",
+  "version": "3.0.12",
+  "name": "Cinemeta",
+  "description": "The official addon for movie and series catalogs",
+  "logo": "https://images.metahub.space/logo/medium/tt0111161/img",
+  "resources": [
+    "catalog",
+    {
+      "name": "meta",
+      "types": [
+        "movie",
+        "series"
+      ],
+      "idPrefixes": [
+        "tt"
+      ]
+    },
+    {
+      "name": "addon_catalog",
+      "types": [
+        "all"
+      ]
+    }
+  ],
+  "types": [
+    "movie",
+    "series"
+  ],
+  "idPrefixes": [
+    "tt"
+  ],
+  "catalogs": [
+    {
+      "id": "top",
+      "type": "movie",
+      "name": "Popular",
+      "extra": [
+        {
+          "name": "genre",
+          "options": [
+            "Action",
+            "Adventure",
+            "Animation",
+            "Biography",
+            "Comedy",
+            "Crime",
+            "Documentary",
+            "Drama",
+            "Family",
+            "Fantasy",
+            "History",
+            "Horror",
+            "Mystery",
+            "Romance",
+            "Sci-Fi",
+            "Sport",
+            "Thriller",
+            "War",
+            "Western"
+          ],
+          "isRequired": false
+        },
+        {
+          "name": "skip"
+        },
+        {
+          "name": "search"
+        }
+      ]
+    },
+    {
+      "id": "top",
+      "type": "series",
+      "name": "Popular",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Animation",
+        "Biography",
+        "Comedy",
+        "Crime",
+        "Documentary",
+        "Drama",
+        "Family",
+        "Fantasy",
+        "History",
+        "Horror",
+        "Mystery",
+        "Romance",
+        "Sci-Fi",
+        "Sport",
+        "Thriller",
+        "War",
+        "Western"
+      ],
+      "extraSupported": [
+        "search",
+        "genre",
+        "skip"
+      ],
+      "extraRequired": []
+    },
+    {
+      "id": "year",
+      "type": "movie",
+      "name": "New",
+      "extra": [
+        {
+          "name": "genre",
+          "options": [
+            "Action",
+            "Adventure",
+            "Animation",
+            "Biography",
+            "Comedy",
+            "Crime",
+            "Documentary",
+            "Drama",
+            "Family",
+            "Fantasy",
+            "History",
+            "Horror",
+            "Mystery",
+            "Romance",
+            "Sci-Fi",
+            "Sport",
+            "Thriller",
+            "War",
+            "Western"
+          ],
+          "isRequired": true
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "imdbRating",
+      "type": "movie",
+      "name": "Featured",
+      "extra": [
+        {
+          "name": "genre",
+          "options": [
+            "Action",
+            "Adventure",
+            "Animation",
+            "Biography",
+            "Comedy",
+            "Crime",
+            "Documentary",
+            "Drama",
+            "Family",
+            "Fantasy",
+            "History",
+            "Horror",
+            "Mystery",
+            "Romance",
+            "Sci-Fi",
+            "Sport",
+            "Thriller",
+            "War",
+            "Western"
+          ],
+          "isRequired": false
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "imdbRating",
+      "type": "series",
+      "name": "Featured",
+      "extra": [
+        {
+          "name": "genre",
+          "options": [
+            "Action",
+            "Adventure",
+            "Animation",
+            "Biography",
+            "Comedy",
+            "Crime",
+            "Documentary",
+            "Drama",
+            "Family",
+            "Fantasy",
+            "History",
+            "Horror",
+            "Mystery",
+            "Romance",
+            "Sci-Fi",
+            "Sport",
+            "Thriller",
+            "War",
+            "Western"
+          ],
+          "isRequired": false
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "top",
+      "type": "movie",
+      "name": "Search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        }
+      ]
+    },
+    {
+      "id": "top",
+      "type": "series",
+      "name": "Search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        }
+      ]
+    }
+  ],
+  "behaviorHints": {
+    "newEpisodeNotifications": true
+  }
+}

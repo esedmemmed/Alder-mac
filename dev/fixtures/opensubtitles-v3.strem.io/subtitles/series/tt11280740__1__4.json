@@ -1,0 +1,36 @@
+{
+  "subtitles": [
+    {
+      "id": "9101",
+      "url": "https://subs.fixture.test/sev104/eng-1.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "eng",
+      "m": "i",
+      "g": "eng"
+    },
+    {
+      "id": "9102",
+      "url": "https://subs.fixture.test/sev104/eng-2.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "eng",
+      "m": "i",
+      "g": "eng"
+    },
+    {
+      "id": "9103",
+      "url": "https://subs.fixture.test/sev104/ger-1.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "ger",
+      "m": "i",
+      "g": "ger"
+    },
+    {
+      "id": "9104",
+      "url": "https://subs.fixture.test/sev104/spa-1.srt",
+      "SubEncoding": "UTF-8",
+      "lang": "spa",
+      "m": "i",
+      "g": "spa"
+    }
+  ]
+}

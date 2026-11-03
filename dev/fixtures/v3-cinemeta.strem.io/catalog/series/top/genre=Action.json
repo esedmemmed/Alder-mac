@@ -1,0 +1,36 @@
+{
+  "metas": [
+    {
+      "id": "tt12637874",
+      "type": "series",
+      "name": "Fallout",
+      "poster": "https://images.metahub.space/poster/medium/tt12637874/img",
+      "posterShape": "poster",
+      "imdbRating": "8.3",
+      "releaseInfo": "2024–",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "description": "In a future, post-nuclear Los Angeles, citizens of a vault return to the irradiated surface.",
+      "runtime": "60 min"
+    },
+    {
+      "id": "tt9253284",
+      "type": "series",
+      "name": "Andor",
+      "poster": "https://images.metahub.space/poster/medium/tt9253284/img",
+      "posterShape": "poster",
+      "imdbRating": "8.4",
+      "releaseInfo": "2022–",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "description": "The tale of the birth of the Rebellion, centered on Cassian Andor.",
+      "runtime": "40 min"
+    }
+  ]
+}

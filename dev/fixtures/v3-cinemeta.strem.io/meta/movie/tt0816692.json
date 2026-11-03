@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "id": "tt0816692",
+    "type": "movie",
+    "name": "Interstellar",
+    "poster": "https://images.metahub.space/poster/medium/tt0816692/img",
+    "posterShape": "poster",
+    "imdbRating": "8.7",
+    "releaseInfo": "2014",
+    "genres": [
+      "Adventure",
+      "Drama",
+      "Sci-Fi"
+    ],
+    "description": "When Earth becomes uninhabitable in the future, a farmer and ex-NASA pilot is tasked to pilot a spacecraft to find a new home.",
+    "runtime": "169 min",
+    "imdb_id": "tt0816692",
+    "background": "https://images.metahub.space/background/medium/tt0816692/img",
+    "logo": "https://images.metahub.space/logo/medium/tt0816692/img"
+  }
+}

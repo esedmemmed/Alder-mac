@@ -1,0 +1,83 @@
+/*
+ * Alder's "House Lights" design tokens, from Screen.kt (companion object) on Android.
+ *
+ * Alder lays out in dp on a 960 x 540 dp screen (a 1080p TV at density 2.0: its screenshots in docs/ are 1920 x 1080 and
+ * the 48 dp PAD is 96 px, the 88 dp poster 176 px). So px = dp x 2 and sp x 2 here, at the app's fixed 1920 x 1080
+ * viewport. (PLAN.md assumed x1.5; the screenshots show x2. See DECISIONS.md.)
+ *
+ * Colours are Screen.kt's ARGB constants as rgba(). No gap, inset, aspect-ratio, clamp, backdrop-filter: Chromium 69.
+ */
+:root {
+  /* colour */
+  --base: #0e0c0a;                              /* BASE: the page */
+  --text: #f3eee6;                              /* TEXT */
+  --text-2: rgba(243, 238, 230, 0.72);          /* TEXT_2 0xB8 */
+  --text-3: rgba(243, 238, 230, 0.45);          /* TEXT_3 0x73 */
+  --tungsten: #f3d9b1;                          /* TUNGSTEN: the accent, focus and selection */
+  --tungsten-rim: rgba(243, 217, 177, 0.6);     /* TUNGSTEN_RIM 0x99 */
+  --tungsten-glow: rgba(243, 217, 177, 0.35);   /* TUNGSTEN_GLOW 0x59 */
+  --glass: rgba(40, 34, 28, 0.3);               /* GLASS 0x4D */
+  --glass-focused: rgba(243, 238, 230, 0.24);   /* GLASS_FOCUSED 0x3D */
+  --glass-edge: rgba(255, 240, 220, 0.14);      /* GLASS_EDGE 0x24 */
+  --glass-highlight: rgba(255, 245, 230, 0.3);  /* GLASS_HIGHLIGHT 0x4D */
+  --row-focused: rgba(243, 238, 230, 0.16);     /* ROW_FOCUSED 0x29 */
+  --progress-track: rgba(255, 255, 255, 0.3);   /* PROGRESS_TRACK 0x4D */
+  --tile: rgba(255, 255, 255, 0.08);            /* tile(): a quiet tinted row 0x14 */
+  --scrim: rgba(0, 0, 0, 0.6);                  /* dialog dim amount 0.6 */
+  --pane: rgba(22, 19, 16, 0.94);               /* a panel over art: Alder frosts the art behind; with no backdrop-filter here it is near-opaque */
+  --shade: rgba(14, 12, 10, 0.92);              /* the shades over art, 0xEB-0xF7 of BASE */
+
+  /* focus language (v0.2): ONE solid warm-white fill with dark ink wherever the remote rests. Alder rims/tints; the owner asked for
+     a filled, Netflix-like focus (DECISIONS.md 2026-10-29 "Focused items are filled"). Contrast against --focus-fill:
+     --focus-ink 15.5:1, --focus-ink-2 8.3:1, --focus-accent 8.1:1 (all >= 7:1, checked by dev/scenarios/v02-focus.mjs). */
+  --focus-fill: #f2e8d8;                        /* the solid fill behind the focused item */
+  --focus-ink: #15110e;                         /* text and icons on it */
+  --focus-ink-2: #4a4036;                       /* secondary text and tags on it (TEXT_2 / TEXT_3 on the dark) */
+  --focus-accent: #5c3d0e;                      /* what is tungsten on the dark (ticks, dots, "THIS PROFILE") once the fill is behind it */
+  --focus-edge: rgba(21, 17, 14, 0.34);         /* outlines of tags and badges on the fill */
+  --focus-glow: rgba(243, 217, 177, 0.55);      /* the stronger glow behind a focused primary pill */
+  --sel-fill: rgba(255, 255, 255, 0.14);        /* current / selected, not focused: translucent fill */
+  --chip-edge: rgba(255, 240, 220, 0.3);        /* an idle chip is an outline only */
+  --glass-dark: rgba(20, 17, 14, 0.55);         /* an idle round button: dark glass */
+
+  /* type: sp x 2 (px), with Alder's LEADING table for the line heights */
+  --font-sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --fs-wordmark: 44px;   /* WORDMARK 22 */
+  --fs-hero: 76px;       --lh-hero: 80px;      /* SERIF_HERO 38 / 40 */
+  --fs-title: 57px;      --lh-title: 60px;     /* SERIF_TITLE 28.5 / 30 */
+  --fs-name: 38px;       --lh-name: 42px;      /* SERIF_NAME 19 / 21 */
+  --fs-body: 29px;       --lh-body: 40px;      /* BODY 14.5 / 20 */
+  --fs-small: 25px;      --lh-small: 34px;     /* SMALL 12.5 / 17, also CAPS */
+  --fs-code: 72px;       --lh-code: 80px;      /* CODE 36 / 40 */
+  --caps-spacing: 0.12em;
+
+  /* space and size: dp x 2 */
+  --pad: 96px;                 /* PAD 48 */
+  --tile-radius: 16px;         /* TILE_RADIUS 8 */
+  --glass-inset: 56px;         /* GLASS_INSET 28 */
+  --hero-w: 1040px;            /* HERO_W 520 */
+  --button-h: 68px;            /* BUTTON_H 34 */
+  --chip-h: 48px;              /* CHIP_H 24 */
+  --card-grow: 1.08;           /* CARD_GROW (PLAN.md said 1.06; Alder's constant wins) */
+  --chip-grow: 1.04;           /* CHIP_GROW */
+  --btn-grow: 1.10;            /* a focused round icon button */
+  --pill-grow: 1.06;           /* a focused primary pill */
+  --card-gap: 28px;            /* CARD_GAP 14 */
+  --poster-w: 176px;           /* POSTER_W 88 */
+  --poster-h: 264px;           /* POSTER_H 132 */
+  --card-radius: 12px;         /* cardFocus radius 6 */
+  --heading-gap: 48px;         /* HEADING_GAP 24 */
+  --section-gap: 64px;         /* SECTION_GAP 32 */
+  --row-h: 84px;               /* ROW_H 42: a one-line list row */
+  --row-h2: 96px;              /* ROW_H2 48: a two-line list row */
+  --panel-w: 57.3%;            /* PANEL_W 0.573 */
+  --dialog-w: 680px;           /* choose(): setLayout(dp(340)) */
+  --hairline: 2px;             /* dp(1) */
+
+  /* motion: transform and opacity only */
+  --t-focus: 150ms;            /* grow() duration */
+  --t-fill: 140ms;             /* a focus fill fading in (its ::before layer's opacity) */
+  --t-slide: 180ms;            /* the top-bar highlight sliding to the focused tab */
+  --t-fade: 260ms;             /* leftShade fade */
+}

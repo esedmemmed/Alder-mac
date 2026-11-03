@@ -1,0 +1,27 @@
+{
+  "name": "alder-tizen",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Alder for Tizen: a Samsung Tizen 5.5 TV web app port of the Android TV Stremio client Alder",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:dev": "node scripts/build.mjs --dev",
+    "dev": "node dev/fixture-server.mjs",
+    "test": "node --test \"test/**/*.test.js\" && node --test mac/web/test/",
+    "compat": "node scripts/compat-check.mjs",
+    "shots": "node dev/screenshot.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "pako": "^3.0.3",
+    "qrcode-generator": "^2.0.4"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "1.63.0"
+  }
+}

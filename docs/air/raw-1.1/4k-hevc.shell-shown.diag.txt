@@ -1,0 +1,5 @@
+info: hwdec-current=videotoolbox
+Audio/Video desynchronisation detected! Possible reasons include too slow
+position will not match to the video (see A-V status field).
+Consider trying `--profile=fast` and/or `--hwdec=auto` as they may help.
+2026-11-03 02:09:34.343 AlderProof[8983:644862] Persistent UI failed to open file [link] No such file or directory (2)

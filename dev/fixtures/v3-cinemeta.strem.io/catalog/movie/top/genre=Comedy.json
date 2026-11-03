@@ -1,0 +1,20 @@
+{
+  "metas": [
+    {
+      "id": "tt6710474",
+      "type": "movie",
+      "name": "Everything Everywhere All at Once",
+      "poster": "https://images.metahub.space/poster/medium/tt6710474/img",
+      "posterShape": "poster",
+      "imdbRating": "7.8",
+      "releaseInfo": "2022",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Comedy"
+      ],
+      "description": "A middle-aged Chinese immigrant is swept up into an insane adventure in which she alone can save the world.",
+      "runtime": "139 min"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+label=1080p-h264 mode=shell-hidden seconds=599.9 drops=21 decoder_drops=0 drop_pct=0.15 hwdec=videotoolbox realtime=0.992 stalls=0 fps=23.976 fps_source=container cpu_avg=41.0

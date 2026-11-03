@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "id": "tt12637874",
+    "type": "series",
+    "name": "Fallout",
+    "poster": "https://images.metahub.space/poster/medium/tt12637874/img",
+    "posterShape": "poster",
+    "imdbRating": "8.3",
+    "releaseInfo": "2024–",
+    "genres": [
+      "Action",
+      "Adventure",
+      "Drama"
+    ],
+    "description": "In a future, post-nuclear Los Angeles, citizens of a vault return to the irradiated surface.",
+    "runtime": "60 min",
+    "imdb_id": "tt12637874",
+    "background": "https://images.metahub.space/background/medium/tt12637874/img",
+    "logo": "https://images.metahub.space/logo/medium/tt12637874/img",
+    "videos": []
+  }
+}

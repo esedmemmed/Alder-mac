@@ -1,0 +1,163 @@
+{
+  "metas": [
+    {
+      "id": "tt15239678",
+      "type": "movie",
+      "name": "Dune: Part Two",
+      "poster": "https://images.metahub.space/poster/medium/tt15239678/img",
+      "posterShape": "poster",
+      "imdbRating": "8.5",
+      "releaseInfo": "2024",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "description": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.",
+      "runtime": "166 min"
+    },
+    {
+      "id": "tt15398776",
+      "type": "movie",
+      "name": "Oppenheimer",
+      "poster": "https://images.metahub.space/poster/medium/tt15398776/img",
+      "posterShape": "poster",
+      "imdbRating": "8.3",
+      "releaseInfo": "2023",
+      "genres": [
+        "Biography",
+        "Drama",
+        "History"
+      ],
+      "description": "The story of American scientist J. Robert Oppenheimer and his role in the development of the atomic bomb.",
+      "runtime": "180 min"
+    },
+    {
+      "id": "tt1877830",
+      "type": "movie",
+      "name": "The Batman",
+      "poster": "https://images.metahub.space/poster/medium/tt1877830/img",
+      "posterShape": "poster",
+      "imdbRating": "7.8",
+      "releaseInfo": "2022",
+      "genres": [
+        "Action",
+        "Crime",
+        "Drama"
+      ],
+      "description": "When a sadistic serial killer begins murdering key political figures in Gotham, Batman is forced to investigate the city's hidden corruption.",
+      "runtime": "176 min"
+    },
+    {
+      "id": "tt1745960",
+      "type": "movie",
+      "name": "Top Gun: Maverick",
+      "poster": "https://images.metahub.space/poster/medium/tt1745960/img",
+      "posterShape": "poster",
+      "imdbRating": "8.2",
+      "releaseInfo": "2022",
+      "genres": [
+        "Action",
+        "Drama"
+      ],
+      "description": "After more than thirty years of service as one of the Navy's top aviators, Pete Mitchell is where he belongs.",
+      "runtime": "130 min"
+    },
+    {
+      "id": "tt6710474",
+      "type": "movie",
+      "name": "Everything Everywhere All at Once",
+      "poster": "https://images.metahub.space/poster/medium/tt6710474/img",
+      "posterShape": "poster",
+      "imdbRating": "7.8",
+      "releaseInfo": "2022",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Comedy"
+      ],
+      "description": "A middle-aged Chinese immigrant is swept up into an insane adventure in which she alone can save the world.",
+      "runtime": "139 min"
+    },
+    {
+      "id": "tt0816692",
+      "type": "movie",
+      "name": "Interstellar",
+      "poster": "https://images.metahub.space/poster/medium/tt0816692/img",
+      "posterShape": "poster",
+      "imdbRating": "8.7",
+      "releaseInfo": "2014",
+      "genres": [
+        "Adventure",
+        "Drama",
+        "Sci-Fi"
+      ],
+      "description": "When Earth becomes uninhabitable in the future, a farmer and ex-NASA pilot is tasked to pilot a spacecraft to find a new home.",
+      "runtime": "169 min"
+    },
+    {
+      "id": "tt1856101",
+      "type": "movie",
+      "name": "Blade Runner 2049",
+      "poster": "https://images.metahub.space/poster/medium/tt1856101/img",
+      "posterShape": "poster",
+      "imdbRating": "8.0",
+      "releaseInfo": "2017",
+      "genres": [
+        "Action",
+        "Drama",
+        "Mystery"
+      ],
+      "description": "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard.",
+      "runtime": "164 min"
+    },
+    {
+      "id": "tt2543164",
+      "type": "movie",
+      "name": "Arrival",
+      "poster": "https://images.metahub.space/poster/medium/tt2543164/img",
+      "posterShape": "poster",
+      "imdbRating": "7.9",
+      "releaseInfo": "2016",
+      "genres": [
+        "Drama",
+        "Mystery",
+        "Sci-Fi"
+      ],
+      "description": "A linguist works with the military to communicate with alien lifeforms after twelve mysterious spacecraft appear around the world.",
+      "runtime": "116 min"
+    },
+    {
+      "id": "tt1392190",
+      "type": "movie",
+      "name": "Mad Max: Fury Road",
+      "poster": "https://images.metahub.space/poster/medium/tt1392190/img",
+      "posterShape": "poster",
+      "imdbRating": "8.1",
+      "releaseInfo": "2015",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Sci-Fi"
+      ],
+      "description": "In a post-apocalyptic wasteland, a woman rebels against a tyrannical ruler in search for her homeland.",
+      "runtime": "120 min"
+    },
+    {
+      "id": "tt0468569",
+      "type": "movie",
+      "name": "The Dark Knight",
+      "poster": "https://images.metahub.space/poster/medium/tt0468569/img",
+      "posterShape": "poster",
+      "imdbRating": "9.0",
+      "releaseInfo": "2008",
+      "genres": [
+        "Action",
+        "Crime",
+        "Drama"
+      ],
+      "description": "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest tests.",
+      "runtime": "152 min"
+    }
+  ]
+}

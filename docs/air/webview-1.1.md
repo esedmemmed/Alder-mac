@@ -1,6 +1,6 @@
 # Shell check and web view, phase 1.1
 
-Input for the 1.3 device profile. No links and no keys, ever. Status: not run yet; every slot below is waiting for the Air.
+Input for the 1.3 device profile. No links and no keys, ever. Status: run 2026-11-03 with `app-7f04732`; numbers in `docs/air/results-1.1.md` (T7 rows).
 
 ## Steps (about 50 minutes, plugged in, lid open, every other app quit, same Wi-Fi)
 
@@ -19,7 +19,9 @@ Tell Claude in plain words, during or after:
 
 ## First open on Big Sur, as it really went
 
-(not run yet)
+- 2026-11-02, DMG `app-e585081` downloaded in Safari, app in Applications: the developer reported "AlderProof opened"; which approval step he needed was not recorded.
+- Measured runs: the helper installs the CI build into `~/AlderProof/app/` via curl (no quarantine), so no Gatekeeper step arises there.
+- 2026-11-02 to 03, earlier failures, not the app: a lapsed debrid subscription served a ~30 s "upgrade required" clip (fixed by renewal); `--vo=gpu` gave bare mpv sound only (now `vo=libmpv`); the shell loaded no measuring script (option `scripts`).
 
 ## Conditions
 
@@ -31,4 +33,5 @@ Dropped from this run: the Probe button needs clicks. Run later if 1.3 needs it.
 
 ## Watch notes
 
-(not run yet)
+- 2026-11-03: watched the bare 1080p play: smooth. The shell plays were not watched; he accepted the numbers.
+- 2026-11-02 (T7.1 run, debrid fixed, no numbers saved): the 1080p shell plays looked okay; 4K froze a bit; a low-battery warning came during 4K.

@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": 101,
+    "message": "Link code not found or expired"
+  }
+}

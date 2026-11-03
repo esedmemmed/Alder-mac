@@ -1,0 +1,1 @@
+label=4k-hevc mode=shell-shown seconds=120.0 drops=1560 decoder_drops=0 drop_pct=54.24 hwdec=videotoolbox realtime=0.952 stalls=0 fps=23.976 fps_source=container cpu_avg=48.8

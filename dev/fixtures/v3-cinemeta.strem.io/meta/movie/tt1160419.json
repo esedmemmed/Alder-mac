@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "id": "tt1160419",
+    "type": "movie",
+    "name": "Dune",
+    "poster": "https://images.metahub.space/poster/medium/tt1160419/img",
+    "posterShape": "poster",
+    "imdbRating": "8.0",
+    "releaseInfo": "2021",
+    "genres": [
+      "Action",
+      "Adventure",
+      "Drama"
+    ],
+    "description": "Paul Atreides, a brilliant and gifted young man born into a great destiny beyond his understanding, must travel to the most dangerous planet in the universe to ensure the future of his family and his people.",
+    "runtime": "155 min",
+    "imdb_id": "tt1160419",
+    "background": "https://images.metahub.space/background/medium/tt1160419/img",
+    "logo": "https://images.metahub.space/logo/medium/tt1160419/img",
+    "cast": [
+      "Timothée Chalamet",
+      "Rebecca Ferguson",
+      "Oscar Isaac",
+      "Jason Momoa"
+    ],
+    "director": [
+      "Denis Villeneuve"
+    ],
+    "released": "2021-09-15T00:00:00.000Z",
+    "country": "United States",
+    "language": "English",
+    "slug": "movie/dune-1160419",
+    "behaviorHints": {
+      "defaultVideoId": "tt1160419",
+      "hasScheduledVideos": false
+    }
+  }
+}

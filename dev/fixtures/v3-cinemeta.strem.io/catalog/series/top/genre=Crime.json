@@ -1,0 +1,36 @@
+{
+  "metas": [
+    {
+      "id": "tt0903747",
+      "type": "series",
+      "name": "Breaking Bad",
+      "poster": "https://images.metahub.space/poster/medium/tt0903747/img",
+      "posterShape": "poster",
+      "imdbRating": "9.5",
+      "releaseInfo": "2008–2013",
+      "genres": [
+        "Crime",
+        "Drama",
+        "Thriller"
+      ],
+      "description": "A high school chemistry teacher diagnosed with cancer teams up with a former student to secure his family's future.",
+      "runtime": "49 min"
+    },
+    {
+      "id": "tt5875444",
+      "type": "series",
+      "name": "Slow Horses",
+      "poster": "https://images.metahub.space/poster/medium/tt5875444/img",
+      "posterShape": "poster",
+      "imdbRating": "8.2",
+      "releaseInfo": "2022–",
+      "genres": [
+        "Comedy",
+        "Crime",
+        "Drama"
+      ],
+      "description": "Intelligence agents who have fallen from grace are relegated to a dumping ground department.",
+      "runtime": "45 min"
+    }
+  ]
+}

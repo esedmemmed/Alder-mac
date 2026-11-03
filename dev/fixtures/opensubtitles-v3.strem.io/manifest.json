@@ -1,0 +1,17 @@
+{
+  "id": "org.stremio.opensubtitlesv3",
+  "version": "1.0.0",
+  "name": "OpenSubtitles v3",
+  "description": "OpenSubtitles addon for Stremio.",
+  "resources": [
+    "subtitles"
+  ],
+  "types": [
+    "movie",
+    "series"
+  ],
+  "idPrefixes": [
+    "tt"
+  ],
+  "catalogs": []
+}

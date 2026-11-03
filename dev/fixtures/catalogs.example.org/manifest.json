@@ -1,0 +1,74 @@
+{
+  "id": "org.example.catalogs",
+  "version": "1.2.0",
+  "name": "Example Catalogs",
+  "description": "Fixture catalog add-on with its own search and \"more like this\".",
+  "resources": [
+    "catalog"
+  ],
+  "types": [
+    "movie",
+    "series"
+  ],
+  "idPrefixes": [
+    "tt"
+  ],
+  "catalogs": [
+    {
+      "id": "ex.trending",
+      "type": "movie",
+      "name": "Trending this week",
+      "extra": [
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "ex.trending",
+      "type": "series",
+      "name": "Trending this week",
+      "extra": [
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "ex.search",
+      "type": "movie",
+      "name": "Example search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        }
+      ]
+    },
+    {
+      "id": "ex.search",
+      "type": "series",
+      "name": "Example search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        }
+      ]
+    },
+    {
+      "id": "ex.similar",
+      "type": "movie",
+      "name": "More like this",
+      "idPrefixes": [
+        "tt"
+      ],
+      "extra": [
+        {
+          "name": "similar",
+          "isRequired": true
+        }
+      ]
+    }
+  ]
+}
