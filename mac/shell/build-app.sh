@@ -2,7 +2,7 @@
 # Builds AlderProof.app (macOS 11.0 x86_64) from the extracted stack and signs it last.
 # Usage: build-app.sh <out-dir>            writes <out-dir>/AlderProof.app
 # Environment: STACK_PREFIX (default $HOME/stack, where the stack release tarball extracts), PINHASH (default: asked
-# of mac/deps/build-stack.sh), COMMIT (default: git HEAD). Needs swiftc, dylibbundler, install_name_tool, codesign.
+# of mac/deps/build-stack.sh), COMMIT (default: git HEAD), ALDER_WEB_DIST (default dist-mac, from npm run build:mac). Needs swiftc, dylibbundler, install_name_tool, codesign.
 # Layout: Contents/MacOS/AlderProof, Contents/libs (libmpv, via dylibbundler), Contents/Resources/{web,measure.lua,
 # licenses}. Bash 3.2 compatible (macOS runner).
 set -euo pipefail
@@ -58,8 +58,13 @@ for f in "$BIN" "$APP"/Contents/libs/*; do
   strip_rpaths "$f"
 done
 
-# Resources: the page and its scripts (never test/), the measuring script.
-for f in index.html bridge.js probe.js mock-bridge.js; do
+# Resources: Alder (npm run build:mac -> dist-mac/, index.html = Alder) and the 1.1 proof page as proof.html with its
+# scripts (never test/), the measuring script.
+WEBDIST=${ALDER_WEB_DIST:-$ROOT/dist-mac}
+[ -f "$WEBDIST/index.html" ] || { echo "no $WEBDIST/index.html: run npm ci && npm run build:mac first" >&2; exit 1; }
+cp -R "$WEBDIST/." "$APP/Contents/Resources/web/"
+cp "$ROOT/mac/web/index.html" "$APP/Contents/Resources/web/proof.html"
+for f in bridge.js probe.js mock-bridge.js; do
   cp "$ROOT/mac/web/$f" "$APP/Contents/Resources/web/$f"
 done
 cp "$ROOT/air/measure.lua" "$APP/Contents/Resources/measure.lua"

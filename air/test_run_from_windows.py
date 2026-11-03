@@ -373,7 +373,8 @@ class Loopback(unittest.TestCase):
             with open(stub, "w", newline="\n") as sf:
                 sf.write(r'''#!/bin/bash
 while [ $# -gt 0 ]; do case $1 in --url) url=$2; shift 2;; --overlay) ov=$2; shift 2;; --end) end=$2; shift 2;;
-  --measure) ms=$2; shift 2;; --label) lb=$2; shift 2;; *) shift;; esac; done
+  --measure) ms=$2; shift 2;; --label) lb=$2; shift 2;; --page) pg=$2; shift 2;; *) shift;; esac; done
+[ "$pg" = proof.html ] || { echo "shell-check must launch --page proof.html, got: $pg" >&2; exit 2; }
 res=$(cygpath -m "$ALDERPROOF_DIR/results"); ms=$(cygpath -m "$ms")
 exec "$STUB_MPV" --no-config --hwdec=no --vo=null --ao=null --end="$end" --script="$ms" --script-opts="measure-label=$lb,measure-mode=shell-$ov,measure-dir=$res" "$url"
 ''')
@@ -406,10 +407,10 @@ exec "$STUB_MPV" --no-config --hwdec=no --vo=null --ao=null --end="$end" --scrip
 
 
 STUB_APP = r'''#!/bin/bash
-# A stand-in for the AlderProof shell: --page and --report only. It plays a probe page that writes a report with a
+# A stand-in for the AlderProof shell: --page, --report and --quit-after only. It plays a probe page that writes a report with a
 # link and a key in it, as a leaking page would.
-while [ $# -gt 0 ]; do case $1 in --page) page=$2; shift 2;; --report) rep=$2; shift 2;; *) shift;; esac; done
-echo "$page" >> "$STUB_CALLS"
+while [ $# -gt 0 ]; do case $1 in --page) page=$2; shift 2;; --report) rep=$2; shift 2;; --quit-after) q=$2; shift 2;; *) shift;; esac; done
+echo "$page${q:+ quit=$q}" >> "$STUB_CALLS"
 case "$page" in
   *probe=1*) printf 'userAgent: Stub
 localStorage: written
@@ -489,14 +490,14 @@ class UiCheck(unittest.TestCase):
 
     def test_probe_runs_twice(self):
         report, calls = self.run_check(["--probe"], 18791)
-        self.assertEqual(calls, ["index.html?probe=1", "index.html?probe=2"])
+        self.assertEqual(calls, ["proof.html?probe=1", "quit=90", "proof.html?probe=2", "quit=90"])
         self.assertIn("== probe 1 ==", report)
         self.assertIn("localStorage after relaunch: present", report)
         self.assertIn("[link", report)
 
     def test_plain_open(self):
         report, calls = self.run_check([], 18795)
-        self.assertEqual(calls, ["index.html"])
+        self.assertEqual(calls, ["proof.html"])
         self.assertIn("log: plain run", report)
 
 

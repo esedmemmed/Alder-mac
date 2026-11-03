@@ -309,6 +309,37 @@ test('the page reports errors through the bridge and runs the probe on ?probe=1|
   assert.match(html, /window\.onerror/);
   assert.match(html, /unhandledrejection/);
   assert.match(html, /probe=\(\[12\]\)/);
-  assert.match(html, /bridge\.report\(text\)/);
+  assert.match(html, /bridge\.report\(line\)/);
+  assert.match(html, /'probe ' \+ phase \+ ': started'/);
+  assert.match(html, /'probe ' \+ phase \+ ': done'/);
   assert.match(html, /bridge\.quit\(\)/);
+});
+
+test('the page posts its own first report and errors before bridge.js, with no query in the file name', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const early = html.indexOf('page: script start');
+  assert.ok(early > 0 && early < html.indexOf('<script src="bridge.js">'));
+  assert.ok(html.indexOf("'page error: '") < html.indexOf('<script src="bridge.js">'));
+  assert.match(html, /split\('\?'\)\[0\]/);
+});
+
+test('probe calls onLine for each line in order, and the joined text matches', async () => {
+  const win = { Promise, Object, String, Array, navigator: { userAgent: 'x' }, fetch: async () => ({ status: 200 }) };
+  const seen = [];
+  const text = await runProbe(win, 1, (l) => seen.push(l));
+  assert.equal(seen.join('\n'), text);
+  assert.match(seen[0], /^userAgent: /);
+  assert.ok(seen.findIndex((l) => /^localStorage/.test(l)) < seen.findIndex((l) => /^api\.strem\.io/.test(l)));
+  assert.match(seen[seen.length - 1], /^Torrentio: reached/);
+});
+
+test('a fetch that never resolves is cut off, in both tries, and the probe still finishes', async () => {
+  const win = { Promise, Object, String, Array, navigator: { userAgent: 'x' }, fetch: () => new Promise(() => {}) };
+  const seen = [];
+  const text = await runProbe(win, undefined, (l) => seen.push(l), 20);
+  assert.match(text, /api\.strem\.io: FAILED, timed out after 0\.02 s/);
+  assert.equal(seen.filter((l) => /timed out/.test(l)).length, TARGETS.length);
+  // First try fails by throwing, the no-cors retry hangs.
+  const win2 = { ...win, fetch: (u, init) => (init.mode === 'no-cors' ? new Promise(() => {}) : Promise.reject(new TypeError('x'))) };
+  assert.match(await runProbe(win2, undefined, null, 20), /Torrentio: FAILED, timed out after 0\.02 s/);
 });

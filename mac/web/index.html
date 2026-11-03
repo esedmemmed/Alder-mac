@@ -4,6 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Alder proof overlay</title>
+<script>
+  // Independent of bridge.js: proves the page ran at all, and catches a failure loading the scripts below.
+  (function () {
+    function raw(text) {
+      try { window.webkit.messageHandlers.alder.postMessage({ id: 0, cmd: 'report', args: { text: text } }); } catch (_) {}
+    }
+    raw('page: script start');
+    window.onerror = function (msg, src, line) {
+      raw('page error: ' + msg + ' (' + String(src || '').split('?')[0] + ':' + line + ')');
+    };
+  })();
+</script>
 <style>
   /* Transparent so the video view below shows through (the shell also clears drawsBackground). */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
@@ -64,10 +76,16 @@
     var probeRun = /[?&]probe=([12])(?:&|$)/.exec(window.location.search);
     if (probeRun) {
       var quitNow = function () { bridge.quit().catch(function () {}); };
-      AlderProbe.runProbe(window, Number(probeRun[1])).then(function (text) {
-        return bridge.report(text);
+      var phase = Number(probeRun[1]);
+      var pending = [];
+      var say = function (line) { pending.push(bridge.report(line).catch(function () {})); };
+      say('probe ' + phase + ': started');
+      AlderProbe.runProbe(window, phase, function (line) { say(line); }).then(function () {
+        say('probe ' + phase + ': done');
+        return Promise.all(pending);
       }).then(quitNow, function (err) {
-        bridge.log('probe failed: ' + (err && err.message)).then(quitNow, quitNow);
+        say('probe ' + phase + ': failed (' + (err && err.message) + ')');
+        Promise.all(pending).then(quitNow, quitNow);
       });
     }
 

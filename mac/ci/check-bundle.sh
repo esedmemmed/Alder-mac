@@ -126,6 +126,17 @@ EOF
     fail "$app: codesign --verify --deep --strict failed"
   fi
 
+  for f in web/index.html web/proof.html web/LICENSE.txt web/licenses/NOTICE.txt; do
+    if [ -s "$app/Contents/Resources/$f" ]; then
+      echo "ok: $f"
+    else
+      fail "$app: $f missing or empty"
+    fi
+  done
+  if grep -qE 'width=1920|[$]WEBAPIS' "$app/Contents/Resources/web/index.html" 2>/dev/null; then
+    fail "$app: web/index.html is the TV page, not the Mac page"
+  fi
+
   for lic in GPL-3.0.txt NOTICE.txt SOURCE.txt; do
     if [ -s "$app/Contents/Resources/licenses/$lic" ]; then
       echo "ok: licenses/$lic"

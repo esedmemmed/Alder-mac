@@ -7,11 +7,13 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:mac": "node scripts/build.mjs --mac",
     "build:dev": "node scripts/build.mjs --dev",
     "dev": "node dev/fixture-server.mjs",
     "test": "node --test \"test/**/*.test.js\" && node --test mac/web/test/",
     "compat": "node scripts/compat-check.mjs",
-    "shots": "node dev/screenshot.mjs"
+    "shots": "node dev/screenshot.mjs",
+    "shots:mac": "node dev/screenshot-mac.mjs"
   },
   "engines": {
     "node": ">=22"

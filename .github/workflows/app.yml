@@ -12,6 +12,11 @@ on:
       - 'mac/web/**'
       - 'mac/ci/**'
       - 'mac/test/**'
+      - 'src/**'
+      - 'scripts/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/app.yml'
 
 permissions:
@@ -58,6 +63,14 @@ jobs:
 
       - name: Install dylibbundler
         run: brew install dylibbundler
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+
+      - name: Build Alder for the Mac (dist-mac)
+        run: npm ci && npm run build:mac
 
       - name: Build AlderProof.app
         id: build

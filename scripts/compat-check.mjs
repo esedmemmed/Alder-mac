@@ -7,6 +7,9 @@
  * what this checks. An API is allowed when src/lib/compat.js lists it in POLYFILLED. To adjust the list for another
  * engine, edit RULES below: each rule says which Chromium version added the thing.
  *
+ * The Mac page (mac/web/alder-index.html, and dist-mac/ from `npm run build:mac`) keeps the JS rules; its viewport rule is
+ * the reverse of the TV's: a viewport is required and width=1920 is forbidden.
+ *
  * Usage: node scripts/compat-check.mjs [--no-dist]
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -151,7 +154,7 @@ export function scanText(file, text, kind, polyfilled) {
     if (rule.files && rule.files.indexOf(file) >= 0) continue;
     // A rule with a per-file exemption (stableSort's own sort) cannot be judged in the bundle, which is one minified file with
     // no comments or paths: the source scan above already checks every src file against it.
-    if (rule.files && file.indexOf('dist/') === 0) continue;
+    if (rule.files && (file.indexOf('dist/') === 0 || file.indexOf('dist-mac/') === 0)) continue;
     if (kind === 'js' && rule.needs && rule.needs.every((n) => polyfilled.has(n))) continue;
     const re = new RegExp(rule.re.source, rule.re.flags.replace('g', '') + 'g');
     let m;
@@ -167,10 +170,12 @@ export function scanText(file, text, kind, polyfilled) {
       if (m[0] === '') re.lastIndex++;
     }
   }
+  const macPage = file === 'mac/web/alder-index.html' || file.startsWith('dist-mac/');
   if (kind === 'html' && /<meta[^>]+name=["']viewport["']/i.test(text) === false) {
-    findings.push({ file, line: 1, rule: 'viewport', since: 0, warn: false, message: 'index.html needs <meta name="viewport" content="width=1920">' });
-  }
-  if (kind === 'html' && !/name=["']viewport["'][^>]*width=1920/i.test(text)) {
+    findings.push({ file, line: 1, rule: 'viewport', since: 0, warn: false, message: file + ' needs a <meta name="viewport"> (' + (macPage ? 'content="width=device-width, initial-scale=1"' : 'content="width=1920"') + ')' });
+  } else if (kind === 'html' && macPage && /name=["']viewport["'][^>]*width=1920/i.test(text)) {
+    findings.push({ file, line: 1, rule: 'viewport', since: 0, warn: false, message: 'the Mac page must not fix the viewport at width=1920 (that is the TV layout)' });
+  } else if (kind === 'html' && !macPage && !/name=["']viewport["'][^>]*width=1920/i.test(text)) {
     findings.push({ file, line: 1, rule: 'viewport', since: 0, warn: false, message: 'the viewport meta must say width=1920 (the app is laid out at a fixed 1920x1080)' });
   }
   return findings;
@@ -191,12 +196,17 @@ const KIND = { '.js': 'js', '.mjs': 'js', '.css': 'css', '.html': 'html' };
  * Scans src/ and index.html, and dist/app when it exists. Returns { findings, scanned, errors, warnings }.
  * Production output must also contain nothing of the dev harness.
  */
-export function checkCompat({ root = ROOT, dist = true } = {}) {
+export function checkCompat({ root = ROOT, dist = true, mac = false } = {}) {
   const polyfilled = readPolyfilled(root);
   const files = [...walk(join(root, 'src'))];
   if (existsSync(join(root, 'index.html'))) files.push(join(root, 'index.html'));
   const prod = join(root, 'dist/app');
   if (dist && existsSync(prod)) files.push(...walk(prod));
+  // The Mac page: its template always, its build output (dist-mac/) when present.
+  if (mac) {
+    if (existsSync(join(root, 'mac/web/alder-index.html'))) files.push(join(root, 'mac/web/alder-index.html'));
+    files.push(...walk(join(root, 'dist-mac')));
+  }
   const findings = [];
   let scanned = 0;
   for (const abs of files) {
@@ -207,7 +217,7 @@ export function checkCompat({ root = ROOT, dist = true } = {}) {
     scanned++;
     // The bundle's own text is minified (one line); rules still apply, findings just all say line 1.
     findings.push(...scanText(rel, text, kind, polyfilled));
-    if (rel.startsWith('dist/app/') && (kind === 'js' || kind === 'html')) {
+    if ((rel.startsWith('dist/app/') || rel.startsWith('dist-mac/')) && (kind === 'js' || kind === 'html')) {
       for (const bad of ['__fx', 'mock-tizen', 'ALDER_FIXTURE', 'sourceMappingURL']) {
         if (text.indexOf(bad) >= 0) findings.push({ file: rel, line: 1, rule: 'dev code in prod', since: 0, warn: false, message: 'production output contains "' + bad + '": dev-only code leaked into the build' });
       }
@@ -224,7 +234,7 @@ export function report(result, out = console) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const result = checkCompat({ dist: !process.argv.includes('--no-dist') });
+  const result = checkCompat({ dist: !process.argv.includes('--no-dist'), mac: true });
   report(result);
   process.exit(result.errors.length ? 1 : 0);
 }

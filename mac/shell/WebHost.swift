@@ -78,7 +78,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     }
 
     /// Appends one line of text to the --report file, if given. Written at once so a quit right after loses nothing.
-    private func appendReport(_ text: String) {
+    func appendReport(_ text: String) {
         guard let path = reportPath, let data = (text + "\n").data(using: .utf8) else { return }
         if !FileManager.default.fileExists(atPath: path) {
             FileManager.default.createFile(atPath: path, contents: nil)
@@ -159,6 +159,22 @@ func makeWebView(root: URL, bridge: Bridge) -> WKWebView {
     let wv = WKWebView(frame: .zero, configuration: config)
     wv.setValue(false, forKey: "drawsBackground") // private key, accepted for this app (no App Store)
     wv.autoresizingMask = [.width, .height]
+    wv.navigationDelegate = bridge // Bridge lives in AppDelegate, which outlives the weak reference
     bridge.webView = wv
     return wv
+}
+
+/// Navigation result of the page load goes to the --report file (no URL), so a page that never ran still leaves a trace.
+extension Bridge: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        appendReport("nav: finished")
+    }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        let e = error as NSError
+        appendReport("nav: failed (\(e.domain) \(e.code))")
+    }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        let e = error as NSError
+        appendReport("nav: failed (\(e.domain) \(e.code))")
+    }
 }

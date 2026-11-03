@@ -392,7 +392,7 @@ if grep -ho 'hwdec=[^ ]*' "$dir"/results/1080p-h264.shell-*.summary.txt 2>/dev/n
     rest
     if prep 1080p-h264 "1080p-h264 videotoolbox-copy"; then
         say "1080p-h264 videotoolbox-copy: playing"
-        "$ALDERPROOF_BIN" --url "$(cat "$dir/.link")" --overlay shown --end "$end" --hwdec videotoolbox-copy --measure "$dir/measure.lua" --label 1080p-h264-copy > "$dir/logs/copy.player.log" 2>&1
+        "$ALDERPROOF_BIN" --page proof.html --url "$(cat "$dir/.link")" --overlay shown --end "$end" --hwdec videotoolbox-copy --measure "$dir/measure.lua" --label 1080p-h264-copy > "$dir/logs/copy.player.log" 2>&1
         rc=$?
         rm -f "$dir/.link"
         tag="1080p-h264 videotoolbox-copy"
@@ -470,13 +470,13 @@ rm -f "$rep"
 if [ "$mode" = "probe" ]; then
     for n in 1 2; do
         echo "== probe $n ==" >> "$rep"
-        say "probe $n: running (the window closes by itself)"
-        "$ALDERPROOF_BIN" --page "index.html?probe=$n" --report "$rep" </dev/null >/dev/null 2>&1
+        say "probe $n: running (the window closes by itself, after 90 s at most)"
+        "$ALDERPROOF_BIN" --page "proof.html?probe=$n" --report "$rep" --quit-after 90 </dev/null >/dev/null 2>&1
         say "probe $n: exit $?"
     done
 else
     say "opening the app; use it, then quit it with Cmd-Q"
-    "$ALDERPROOF_BIN" --page index.html --report "$rep" </dev/null >/dev/null 2>&1
+    "$ALDERPROOF_BIN" --page proof.html --report "$rep" </dev/null >/dev/null 2>&1
     say "app closed: exit $?"
 fi
 [ -f "$rep" ] || echo "(the app wrote no report)" > "$rep"

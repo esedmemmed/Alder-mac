@@ -41,6 +41,7 @@
     { name: 'OpenSubtitles v3', url: 'https://opensubtitles-v3.strem.io/manifest.json', init: { method: 'GET' } },
     { name: 'Torrentio', url: 'https://torrentio.strem.fun/manifest.json', init: { method: 'GET' } }
   ];
+  var FETCH_TIMEOUT_MS = 10000;
   var STORE_KEY = 'alder-probe';
   var STORE_VALUE = 'kept-across-launches';
 
@@ -65,35 +66,58 @@
     return ['WebKit version: ' + (webkit ? webkit[1] : 'unknown'), 'Safari version: ' + (safari ? safari[1] : 'unknown')];
   }
 
-  async function probeTarget(fetchFn, target) {
+  // A fetch that never settles must not stall the run: each try races a timer.
+  function withTimeout(promise, ms) {
+    var timer;
+    var limit = new Promise(function (_, reject) {
+      timer = setTimeout(function () {
+        var e = new Error('timed out after ' + (ms / 1000) + ' s');
+        e.name = 'Timeout';
+        reject(e);
+      }, ms);
+    });
+    return Promise.race([promise, limit]).finally(function () { clearTimeout(timer); });
+  }
+
+  async function probeTarget(fetchFn, target, timeoutMs) {
     try {
-      var res = await fetchFn(target.url, target.init);
+      var res = await withTimeout(fetchFn(target.url, target.init), timeoutMs);
       return target.name + ': reached, status ' + res.status;
     } catch (err) {
+      if (err.name === 'Timeout') return target.name + ': FAILED, timed out after ' + (timeoutMs / 1000) + ' s';
       // Blocked or offline look alike to fetch. no-cors succeeds only when the network path works, so CORS is the cause.
       var verdict = 'network failure or offline';
       try {
-        await fetchFn(target.url, { method: 'GET', mode: 'no-cors' });
+        await withTimeout(fetchFn(target.url, { method: 'GET', mode: 'no-cors' }), timeoutMs);
         verdict = 'blocked by CORS, host reachable';
-      } catch (_) { /* verdict stands */ }
+      } catch (e2) {
+        if (e2.name === 'Timeout') return target.name + ': FAILED, timed out after ' + (timeoutMs / 1000) + ' s';
+      }
       return target.name + ': FAILED, ' + verdict + ' (' + err.name + ': ' + err.message + ')';
     }
   }
 
-  async function runProbe(win, phase) {
-    var lines = ['userAgent: ' + win.navigator.userAgent].concat(engineVersions(win.navigator.userAgent));
-    lines.push('origin: ' + (win.location ? win.location.origin : 'unavailable'));
+  // onLine(line) is called for each line as produced; the joined text is still returned. timeoutMs is for tests.
+  async function runProbe(win, phase, onLine, timeoutMs) {
+    var lines = [];
+    function add(line) {
+      lines.push(line);
+      if (onLine) onLine(line);
+    }
+    add('userAgent: ' + win.navigator.userAgent);
+    engineVersions(win.navigator.userAgent).forEach(add);
+    add('origin: ' + (win.location ? win.location.origin : 'unavailable'));
     Object.keys(JS_FEATURES).forEach(function (name) {
-      lines.push('js ' + name + ': ' + (JS_FEATURES[name](win) ? 'yes' : 'no'));
+      add('js ' + name + ': ' + (JS_FEATURES[name](win) ? 'yes' : 'no'));
     });
     CSS_FEATURES.forEach(function (rule) {
       var verdict = win.CSS && win.CSS.supports ? (win.CSS.supports(rule) ? 'yes' : 'no') : 'unavailable';
-      lines.push('css ' + rule + ': ' + verdict);
+      add('css ' + rule + ': ' + verdict);
     });
     var store = probeStorage(win, phase);
-    if (store) lines.push(store);
+    if (store) add(store);
     for (var i = 0; i < TARGETS.length; i++) {
-      lines.push(await probeTarget(win.fetch.bind(win), TARGETS[i]));
+      add(await probeTarget(win.fetch.bind(win), TARGETS[i], timeoutMs || FETCH_TIMEOUT_MS));
     }
     return lines.join('\n');
   }

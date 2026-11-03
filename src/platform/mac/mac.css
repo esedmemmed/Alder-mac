@@ -1,0 +1,28 @@
+/*
+ * Mac-only CSS, appended after the shared stylesheet by scripts/build.mjs --mac (the Tizen build never contains it).
+ * A Mac has a pointer, so the cursor shows (base.css hides it for the TV), and it is read at desk distance on a laptop
+ * panel, so focus is drawn stronger than on a TV (R0-002 focus contrast): a solid rim, a wider grow, a brighter glow.
+ */
+html, body, [data-focus] { cursor: default; }
+[data-focus] { cursor: pointer; }
+
+:root { --card-grow: 1.12; --btn-grow: 1.14; --pill-grow: 1.09; --chip-grow: 1.07; }
+
+.card > .rim { border: 4px solid var(--tungsten); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 20px 56px var(--focus-glow); }
+.card:focus { outline: 3px solid var(--focus-fill); outline-offset: 3px; }
+.pill:focus, .btn-round:focus, .chip:focus, .avatar:focus {
+  outline: 3px solid var(--focus-fill); outline-offset: 4px;
+}
+.nav-item:focus, .row-item:focus, .st-row:focus, .ad-row:focus, .eg-row:focus, .sg-row:focus, .sg-group:focus, .pl-row:focus {
+  outline: 3px solid var(--focus-fill); outline-offset: 2px;
+}
+
+/* Native text fields (platform/mac/osk.js): the field shows focus, the keyboard grid is gone. */
+.osk-native:focus-within { background: var(--glass-focused); outline: 3px solid var(--focus-fill); outline-offset: 2px; }
+.osk-none { display: none; }
+.ob-macform .osk-field { margin-top: 16px; height: 64px; }
+.ob-macform .osk-input { height: 60px; }
+.ob-macform .pill { margin-top: 12px; }
+.ob-or { margin-top: 28px; }
+/* search: the letter grid is not built into the page on the Mac, so the recent searches move up under the field */
+.sr-recentbox { top: 300px; }

@@ -72,7 +72,7 @@ case $mode in
     shell-*)
         app=${ALDERPROOF_BIN:-$dir/AlderProof.app/Contents/MacOS/AlderProof}
         [ -x "$app" ] || { echo "AlderProof not found at $app" >&2; exit 69; }
-        "$app" --url "$link" --overlay "${mode#shell-}" --end "$end" \
+        "$app" --page proof.html --url "$link" --overlay "${mode#shell-}" --end "$end" \
             --measure "$script" --label "$label" > "$log" 2>&1
         ;;
 esac

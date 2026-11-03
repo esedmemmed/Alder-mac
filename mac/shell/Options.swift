@@ -1,6 +1,6 @@
 // Command line of the shell. Shape is the contract in the phase plan:
 // AlderProof [--url <link>] [--overlay shown|hidden] [--end <seconds>] [--measure <script> --label <label>]
-//            [--hwdec <value>] [--selftest <file>] [--page <file[?query]>] [--report <path>]
+//            [--hwdec <value>] [--selftest <file>] [--page <file[?query]>] [--report <path>] [--quit-after <seconds>]
 import Foundation
 
 struct Options {
@@ -13,10 +13,11 @@ struct Options {
     var selftest: String?
     var page = "index.html"
     var report: String?
+    var quitAfter: Double?
 
     static let usage = "usage: AlderProof [--url <link>] [--overlay shown|hidden] [--end <seconds>] "
         + "[--measure <script> --label <label>] [--hwdec <value>] [--selftest <file>] "
-        + "[--page <file[?query]>] [--report <path>]"
+        + "[--page <file[?query]>] [--report <path>] [--quit-after <seconds>]"
 
     /// Parses the arguments; prints the usage and exits 64 on anything it does not know.
     static func parse(_ argv: [String]) -> Options {
@@ -49,6 +50,9 @@ struct Options {
             case "--selftest": o.selftest = value(a)
             case "--page": o.page = value(a)
             case "--report": o.report = value(a)
+            case "--quit-after":
+                guard let d = Double(value(a)), d > 0 else { fail("--quit-after needs seconds > 0") }
+                o.quitAfter = d
             default:
                 if a.hasPrefix("-psn_") { break } // Finder launch argument
                 fail("unknown argument \(a)")

@@ -76,6 +76,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         player.startEvents()
         guard let pageURL = URL(string: "alder://app/" + opts.page) else { die("bad --page \(opts.page)") }
         web.load(URLRequest(url: pageURL))
+        if let secs = opts.quitAfter {
+            // Backstop so an unattended run always ends, whatever the page does.
+            Timer.scheduledTimer(withTimeInterval: secs, repeats: false) { [weak self] _ in
+                self?.bridge?.appendReport("shell: quit-after reached")
+                NSApp.terminate(nil)
+            }
+        }
         if let url = opts.url {
             let rc = player.command(["loadfile", url, "replace"], replyID: 0)
             if rc < 0 { fputs("AlderProof: loadfile refused: \(Player.errorText(rc))\n", stderr) }
