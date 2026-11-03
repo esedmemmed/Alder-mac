@@ -11,6 +11,16 @@ You need the Air on the same Wi-Fi as this Windows computer, plugged in, with it
 
 If the Air says the player would not start, tell Claude; the status is already on the Windows window.
 
+## The UI check (from Windows, no Stremio login)
+
+Checks the Alder page inside the Mac web view: the engine versions, which Stremio hosts the page can reach, and whether the page keeps data between launches. It needs no Stremio login and no links, so nothing secret is involved. The Air must be on the same Wi-Fi as this Windows computer, with its lid open and the internet working.
+
+1. On Windows, in the project folder, run `python air/run_from_windows.py --ui-check --probe` (use the Python named in `.claude/pa.json`). Leave out `--probe` to have the app open for you to use instead.
+2. It prints one line starting `curl -sS http://` (it looks up the newest app build first). If Windows asks about its firewall, tick Public networks and press Allow.
+3. On the Air press Cmd-Space, type Terminal, press Return, type that line exactly and press Return.
+4. The Air downloads the newest app build and opens it twice, a few seconds each; a full-screen window appears and closes by itself. If a window stays open, press Cmd-Q. Without `--probe` the app opens once and stays until you press Cmd-Q; use it as you like (the page's errors are reported too).
+5. The Air says it has finished. The Windows window then prints where the report is: `.run/1.1/air-results/ui-report.txt` (use `--out <folder>` to choose). Tell Claude it is there. Links and keys are removed on the Air and again on Windows; the report holds engine versions, reachability verdicts, error lines and the localStorage verdict.
+
 ## The manual way (fallback)
 
 This takes one 10-minute run per file, plus a few minutes of cooling between files. Each step says where to type. "Air Terminal" means press Cmd-Space on the Air, type Terminal, press Return.

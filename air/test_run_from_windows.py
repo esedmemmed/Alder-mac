@@ -405,5 +405,100 @@ exec "$STUB_MPV" --no-config --hwdec=no --vo=null --ao=null --end="$end" --scrip
             shutil.rmtree(work, ignore_errors=True)
 
 
+STUB_APP = r'''#!/bin/bash
+# A stand-in for the AlderProof shell: --page and --report only. It plays a probe page that writes a report with a
+# link and a key in it, as a leaking page would.
+while [ $# -gt 0 ]; do case $1 in --page) page=$2; shift 2;; --report) rep=$2; shift 2;; *) shift;; esac; done
+echo "$page" >> "$STUB_CALLS"
+case "$page" in
+  *probe=1*) printf 'userAgent: Stub
+localStorage: written
+log: failed https://x.example/a?authKey=SECRETKEY99 here
+' >> "$rep";;
+  *probe=2*) printf 'localStorage after relaunch: present
+authKey: SECRETKEY99
+' >> "$rep";;
+  *) printf 'log: plain run
+' >> "$rep";;
+esac
+'''
+
+
+class KeepUiReport(unittest.TestCase):
+    def test_strips_links_and_keys(self):
+        out = tempfile.mkdtemp()
+        try:
+            n = rw.keep_ui_report(b'a https://h.example/p?x=1 b authKey: SECRETKEY99 c "password":"hunter2"', out)
+            text = open(os.path.join(out, "ui-report.txt")).read()
+            self.assertEqual(n, (1, 3))
+            self.assertNotRegex(text, r"https?://|SECRETKEY99|hunter2")
+            self.assertIn("[link removed]", text)
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+
+
+@unittest.skipUnless(shutil.which("bash") and shutil.which("curl"), "needs bash and curl")
+class UiCheck(unittest.TestCase):
+    def run_check(self, extra, port):
+        work = tempfile.mkdtemp()
+        out = os.path.join(work, "air-results")
+        buf = hold_output()
+        rc = {}
+        old = rw.find_app_release
+        rw.find_app_release = lambda: None  # no network: the stub below stands in for the installed app
+
+        def run():
+            with contextlib.redirect_stdout(buf):
+                rc["rc"] = rw.main(["--host", "127.0.0.1", "--out", out, "--port", str(port), "--idle", "60",
+                                    "--ui-check"] + extra)  # no creds: the mode must not ask for a login
+
+        t = threading.Thread(target=run)
+        t.start()
+        try:
+            line = None
+            for _ in range(100):
+                m = re.search(r"curl -sS (http://\S+) \| bash", buf.getvalue())
+                if m:
+                    line = m.group(1)
+                    break
+                time.sleep(0.1)
+            self.assertTrue(line, buf.getvalue())
+            stub = os.path.join(work, "AlderProof")
+            with open(stub, "w", newline="\n") as sf:
+                sf.write(STUB_APP)
+            os.chmod(stub, 0o755)
+            calls = os.path.join(work, "calls.txt")
+            env = dict(os.environ, ALDERPROOF_DIR=os.path.join(work, "air"), ALDERPROOF_BIN=stub, STUB_CALLS=calls)
+            p = subprocess.run(["bash", "-c", "curl -s %s | bash" % line], env=env, capture_output=True, text=True, timeout=60)
+            t.join(30)
+            shown = buf.getvalue() + p.stdout
+            self.assertFalse(t.is_alive(), shown)
+            self.assertEqual(rc.get("rc"), 0, shown)
+            self.assertIn("Finished", p.stdout)
+            self.assertNotIn("Stremio", shown)
+            with open(os.path.join(out, "ui-report.txt")) as rf:
+                report = rf.read()
+            self.assertNotRegex(report, r"https?://")
+            self.assertNotIn("SECRETKEY99", report + shown)
+            self.assertEqual(os.listdir(os.path.join(work, "air")), [])  # report copies deleted on the Air
+            with open(calls) as cf:
+                return report, cf.read().split()
+        finally:
+            rw.find_app_release = old
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_probe_runs_twice(self):
+        report, calls = self.run_check(["--probe"], 18791)
+        self.assertEqual(calls, ["index.html?probe=1", "index.html?probe=2"])
+        self.assertIn("== probe 1 ==", report)
+        self.assertIn("localStorage after relaunch: present", report)
+        self.assertIn("[link", report)
+
+    def test_plain_open(self):
+        report, calls = self.run_check([], 18795)
+        self.assertEqual(calls, ["index.html"])
+        self.assertIn("log: plain run", report)
+
+
 if __name__ == "__main__":
     unittest.main()

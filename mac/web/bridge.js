@@ -2,6 +2,7 @@
 // JS to native: window.webkit.messageHandlers.alder.postMessage({id, cmd, args})
 // Native to JS: window.alderNative.onEvent({type, ...})
 // Args:   load {url} · pause {paused} · seek {seconds} · setProp {name, value} · getProp {name} · quit {}
+//         log {line} · report {text}  (text for the shell's --report file; scrubbed of links like everything else)
 // Events: reply {id, ok, value|error} · prop {name, value} · fileLoaded · playbackRestart
 //         endFile {reason: eof|stop|quit|error|redirect, error?: mpv error code, message?}
 // Events never carry the link. Native must not send one; scrubbing here is the second line, not the contract.
@@ -11,7 +12,7 @@
 })(this, function () {
   'use strict';
 
-  var COMMANDS = ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit'];
+  var COMMANDS = ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report'];
   var EVENT_TYPES = ['reply', 'prop', 'fileLoaded', 'playbackRestart', 'endFile'];
   var LINK_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]*|\bmagnet:\?[^\s"'<>]*/gi;
   var REDACTED = '[link]';
@@ -105,7 +106,9 @@
       seek: function (seconds) { return send('seek', { seconds: seconds }); },
       setProp: function (name, value) { return send('setProp', { name: name, value: value }); },
       getProp: function (name) { return send('getProp', { name: name }); },
-      quit: function () { return send('quit', {}); }
+      quit: function () { return send('quit', {}); },
+      log: function (line) { return send('log', { line: scrubText(String(line), known) }); },
+      report: function (text) { return send('report', { text: scrubText(String(text), known) }); }
     };
   }
 

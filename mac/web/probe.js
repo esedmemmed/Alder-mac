@@ -1,7 +1,7 @@
 // What this web view can do, as text to copy back from the Air. Read by T7 (CORS, WebKit version) and 1.2 (port).
 // JS list: what Alder-tizen's compat-check forbade on Chromium 69, so what the port may now use (R0-001).
 // CSS list: judgement, Alder's stylesheets are not in this repo until 1.2; backdrop-filter is from R0-002.
-// Sends no auth key and no link.
+// Sends no auth key and no link. runProbe(win, phase): phase 1 or 2 adds the localStorage line.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.AlderProbe = factory();
@@ -36,8 +36,34 @@
   var TARGETS = [
     { name: 'api.strem.io', url: 'https://api.strem.io/api/addonCollectionGet',
       init: { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' } },
-    { name: 'public add-on manifest', url: 'https://v3-cinemeta.strem.io/manifest.json', init: { method: 'GET' } }
+    { name: 'link.stremio.com', url: 'https://link.stremio.com/api/v2/', init: { method: 'GET' } },
+    { name: 'Cinemeta', url: 'https://v3-cinemeta.strem.io/manifest.json', init: { method: 'GET' } },
+    { name: 'OpenSubtitles v3', url: 'https://opensubtitles-v3.strem.io/manifest.json', init: { method: 'GET' } },
+    { name: 'Torrentio', url: 'https://torrentio.strem.fun/manifest.json', init: { method: 'GET' } }
   ];
+  var STORE_KEY = 'alder-probe';
+  var STORE_VALUE = 'kept-across-launches';
+
+  // Phase 1 writes a value, phase 2 (a fresh launch) says whether it is still there. No phase: line left out.
+  function probeStorage(win, phase) {
+    if (!phase) return null;
+    try {
+      if (phase === 1) {
+        win.localStorage.setItem(STORE_KEY, STORE_VALUE);
+        return 'localStorage: written';
+      }
+      var got = win.localStorage.getItem(STORE_KEY);
+      return 'localStorage after relaunch: ' + (got === STORE_VALUE ? 'present' : 'missing');
+    } catch (err) {
+      return 'localStorage: FAILED (' + err.name + ')';
+    }
+  }
+
+  function engineVersions(ua) {
+    var webkit = /AppleWebKit\/([0-9.]+)/.exec(ua);
+    var safari = /Version\/([0-9.]+)/.exec(ua);
+    return ['WebKit version: ' + (webkit ? webkit[1] : 'unknown'), 'Safari version: ' + (safari ? safari[1] : 'unknown')];
+  }
 
   async function probeTarget(fetchFn, target) {
     try {
@@ -54,8 +80,8 @@
     }
   }
 
-  async function runProbe(win) {
-    var lines = ['userAgent: ' + win.navigator.userAgent];
+  async function runProbe(win, phase) {
+    var lines = ['userAgent: ' + win.navigator.userAgent].concat(engineVersions(win.navigator.userAgent));
     lines.push('origin: ' + (win.location ? win.location.origin : 'unavailable'));
     Object.keys(JS_FEATURES).forEach(function (name) {
       lines.push('js ' + name + ': ' + (JS_FEATURES[name](win) ? 'yes' : 'no'));
@@ -64,6 +90,8 @@
       var verdict = win.CSS && win.CSS.supports ? (win.CSS.supports(rule) ? 'yes' : 'no') : 'unavailable';
       lines.push('css ' + rule + ': ' + verdict);
     });
+    var store = probeStorage(win, phase);
+    if (store) lines.push(store);
     for (var i = 0; i < TARGETS.length; i++) {
       lines.push(await probeTarget(win.fetch.bind(win), TARGETS[i]));
     }

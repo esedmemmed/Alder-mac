@@ -51,6 +51,26 @@
     var bridge = AlderBridge.createBridge({ win: window, log: function (l) { console.log(l); } });
     var pos = 0, duration = 0, paused = false, dragging = false;
 
+    // Errors reach the shell's --report file through the bridge; a failing log call is dropped, never looped.
+    function sendLog(line) { bridge.log(line).catch(function () {}); }
+    window.onerror = function (msg, src, line) {
+      sendLog('error: ' + msg + ' (' + String(src || '').split('?')[0] + ':' + line + ')');
+    };
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e.reason;
+      sendLog('unhandled rejection: ' + (r && r.message ? r.message : String(r)));
+    });
+    // ?probe=1 or ?probe=2: run the probe, hand the text to the shell, quit. For the Air's --ui-check.
+    var probeRun = /[?&]probe=([12])(?:&|$)/.exec(window.location.search);
+    if (probeRun) {
+      var quitNow = function () { bridge.quit().catch(function () {}); };
+      AlderProbe.runProbe(window, Number(probeRun[1])).then(function (text) {
+        return bridge.report(text);
+      }).then(quitNow, function (err) {
+        bridge.log('probe failed: ' + (err && err.message)).then(quitNow, quitNow);
+      });
+    }
+
     function clock(s) {
       s = Math.floor(s);
       return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');

@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 # Only these paths go public. Anything new stays private until it is added here.
-ALLOW=(.gitattributes .github LICENSE README.md air docs/air mac scripts/publish.sh)
+ALLOW=(.gitattributes .github LICENSE README.md air docs/air mac scripts/publish.sh src test dev scripts index.html config.xml icon.png release package.json package-lock.json licenses docs/tizen)
 
 mkdir -p .run/1.1
 export GIT_INDEX_FILE=.run/1.1/publish.index

@@ -12,6 +12,9 @@ Usage:  python air/run_from_windows.py        (see air/RECIPE.md, "The easy way"
 With --shell-check (T7.1): steps 1 and 2 for SHELL_LABELS only, then the line typed on the Air plays
 docs/air/webview-1.1.md steps 7-11 in order, asking the add-on again for a fresh link before each play
 (GET /<token>/link/<label>?fresh=1), and sends the results back as above. Links stay in ~/AlderProof/{.link,.fresh,logs}.
+With --ui-check [--probe] (T2): no Stremio login and no links. The Air installs the newest app build and either runs
+the page probe twice (?probe=1, ?probe=2; the second launch shows whether localStorage kept its value) or opens
+the app plain for the user to try. Its --report text comes back with keys and links stripped, to --out/ui-report.txt.
 Python standard library only. Test hooks: --host, --api, --cooldown, --end, --out.
 """
 import argparse
@@ -38,7 +41,8 @@ PORT = 8765
 LABELS = ["720p-h264", "1080p-h264", "1080p-hevc8", "1080p-hevc10", "4k-hevc", "4k-h264", "dts", "truehd"]
 SHELL_LABELS = ["1080p-h264", "4k-hevc"]  # what docs/air/webview-1.1.md plays
 LINK_RE = re.compile(r"(?i)\b(?:https?|ftp)://\S*")
-TOKEN_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/o/1/l/i: it is typed by hand
+KEY_RE = re.compile(r"(?i)\b(auth_?key|password|token|api_?key)\b([\"']?\s*[:=]\s*[\"']?)[^\s,;\"']+")
+TOKEN_CHARS ="abcdefghjkmnpqrstuvwxyz23456789"  # no 0/o/1/l/i: it is typed by hand
 
 MOVIES = """tt0111161 tt0068646 tt0468569 tt0071562 tt0108052 tt0167260 tt0110912 tt0120737 tt0109830 tt1375666
 tt0137523 tt0080684 tt0133093 tt0099685 tt0167261 tt0114369 tt0102926 tt0120815 tt0816692 tt0172495
@@ -411,6 +415,85 @@ main "$@"
 '''
 
 
+UI_SCRIPT = r'''#!/bin/bash
+# Alder Air UI check (T2). Served by run_from_windows.py --ui-check; bash 3.2. No Stremio login, no links.
+main() {
+base="__BASE__"
+mode="__UIMODE__"
+dir=${ALDERPROOF_DIR:-$HOME/AlderProof}
+ALDERPROOF_BIN=${ALDERPROOF_BIN:-/Applications/AlderProof.app/Contents/MacOS/AlderProof}; export ALDERPROOF_BIN
+umask 077
+say() { curl -s -m 20 -X POST --data-binary "$1" "$base/status" >/dev/null 2>&1 </dev/null; echo "$1"; }
+cleanup() { rm -rf "$dir/ui-report.txt" "$dir/ui-report.clean"; }
+trap cleanup EXIT
+mkdir -p "$dir" || { say "cannot make $dir"; return 1; }
+say "air started: $(sw_vers -productVersion 2>/dev/null) $(sysctl -n hw.model 2>/dev/null)"
+
+appurl="__APPURL__"; apptag="__APPTAG__"
+if [ -n "$appurl" ]; then
+    if [ "$(cat "$dir/app/.tag" 2>/dev/null)" = "$apptag" ] && [ -x "$dir/app/AlderProof.app/Contents/MacOS/AlderProof" ]; then
+        ALDERPROOF_BIN="$dir/app/AlderProof.app/Contents/MacOS/AlderProof"; say "app $apptag already installed"
+    else
+        say "fetching app $apptag"
+        rm -rf "$dir/app" "$dir/mnt"; mkdir -p "$dir/app" "$dir/mnt"
+        if ! curl -fsSL -m 900 "$appurl" -o "$dir/AlderProof.dmg" </dev/null; then
+            say "app download failed; using the one in Applications if present"
+        elif ! hdiutil attach -nobrowse -readonly -mountpoint "$dir/mnt" "$dir/AlderProof.dmg" >/dev/null 2>&1; then
+            say "app dmg could not be mounted; using the one in Applications if present"
+        else
+            if ditto "$dir/mnt/AlderProof.app" "$dir/app/AlderProof.app" >/dev/null 2>&1; then
+                xattr -dr com.apple.quarantine "$dir/app/AlderProof.app" 2>/dev/null
+                echo "$apptag" > "$dir/app/.tag"
+                ALDERPROOF_BIN="$dir/app/AlderProof.app/Contents/MacOS/AlderProof"; say "app $apptag installed"
+            else
+                say "app could not be copied from the dmg; using the one in Applications if present"
+            fi
+            hdiutil detach "$dir/mnt" -force >/dev/null 2>&1
+        fi
+        rm -f "$dir/AlderProof.dmg"
+        [ -f "$dir/app/.tag" ] || rm -rf "$dir/app"
+    fi
+fi
+if [ ! -x "$ALDERPROOF_BIN" ]; then
+    say "the AlderProof app is missing at $ALDERPROOF_BIN"
+    echo "AlderProof is not in Applications. Install it (steps 2 to 4 of the steps page), then run this line again."
+    return 1
+fi
+
+# Strip keys and anything URL-like (with or without a query string) from the report before it leaves the Air.
+strip() {
+    sed -E -e 's#[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]]*#[link]#g' \
+        -e 's#([Aa]uth_?[Kk]ey|[Pp]assword|[Tt]oken|[Aa]pi_?[Kk]ey)(["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?)[^[:space:],;"'"'"']+#\1\2[removed]#g'
+}
+rep="$dir/ui-report.txt"
+rm -f "$rep"
+if [ "$mode" = "probe" ]; then
+    for n in 1 2; do
+        echo "== probe $n ==" >> "$rep"
+        say "probe $n: running (the window closes by itself)"
+        "$ALDERPROOF_BIN" --page "index.html?probe=$n" --report "$rep" </dev/null >/dev/null 2>&1
+        say "probe $n: exit $?"
+    done
+else
+    say "opening the app; use it, then quit it with Cmd-Q"
+    "$ALDERPROOF_BIN" --page index.html --report "$rep" </dev/null >/dev/null 2>&1
+    say "app closed: exit $?"
+fi
+[ -f "$rep" ] || echo "(the app wrote no report)" > "$rep"
+strip < "$rep" > "$dir/ui-report.clean"
+if curl -fsS -m 60 --data-binary @"$dir/ui-report.clean" "$base/ui-report" >/dev/null </dev/null; then
+    say "report sent"
+else
+    say "report could not be sent"
+fi
+cleanup
+echo
+echo "Finished. You can close this window."
+}
+main "$@"
+'''
+
+
 def air_script(base, labels, template=AIR_SCRIPT, app_url="", app_tag=""):
     return (template.replace("__BASE__", base).replace("__LABELS__", " ".join(labels))
             .replace("__APPURL__", app_url).replace("__APPTAG__", app_tag))
@@ -451,6 +534,7 @@ class State:
         self.contact = time.time()
         self.done = threading.Event()
         self.kept = None
+        self.ui_check = False
 
     def fresh(self, label):
         """The url for `label` asked of its add-on again now: the one whose release text matches, else the stored one.
@@ -486,6 +570,18 @@ def keep_results(data, out_dir):
                 f.write(text)
             files += 1
     return files, removed
+
+
+def keep_ui_report(data, out_dir):
+    """Write the posted --ui-check report to out_dir/ui-report.txt, links and keys stripped a second time.
+    Returns (files kept, items removed)."""
+    os.makedirs(out_dir, exist_ok=True)
+    text = data.decode("utf-8", "replace")
+    text, n = LINK_RE.subn("[link removed]", text)
+    text, k = KEY_RE.subn(r"\1\2[removed]", text)
+    with open(os.path.join(out_dir, "ui-report.txt"), "w", encoding="utf-8", newline="") as f:
+        f.write(text)
+    return 1, n + k
 
 
 def make_handler(st):
@@ -539,6 +635,14 @@ def make_handler(st):
                     return self._send(400)
                 st.done.set()
                 return self._send(200)
+            if r == ["ui-report"] and st.ui_check:
+                try:
+                    st.kept = keep_ui_report(body, st.out_dir)
+                except Exception as e:
+                    st.say("report could not be read (%s)" % type(e).__name__)
+                    return self._send(400)
+                st.done.set()
+                return self._send(200)
             self._send(404)
     return H
 
@@ -574,34 +678,41 @@ def main(argv=None, creds=None):
     ap.add_argument("--out", default=os.path.join(ROOT, ".run", "1.1", "air-results"))
     ap.add_argument("--idle", type=int, default=3 * 3600, help="give up after this many seconds without the Air")
     ap.add_argument("--port", type=int, default=PORT)
+    ap.add_argument("--ui-check", action="store_true", help="T2: install the app on the Air and check its page (no login)")
+    ap.add_argument("--probe", action="store_true", help="with --ui-check: run the page probe twice instead of opening the app")
     ap.add_argument("--shell-check", action="store_true", help="T7.1: the AlderProof shell check (webview-1.1 steps 7-11)")
     a = ap.parse_args(argv)
 
     def say(s):
         print(scrub(s), flush=True)
 
+    if a.probe and not a.ui_check:
+        ap.error("--probe goes with --ui-check")
     wanted = SHELL_LABELS if a.shell_check else LABELS
-    email, password = creds or (input("Stremio email: ").strip(), getpass.getpass("Stremio password (not shown): "))
-    try:
-        say("Logging in to Stremio...")
-        key = login(a.api, email, password)
-        say("Logged in. Looking for files; this takes a few minutes.")
-        sources = {}
-        links = find_links(a.api, key, say, labels=wanted, sources=sources)
-    except Exception as e:
-        say("Stopped: %s. Nothing was started." % (scrub(e) if isinstance(e, RuntimeError) else type(e).__name__))
-        return 1
-    finally:
-        password = key = None
-    found = [l for l in wanted if l in links]
-    say("Found: " + (", ".join(found) or "nothing"))
-    say("Missing: " + (", ".join(l for l in wanted if l not in links) or "none"))
-    if not found:
-        say("No playable file was found, so there is nothing to measure.")
-        return 1
-    if a.shell_check and "1080p-h264" not in links:
-        say("The check needs a 1080p-h264 file and none was found. Nothing was started.")
-        return 1
+    if a.ui_check:
+        links, sources, found = {}, {}, []  # no login, no links: nothing to find
+    else:
+        email, password = creds or (input("Stremio email: ").strip(), getpass.getpass("Stremio password (not shown): "))
+        try:
+            say("Logging in to Stremio...")
+            key = login(a.api, email, password)
+            say("Logged in. Looking for files; this takes a few minutes.")
+            sources = {}
+            links = find_links(a.api, key, say, labels=wanted, sources=sources)
+        except Exception as e:
+            say("Stopped: %s. Nothing was started." % (scrub(e) if isinstance(e, RuntimeError) else type(e).__name__))
+            return 1
+        finally:
+            password = key = None
+        found = [l for l in wanted if l in links]
+        say("Found: " + (", ".join(found) or "nothing"))
+        say("Missing: " + (", ".join(l for l in wanted if l not in links) or "none"))
+        if not found:
+            say("No playable file was found, so there is nothing to measure.")
+            return 1
+        if a.shell_check and "1080p-h264" not in links:
+            say("The check needs a 1080p-h264 file and none was found. Nothing was started.")
+            return 1
 
     host, others = (a.host, [a.host]) if a.host else lan_addresses()
     if not host:
@@ -621,18 +732,20 @@ def main(argv=None, creds=None):
         return 1
     base = "http://%s:%d/%s" % (host, server.server_address[1], token)
     app_tag, app_url = "", ""
-    if a.shell_check:
+    if a.shell_check or a.ui_check:
         rel = find_app_release()
         if rel:
             app_tag, app_url = rel
             say("Newest AlderProof build: %s (the Air will fetch it)." % app_tag)
         else:
             say("Could not look up the newest AlderProof build; the Air will use the app in Applications.")
-    script = air_script(base, found, SHELL_SCRIPT if a.shell_check else AIR_SCRIPT, app_url, app_tag)
+    template = UI_SCRIPT if a.ui_check else SHELL_SCRIPT if a.shell_check else AIR_SCRIPT
+    script = air_script(base, found, template, app_url, app_tag).replace("__UIMODE__", "probe" if a.probe else "open")
     if a.end:
         script = script.replace('main "$@"', 'MEASURE_END=%d; export MEASURE_END\nmain "$@"' % a.end)
     script = script.replace("cool=${ALDER_COOLDOWN:-180}", "cool=${ALDER_COOLDOWN:-%d}" % a.cooldown)
     st = State(token, links, script, a.out, say, sources=sources)
+    st.ui_check = a.ui_check
     holder["h"] = make_handler(st)
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
@@ -644,7 +757,12 @@ def main(argv=None, creds=None):
     if len(others) > 1:
         print("If that cannot connect, the Windows computer has other addresses: " + ", ".join(x for x in others if x != host))
     print("The Air must be on the same Wi-Fi. If Windows asks about the firewall, press Allow.")
-    if a.shell_check:
+    if a.ui_check:
+        if a.probe:
+            print("The Air opens the app twice for a few seconds each. Leave both computers alone; this window ends by itself.")
+        else:
+            print("The Air opens the app for you to use. Quit it with Cmd-Q when done; this window then ends by itself.")
+    elif a.shell_check:
         print("The check takes about an hour. Leave both computers alone; this window ends by itself.")
     else:
         print("The run takes about two hours. Leave both computers alone; this window ends by itself.")

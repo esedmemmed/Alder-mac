@@ -38,13 +38,15 @@ final class AlderSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
 }
 
-/// JS to native dispatcher: load, pause, seek, setProp, getProp, quit. Every message gets one reply event.
+/// JS to native dispatcher: load, pause, seek, setProp, getProp, quit, log, report. Every message gets one reply event.
 final class Bridge: NSObject, WKScriptMessageHandler {
     private let player: Player
+    private let reportPath: String?
     weak var webView: WKWebView?
 
-    init(player: Player) {
+    init(player: Player, reportPath: String? = nil) {
         self.player = player
+        self.reportPath = reportPath
         super.init()
         player.emit = { [weak self] event in self?.emit(event) }
     }
@@ -73,6 +75,18 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             return n.stringValue
         }
         return v as? String
+    }
+
+    /// Appends one line of text to the --report file, if given. Written at once so a quit right after loses nothing.
+    private func appendReport(_ text: String) {
+        guard let path = reportPath, let data = (text + "\n").data(using: .utf8) else { return }
+        if !FileManager.default.fileExists(atPath: path) {
+            FileManager.default.createFile(atPath: path, contents: nil)
+        }
+        guard let handle = FileHandle(forWritingAtPath: path) else { return }
+        handle.seekToEndOfFile()
+        handle.write(data)
+        handle.closeFile()
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -114,6 +128,20 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             }
             if let v = player.getString(name) { reply(id, ok: true, value: v) }
             else { reply(id, ok: false, error: "property unavailable") }
+        case "log":
+            guard let line = args["line"] as? String else {
+                reply(id, ok: false, error: "log needs line")
+                return
+            }
+            appendReport("log: " + line)
+            reply(id, ok: true)
+        case "report":
+            guard let text = args["text"] as? String else {
+                reply(id, ok: false, error: "report needs text")
+                return
+            }
+            appendReport(text)
+            reply(id, ok: true)
         case "quit":
             reply(id, ok: true)
             NSApp.terminate(nil)

@@ -25,7 +25,7 @@
     var props = { 'time-pos': null, pause: false, duration: null, 'hwdec-current': 'mock' };
     var failNext = false;
     var stopTicks = null;
-    var mock = { posted: [], delivered: [] };
+    var mock = { posted: [], delivered: [], logs: [], reports: [] };
 
     function emit(event) {
       var wire = JSON.parse(JSON.stringify(event));
@@ -90,6 +90,16 @@
       getProp: function (args) {
         if (!(args.name in props)) throw new Error('property unavailable');
         return { value: props[args.name] };
+      },
+      log: function (args) {
+        if (typeof args.line !== 'string') throw new Error('log needs line');
+        mock.logs.push(args.line);
+        return {};
+      },
+      report: function (args) {
+        if (typeof args.text !== 'string') throw new Error('report needs text');
+        mock.reports.push(args.text);
+        return {};
       },
       quit: function () { return { after: function () { if (stopTicks) endPlayback('quit'); } }; }
     };

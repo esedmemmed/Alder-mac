@@ -45,15 +45,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let win = NSWindow(contentRect: rect, styleMask: [.titled, .closable, .miniaturizable, .resizable],
                            backing: .buffered, defer: false)
         win.title = "Alder"
+        // The window fills the visible screen (under the menu bar and Dock); it stays resizable.
+        if let visible = NSScreen.main?.visibleFrame { win.setFrame(visible, display: false) } else { win.center() }
         win.backgroundColor = .black
         let content = NSView(frame: rect)
         win.contentView = content
 
         let video = VideoView(core: core)
         video.frame = content.bounds
+        video.autoresizingMask = [.width, .height]
         content.addSubview(video)
 
-        let bridge = Bridge(player: player)
+        let bridge = Bridge(player: player, reportPath: opts.report)
         self.bridge = bridge
         guard let root = Bundle.main.resourceURL?.appendingPathComponent("web") else { die("no bundled web directory") }
         let web = makeWebView(root: root, bridge: bridge)
@@ -61,7 +64,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         web.isHidden = !opts.overlayShown
         content.addSubview(web, positioned: .above, relativeTo: video)
         window = win
-        win.center()
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -72,7 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self?.opts.end != nil || self?.opts.measureScript != nil { NSApp.terminate(nil) }
         }
         player.startEvents()
-        web.load(URLRequest(url: URL(string: "alder://app/index.html")!))
+        guard let pageURL = URL(string: "alder://app/" + opts.page) else { die("bad --page \(opts.page)") }
+        web.load(URLRequest(url: pageURL))
         if let url = opts.url {
             let rc = player.command(["loadfile", url, "replace"], replyID: 0)
             if rc < 0 { fputs("AlderProof: loadfile refused: \(Player.errorText(rc))\n", stderr) }

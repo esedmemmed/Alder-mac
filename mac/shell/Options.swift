@@ -1,6 +1,6 @@
 // Command line of the shell. Shape is the contract in the phase plan:
 // AlderProof [--url <link>] [--overlay shown|hidden] [--end <seconds>] [--measure <script> --label <label>]
-//            [--hwdec <value>] [--selftest <file>]
+//            [--hwdec <value>] [--selftest <file>] [--page <file[?query]>] [--report <path>]
 import Foundation
 
 struct Options {
@@ -11,9 +11,12 @@ struct Options {
     var label: String?
     var hwdec = "videotoolbox"
     var selftest: String?
+    var page = "index.html"
+    var report: String?
 
     static let usage = "usage: AlderProof [--url <link>] [--overlay shown|hidden] [--end <seconds>] "
-        + "[--measure <script> --label <label>] [--hwdec <value>] [--selftest <file>]"
+        + "[--measure <script> --label <label>] [--hwdec <value>] [--selftest <file>] "
+        + "[--page <file[?query]>] [--report <path>]"
 
     /// Parses the arguments; prints the usage and exits 64 on anything it does not know.
     static func parse(_ argv: [String]) -> Options {
@@ -44,6 +47,8 @@ struct Options {
             case "--label": o.label = value(a)
             case "--hwdec": o.hwdec = value(a)
             case "--selftest": o.selftest = value(a)
+            case "--page": o.page = value(a)
+            case "--report": o.report = value(a)
             default:
                 if a.hasPrefix("-psn_") { break } // Finder launch argument
                 fail("unknown argument \(a)")

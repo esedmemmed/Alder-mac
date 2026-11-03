@@ -93,7 +93,7 @@ test('unknown commands never reach native', async () => {
   const { bridge, mock } = setup();
   await assert.rejects(bridge.send('rm', {}), /unknown command/);
   assert.equal(mock.posted.length, 0);
-  assert.deepEqual(COMMANDS, ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit']);
+  assert.deepEqual(COMMANDS, ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report']);
 });
 
 test('no native handler: send rejects, no throw', async () => {
@@ -235,9 +235,12 @@ test('probe reports the user agent, features and both fetches, and sends no cred
   assert.match(text, /css display: grid: yes/);
   assert.match(text, /css inset: 0: no/);
   assert.match(text, /api\.strem\.io: reached, status 200/);
-  assert.match(text, /public add-on manifest: FAILED, blocked by CORS, host reachable \(TypeError: Load failed\)/);
-  assert.equal(calls.length, 3);
-  assert.deepEqual(calls.map((c) => c.url).slice(0, 2), TARGETS.map((t) => t.url));
+  assert.match(text, /Cinemeta: FAILED, blocked by CORS, host reachable \(TypeError: Load failed\)/);
+  assert.equal(calls.length, TARGETS.length + 1); // plus the one no-cors retry after Cinemeta failed
+  assert.deepEqual(calls.map((c) => c.url).filter((u, i) => i !== 3), TARGETS.map((t) => t.url));
+  for (const host of ['api.strem.io', 'link.stremio.com', 'cinemeta', 'opensubtitles-v3', 'torrentio']) {
+    assert.ok(calls.some((c) => c.url.includes(host)), host);
+  }
   assert.ok(!/authKey/i.test(JSON.stringify(calls)));
 });
 
@@ -253,10 +256,59 @@ test('probe says offline when even no-cors fails, and copes with no CSS object',
   assert.match(text, /js WeakRef: no/);
 });
 
+test('probe parses WebKit and Safari versions from the user agent', async () => {
+  const win = {
+    Promise, Object, String, Array,
+    navigator: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6.1 Safari/605.1.15' },
+    fetch: async () => ({ status: 200 }),
+  };
+  const text = await runProbe(win);
+  assert.match(text, /WebKit version: 605\.1\.15/);
+  assert.match(text, /Safari version: 15\.6\.1/);
+  assert.doesNotMatch(text, /localStorage/);
+});
+
+test('probe localStorage: phase 1 writes, phase 2 finds it, a wiped store reads missing', async () => {
+  const data = new Map();
+  const storage = { setItem: (k, v) => data.set(k, String(v)), getItem: (k) => (data.has(k) ? data.get(k) : null) };
+  const mk = (localStorage) => ({ Promise, Object, String, Array, navigator: { userAgent: 'x' }, localStorage, fetch: async () => ({ status: 204 }) });
+  assert.match(await runProbe(mk(storage), 1), /localStorage: written/);
+  assert.match(await runProbe(mk(storage), 2), /localStorage after relaunch: present/);
+  data.clear();
+  assert.match(await runProbe(mk(storage), 2), /localStorage after relaunch: missing/);
+  const broken = { setItem() { throw new Error('denied'); }, getItem() { return null; } };
+  assert.match(await runProbe(mk(broken), 1), /localStorage: FAILED \(Error\)/);
+});
+
+test('log and report cross the bridge, are recorded by the mock, and carry no link', async () => {
+  const { bridge, mock, clock, lines } = setup();
+  const a = bridge.log('error: boom at ' + LINK);
+  const b = bridge.report('userAgent: x\nlink ' + LINK);
+  clock.advance(5);
+  await Promise.all([a, b]);
+  assert.deepEqual(mock.posted.map((m) => m.cmd), ['log', 'report']);
+  assert.deepEqual(mock.logs, ['error: boom at [link]']);
+  assert.deepEqual(mock.reports, ['userAgent: x\nlink [link]']);
+  assertNoLink(JSON.stringify(mock.delivered));
+  assertNoLink(lines.join('\n'));
+  const c = bridge.send('log', {});
+  clock.advance(5);
+  await assert.rejects(c, /log needs line/);
+});
+
 test('the page holds the control bar, a transparent background, and loads the mock only without native', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /html, body \{[^}]*background: transparent/);
   for (const id of ['bar', 'play', 'seek', 'pos', 'link', 'load', 'probe']) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(html, /messageHandlers\.alder\) \{\s*start\(\);/);
   assert.doesNotMatch(html, /<script src="mock-bridge\.js"/);
+});
+
+test('the page reports errors through the bridge and runs the probe on ?probe=1|2, then quits', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /window\.onerror/);
+  assert.match(html, /unhandledrejection/);
+  assert.match(html, /probe=\(\[12\]\)/);
+  assert.match(html, /bridge\.report\(text\)/);
+  assert.match(html, /bridge\.quit\(\)/);
 });
