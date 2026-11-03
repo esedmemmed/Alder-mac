@@ -137,6 +137,9 @@ function macPlatform() {
       });
       const patches = new Map([
         [join(ROOT, 'src/main.js'), MAIN_PATCHES],
+        // Safari before 16.4 (Big Sur, the Air) throws a SyntaxError on a lookbehind regex, and this one is built at module load: the
+        // whole bundle died before boot (black window, T3.1). Same word-start test without a lookbehind; Tizen's build keeps the original.
+        [join(ROOT, 'src/core/audio.js'), [["const START = '(?<![a-z0-9])'", "const START = '(?:^|[^a-z0-9])'"]]],
         [join(ROOT, 'src/screens/diagnostics.js'), [['deviceProfile({ webapis: window.webapis })', 'deviceProfile({})']]],
         [join(ROOT, 'src/screens/settings.js'), [['Alder for Tizen is a port of Alder', 'Alder for Mac is a port of Alder']]],
         // sign-in leads with e-mail + password in native fields (platform/mac/signin-form.js), Return continues the name step
@@ -192,7 +195,8 @@ export async function buildMac({ log = console.log, dev = false, outDir: outDirA
   const common = { bundle: true, target: MAC_TARGET, logLevel: 'silent', absWorkingDir: ROOT, legalComments: 'external', minify: !dev,
     // esbuild cannot lower destructuring for safari14 (a WebKit 14 bug in some destructuring forms), so it fails the build
     // instead; the shell's WebKit runs it as written (T3.c1 note; revisit if the Air shows a Safari 14 fault).
-    supported: { destructuring: true } };
+    supported: { destructuring: true,
+      'class-field': false } }; // pako's `class { options; }` fields: esbuild passes them for safari14, Safari 14.0 cannot parse them (14.1 can)
   await esbuild({ ...common, entryPoints: ['src/main.js'], outfile: join(outDir, 'app.js'), format: 'iife', define, plugins: [macPlatform()] });
   await esbuild({
     ...common, outfile: join(outDir, 'app.css'), plugins: [macPlatform()],

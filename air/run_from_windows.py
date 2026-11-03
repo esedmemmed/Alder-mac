@@ -476,7 +476,7 @@ if [ "$mode" = "probe" ]; then
     done
 else
     say "opening the app; use it, then quit it with Cmd-Q"
-    "$ALDERPROOF_BIN" --page proof.html --report "$rep" </dev/null >/dev/null 2>&1
+    "$ALDERPROOF_BIN" --page index.html --report "$rep" </dev/null >/dev/null 2>&1  # was proof.html: the 1.1 bar, black with no video (T9 Air walk)
     say "app closed: exit $?"
 fi
 [ -f "$rep" ] || echo "(the app wrote no report)" > "$rep"

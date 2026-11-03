@@ -497,7 +497,7 @@ class UiCheck(unittest.TestCase):
 
     def test_plain_open(self):
         report, calls = self.run_check([], 18795)
-        self.assertEqual(calls, ["proof.html"])
+        self.assertEqual(calls, ["index.html"])
         self.assertIn("log: plain run", report)
 
 

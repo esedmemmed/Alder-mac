@@ -13,7 +13,8 @@
     "test": "node --test \"test/**/*.test.js\" && node --test mac/web/test/",
     "compat": "node scripts/compat-check.mjs",
     "shots": "node dev/screenshot.mjs",
-    "shots:mac": "node dev/screenshot-mac.mjs"
+    "shots:mac": "node dev/screenshot-mac.mjs",
+    "check:mac": "node dev/check-mac-webkit.mjs"
   },
   "engines": {
     "node": ">=22"

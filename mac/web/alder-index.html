@@ -2,17 +2,68 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- Page log forwarder: first thing in the page, ES5 only, so a bundle that fails to parse still leaves a trace. It sends window
+       errors, unhandled rejections, console.error and the boot stages to the shell's --report file (bridge command `log`; no-op
+       outside the native shell). Links and query strings are cut from every line. -->
+  <script>
+  (function () {
+    var seq = 1000000000, bootDone = false;
+    function clean(s) {
+      s = String(s).replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]*|magnet:\?[^\s"'<>]*/gi, '[link]').replace(/\?[^\s"'<>]*/g, '?[cut]');
+      return s.length > 400 ? s.slice(0, 400) + '...' : s;
+    }
+    function send(line) {
+      try {
+        var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.alder;
+        if (h) h.postMessage({ id: seq++, cmd: 'log', args: { line: clean(line) } });
+      } catch (e) {}
+    }
+    window.__alderPageLog = send;
+    window.__alderBoot = function (stage) { send('boot: ' + stage); };
+    window.addEventListener('error', function (e) {
+      if (e && e.target && e.target !== window) { send('error: failed to load a ' + (e.target.tagName || 'resource').toLowerCase()); return; }
+      send('error: ' + (e && e.message) + (e && e.filename ? ' @' + String(e.filename).split('/').pop().split('?')[0] + ':' + e.lineno + ':' + e.colno : ''));
+    }, true);
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e && e.reason;
+      send('unhandledrejection: ' + (r && r.message ? r.message : r));
+    });
+    if (window.console && console.error) {
+      var orig = console.error;
+      console.error = function () {
+        var parts = [];
+        for (var i = 0; i < arguments.length; i++) { var a = arguments[i]; parts.push(a && a.message ? a.message : (typeof a === 'object' ? '[object]' : a)); }
+        send('console.error: ' + parts.join(' '));
+        return orig.apply(console, arguments);
+      };
+    }
+    // the first screen is the first thing in #app; nothing in src/ announces it, so watch for it (and say so if it never comes)
+    window.__alderWatchApp = function () {
+      var app = document.getElementById('app');
+      function seen() { if (!bootDone && app && app.childNodes.length) { bootDone = true; send('boot: first screen'); return true; } return false; }
+      if (!app || seen()) return;
+      if (window.MutationObserver) new MutationObserver(function (m, o) { if (seen()) o.disconnect(); }).observe(app, { childList: true });
+      setTimeout(function () {
+        if (!bootDone) send('boot: no first screen after 5s (#app children ' + app.childNodes.length + ', window ' + window.innerWidth + 'x' + window.innerHeight + ')');
+      }, 5000);
+    };
+    send('boot: html');
+  })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Alder</title>
   <link rel="stylesheet" href="app.css">
   <!-- The Mac page (npm run build:mac copies it to dist-mac/index.html): no Samsung webapis, no fixed 1920 viewport.
        bridge.js is the 1.1 native bridge (mac/web/bridge.js). -->
   <script src="bridge.js"></script>
+  <script>window.__alderBoot('bridge ' + (window.AlderBridge ? 'loaded' : 'missing'));</script>
 </head>
 <body>
   <div id="app"></div>
   <div id="overlay"></div>
   <div id="toast"></div>
+  <script>window.__alderWatchApp();</script>
   <script src="app.js"></script>
+  <script>window.__alderBoot('app.js loaded');</script>
 </body>
 </html>
