@@ -105,3 +105,27 @@ test('two embedded text tracks + one add-on subtitle: the add-on is selected by 
   assert.equal(mpv.addSubtitle('', {}), false);
   assert.ok(mock.posted.every((m) => !/https?:/.test(JSON.stringify(m.args)) || m.cmd === 'load'), 'no link on the wire but load');
 });
+
+test('Mac build: Subtitle timing steps are 0.1 s from -2 s to +2 s; the shared list stays Alder\'s', async () => {
+  const { readFileSync, writeFileSync, rmSync } = await import('node:fs');
+  const { fileURLToPath, pathToFileURL } = await import('node:url');
+  const { TRACKS_PATCHES } = await import('../../scripts/build.mjs');
+  const src = fileURLToPath(new URL('../../src/player/tracks.js', import.meta.url));
+  const copy = fileURLToPath(new URL('../../src/player/tracks.mac-test.js', import.meta.url));
+  let text = readFileSync(src, 'utf8');
+  for (const [from, to] of TRACKS_PATCHES) {
+    assert.ok(text.includes(from), 'anchor present: ' + from);
+    text = text.split(from).join(to);
+  }
+  writeFileSync(copy, text);
+  let mac;
+  try { mac = await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  assert.equal(mac.TIMING_STEPS.length, 41);
+  assert.equal(mac.TIMING_STEPS[0], -2000);
+  assert.equal(mac.TIMING_STEPS[20], 0);
+  assert.equal(mac.TIMING_STEPS[40], 2000);
+  assert.ok(mac.TIMING_STEPS.every((v, i) => i === 0 || v - mac.TIMING_STEPS[i - 1] === 100));
+  assert.equal(mac.timingLabel(100), '+0.1 s  later');
+  const shared = await import('../../src/player/tracks.js');
+  assert.deepEqual([...shared.TIMING_STEPS], [-2000, -1000, -500, 0, 500, 1000, 2000]);
+});

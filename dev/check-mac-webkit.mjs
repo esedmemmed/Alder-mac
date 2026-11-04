@@ -101,6 +101,24 @@ try {
     return bad;
   });
   if (unpositioned.length) fail('focus-fill ::before is absolute but the element is not positioned (it would fill its panel): ' + unpositioned.join(' ')); else ok('focus-fill ::before: every host element is positioned');
+  // Safari 14 ignores focus({preventScroll}): focusing a card off the edge scrolls its overflow:hidden ancestors (T12.1.1: the Home side
+  // menu was cut in half while a row edge-scrolled). Fake that focus here; layout.js must put every such scroll back at once.
+  const scrolled = await page.evaluate(async () => {
+    const plain = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function () { return plain.call(this); }; // no options: as Safari 14
+    const box = document.createElement('div');
+    box.className = 'screen';
+    box.style.cssText += ';width:400px;height:200px;overflow:hidden';
+    box.innerHTML = '<div style="position:relative;width:3000px;height:100px"><button id="far" style="position:absolute;left:2000px;top:0">x</button></div>';
+    document.body.appendChild(box);
+    document.getElementById('far').focus();
+    await new Promise((r) => setTimeout(r, 200));
+    const out = { box: box.scrollLeft, root: document.scrollingElement.scrollLeft, body: document.body.scrollLeft };
+    box.remove();
+    HTMLElement.prototype.focus = plain;
+    return out;
+  });
+  if (scrolled.box || scrolled.root || scrolled.body) fail('a focus without preventScroll (Safari 14) scrolled a clipped ancestor and it stayed: ' + JSON.stringify(scrolled)); else ok('focus without preventScroll: clipped ancestors are put back at once');
   // the page log forwarder (mac/web/alder-index.html): boot stages arrive as bridge `log` commands, never with a link or a query string
   const posted = await page.evaluate(() => window.__posted);
   const lines = posted.filter((m) => m.cmd === 'log').map((m) => m.args.line);

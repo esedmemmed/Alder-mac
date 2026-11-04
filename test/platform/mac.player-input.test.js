@@ -169,3 +169,22 @@ test('Settings (T12): mac.css positions .sg-group so its focus-fill ::before sta
   assert.match(readFileSync(new URL('../../src/platform/mac/mac.css', import.meta.url), 'utf8'), /^\.sg-group \{ position: relative; \}/m);
   assert.match(readFileSync(new URL('../../dev/check-mac-webkit.mjs', import.meta.url), 'utf8'), /focus-fill ::before is absolute but the element is not positioned/);
 });
+
+test('a click on the video with the options panel open closes it like Esc and does not pause; a click on the panel itself does nothing', () => {
+  const r = rig({ blocked: true });
+  const keys = [];
+  let open = true;
+  const input = createPlayerInput({
+    controls: { quiet: (fn) => fn() }, engine: { snapshot: () => ({}), togglePlay: () => keys.push('toggle') }, avplay: {}, fullscreen() {}, hit: (t) => t,
+    menu: { key: (e) => { keys.push(e.action); if (e.action === 'back') open = false; } }, blocked: () => open, menuOpen: () => open, timers: r.t, ui: {},
+  });
+  input.click({ target: { kind: 'panel' }, detail: 1 });
+  r.t.advance(CLICK_DELAY + 1);
+  assert.deepEqual(keys, [], 'the panel itself is left alone');
+  input.click({ target: VIDEO, detail: 1 });
+  r.t.advance(CLICK_DELAY + 1);
+  assert.deepEqual(keys, ['back']);
+  input.click({ target: VIDEO, detail: 1 });
+  r.t.advance(CLICK_DELAY + 1);
+  assert.deepEqual(keys, ['back', 'toggle'], 'closed: the next click is the plain pause click again');
+});

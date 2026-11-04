@@ -16,7 +16,26 @@ Fixing tasks:
 - T11.1 subtitles from every add-on, every language (`src/core/playback.js` chooseAddonSubtitles cap and language filter)
 - T12 player mouse, control bar on hover, volume, readable settings
 
-## Walk 2: push 3 (after T11.1, T12 and a green app.yml)
+## Walk 2: app-46744f8, 2026-11-04 (push 3)
 Command: `PY air/run_from_windows.py --ui-check --out .run/1.3/walk`, then he uses the app.
-Report: `docs/air/raw-1.3/ui-report-walk2.txt` (pending).
-His words: pending.
+Report: none arrived in `.run/1.3/walk` (not filed).
+His words, summarised:
+- newly added add-on subtitles load: ok (T11.1)
+- click plays and pauses; double-click toggles fullscreen: ok (T12)
+- control bar shows on mouse movement: ok (T12)
+- volume buttons and M mute work: ok (T12)
+- Settings is fixed, readable: ok (T12)
+- clicking a subtitle (or audio) entry in the player menu does not select it; arrows and OK do: defect -> T12.1
+- the display/system sleeps during playback: defect -> T12.1 (power assertion while playing)
+- wants Up/Down to change volume during playback when no menu has focus: request -> T12.1
+- hovering a row on home and the library races it sideways: defect -> T12.1 (edge-only, calm scroll)
+- during playback only Esc goes back; no way back with the mouse: defect -> T12.1 (Back button top-left, with the control bar, same as Esc)
+- wants the subtitle language remembered across episodes: scope of phase 1.4, not 1.3
+
+Fixing task: T12.1. Walk 3 follows on the T12.1 build (push 4).
+
+## Walk 3: push 4 (pending his walk)
+Command: `PY air/run_from_windows.py --ui-check --out .run/1.3/walk3`, then he uses the app.
+Report: to be filed stripped as `docs/air/raw-1.3/ui-check-walk3.json` (walk 2 filed none).
+Walk-2 defects to check: subtitle pick by mouse; screen kept awake while playing; Up/Down volume keys; home-row hover scroll speed; Back button top-left.
+His words: (pending)

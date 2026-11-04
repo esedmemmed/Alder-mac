@@ -134,6 +134,11 @@ export const RANKING_PATCHES = [
   ['const best = eligible.find(quiet) || null', 'const best = eligible.find(s => quiet(s) && (!tv.autoOk || tv.autoOk(s))) || null'],
 ];
 
+// Mac-only subtitle timing: 0.1 s steps from -2 s to +2 s (Alder's list is -2, -1, -0.5, 0, 0.5, 1, 2 s). src/player/tracks.js stays untouched.
+export const TRACKS_PATCHES = [
+  ['Object.freeze([-2000, -1000, -500, 0, 500, 1000, 2000])', 'Object.freeze(Array.from({ length: 41 }, (_, i) => (i - 20) * 100))'],
+];
+
 /** esbuild plugin: `#platform/<name>` resolves to src/platform/mac/<name>.js, so shared code never branches at run time. */
 function macPlatform() {
   return {
@@ -185,6 +190,7 @@ function macPlatform() {
           ['if (mediaKey(evt)) return true;', 'if (macFullscreenKey(evt)) return true;\n      if (macPlayerKey(evt)) return true;\n      if (mediaKey(evt)) return true;'],
         ]],
         // hover moves the highlight only: a card focused by the pointer (platform/mac/pointer.js sets window.__macHover) does not slide its row
+        [join(ROOT, 'src/player/tracks.js'), TRACKS_PATCHES],
         [join(ROOT, 'src/ui/row.js'), [['reveal(i, true);', 'if (!window.__macHover) reveal(i, true);']]],
         // "TV" wording: the Mac build says Mac (and "Check the Mac's internet connection")
         [join(ROOT, 'src/screens/home.js'), [["Check the TV's connection.", "Check the Mac's internet connection."]]],

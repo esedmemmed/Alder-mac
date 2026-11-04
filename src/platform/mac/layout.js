@@ -22,3 +22,13 @@ export function applyLayout(win = window) {
 
 applyLayout();
 window.addEventListener('resize', () => applyLayout());
+
+// Safari 14 ignores focus({ preventScroll: true }), so focusing a card past a row's edge scrolls the overflow:hidden ancestors
+// (.screen, body, html) sideways and cuts the side menu in half (T12.1.1). Nothing in the app scrolls by scrollLeft/Top (rows and
+// lists move by transform), so any such scroll is put back at once, before the frame paints. Text fields scroll their own text.
+window.addEventListener('scroll', (e) => {
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+  const el = !t || t === document || t === document.documentElement ? document.scrollingElement : t;
+  if (el && (el.scrollLeft || el.scrollTop)) { el.scrollLeft = 0; el.scrollTop = 0; }
+}, true);

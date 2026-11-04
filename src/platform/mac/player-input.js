@@ -7,6 +7,7 @@
  *   mouse, pointer, wheel     the controls come up (and the cursor shows); IDLE_MS without any, while playing, they go down and the
  *                             cursor goes with them (class mac-idle on the screen, mac.css)
  *   click on a row of the Audio & subtitles panel   the row is chosen as arrow keys + OK would (the panel's own key handler)
+ *   click on the video while the Audio & subtitles panel is open   closes it as Esc does (the panel's Back key); no play / pause
  *   click on Back (top left of the bar)   the Back key's end: engine.exit() (save the place, return to the screen playback started from)
  *   Up / Down (no panel or card open), M volume +/- VOLUME_STEP, mute; the level shows for OSD_MS (.mac-osd)
  * Volume rides the wire's `volume` (avplay.setVolume -> setProp): the shell does not allow `mute`, so mute is volume 0 with the level kept.
@@ -22,12 +23,13 @@ const BUTTON_IDS = ['audio', 'stream', 'play', 'next', 'info']; // the .pl-btn o
 
 /**
  * hit(target) -> { kind: 'btn', id } | { kind: 'bar', fraction } | { kind: 'vol' } | { kind: 'video' }; a click may carry its own e.fraction (0..1) for the bar
- * hit may also say { kind: 'row', index, at } (a row of the open options panel: its index and the focused row's) or { kind: 'back' }.
+ * hit may also say { kind: 'row', index, at } (a row of the open options panel: its index and the focused row's), { kind: 'panel' } (the open panel, not a row) or { kind: 'back' }.
  * menu: the options panel's key(evt); a row click walks it to the row with Up / Down presses and presses OK.
  * ui: { cursor(on), osd(text), vol(level, muted) }; every one optional.
  * blocked(): the options panel or a card is up (the mouse leaves them alone).
+ * menuOpen(): the options panel is up; a click on the video then closes it (menu.key back) instead of pausing.
  */
-export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, menu = null, blocked = () => false, timers, ui = {} }) {
+export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, menu = null, blocked = () => false, menuOpen = () => false, timers, ui = {} }) {
   const later = timers.setTimeout, cancel = timers.clearTimeout;
   let pending = null, idle = null, osdTimer = null;
   let level = 100, muted = false;
@@ -84,6 +86,7 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, m
       }
       return true;
     }
+    if (h.kind === 'panel') return true;
     if (h.kind === 'back') { if (!blocked()) engine.exit(); return true; }
     if (h.kind === 'btn') {
       if (!blocked()) { controls.show(h.id); controls.key({ type: 'press', action: 'ok', repeat: false }); }
@@ -95,6 +98,7 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, m
       if (!blocked() && d > 0 && f >= 0) engine.seekTo(f * d);
       return true;
     }
+    if (menuOpen()) { if (menu) menu.key({ type: 'press', action: 'back', repeat: false }); return true; } // outside the panel: close it like Esc
     if (blocked()) return true;
     if (e.detail >= 2) { cancel(pending); pending = null; return true; } // the second click of a double click
     cancel(pending);
@@ -151,6 +155,7 @@ export function bindPlayerInput({ root, controls, options, engine, avplay, fulls
     const t = target && target.closest ? target : null;
     if (t && t.closest('.mac-vol')) return { kind: 'vol' };
     if (t && t.closest('.mac-back')) return { kind: 'back' };
+    if (t && options.isOpen() && t.closest('.pl-options') && !t.closest('.pl-options .pl-row')) return { kind: 'panel' };
     const prow = t && options.isOpen() ? t.closest('.pl-options .pl-row') : null;
     if (prow) {
       const all = Array.prototype.slice.call(prow.parentNode.querySelectorAll('.pl-row'));
@@ -174,7 +179,7 @@ export function bindPlayerInput({ root, controls, options, engine, avplay, fulls
   if (bar) bar.appendChild(back);
   const bound = createPlayerInput({
     controls, engine, avplay, fullscreen, timers, ui, hit, menu: options,
-    blocked: () => options.isOpen() || controls.cardOpen(),
+    blocked: () => options.isOpen() || controls.cardOpen(), menuOpen: () => options.isOpen(),
   });
   mute.addEventListener('click', (e) => { e.stopPropagation(); bound.toggleMute(); });
   down.addEventListener('click', (e) => { e.stopPropagation(); bound.stepVolume(-1); });
