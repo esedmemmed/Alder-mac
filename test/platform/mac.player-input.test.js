@@ -127,15 +127,41 @@ test('Up / Down with the bar hidden and M drive volume through setProp on the mo
   assert.equal(input.key({ type: 'press', action: 'left', repeat: false }), false);
 });
 
-test('Up / Down are the bar\'s while it is shown; the level shows then goes after OSD_MS; M is the M key', () => {
+test('Up / Down are volume whenever no panel or card is open (bar shown too); a panel keeps them; M is the M key', () => {
   const r = rig({ shown: true });
-  assert.equal(r.input.key({ type: 'press', action: 'up' }), false);
+  assert.equal(r.input.key({ type: 'press', action: 'up' }), true);
+  assert.deepEqual(r.vols, [100]);
+  r.st.blocked = true;
+  assert.equal(r.input.key({ type: 'press', action: 'down' }), false);
+  r.st.blocked = false;
   assert.equal(r.input.key({ type: 'press', action: 'mute' }), true);
-  assert.deepEqual(r.vols, [0]);
-  assert.deepEqual(r.calls, ['osd:Muted']);
+  assert.deepEqual(r.vols, [100, 0]);
   r.t.advance(OSD_MS);
-  assert.deepEqual(r.calls, ['osd:Muted', 'osd:null']);
+  assert.equal(r.calls[r.calls.length - 1], 'osd:null');
   assert.equal(actionFor(77), 'mute');
+});
+
+test('a click on an options row walks the panel to it and presses OK; Back runs engine.exit()', () => {
+  const r = rig({ blocked: true });
+  const keys = [];
+  let exited = 0;
+  const input = createPlayerInput({
+    controls: {}, engine: { exit: () => exited++, snapshot: () => ({}) }, avplay: {}, fullscreen() {}, hit: (t) => t, menu: { key: (e) => keys.push(e.action) },
+    blocked: () => true, timers: r.t, ui: {},
+  });
+  input.click({ target: { kind: 'row', index: 5, at: 2 }, detail: 1 });
+  assert.deepEqual(keys, ['down', 'down', 'down', 'ok']);
+  keys.length = 0;
+  input.click({ target: { kind: 'row', index: 1, at: 2 }, detail: 1 });
+  assert.deepEqual(keys, ['up', 'ok']);
+  keys.length = 0;
+  input.click({ target: { kind: 'row', index: 2, at: 2 }, detail: 1 });
+  assert.deepEqual(keys, ['ok']);
+  input.click({ target: { kind: 'back' }, detail: 1 });
+  assert.equal(exited, 0, 'blocked: a panel is up');
+  const free = createPlayerInput({ controls: {}, engine: { exit: () => exited++ }, avplay: {}, fullscreen() {}, hit: (t) => t, blocked: () => false, timers: r.t, ui: {} });
+  free.click({ target: { kind: 'back' }, detail: 1 });
+  assert.equal(exited, 1);
 });
 
 test('Settings (T12): mac.css positions .sg-group so its focus-fill ::before stays in its row (check:mac fails without it)', async () => {

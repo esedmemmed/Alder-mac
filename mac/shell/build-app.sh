@@ -30,7 +30,7 @@ BIN=$APP/Contents/MacOS/AlderProof
 swiftc -target x86_64-apple-macos11.0 -O -swift-version 5 \
   -Xfrontend -disable-implicit-concurrency-module-import \
   -import-objc-header "$HERE/bridging.h" -Xcc "-I$STACK/include" \
-  -framework AppKit -framework WebKit -framework OpenGL -framework QuartzCore -framework CoreAudio \
+  -framework AppKit -framework WebKit -framework OpenGL -framework QuartzCore -framework CoreAudio -framework IOKit \
   -L"$STACK/lib" -lmpv \
   -o "$BIN" \
   "$HERE/main.swift" "$HERE/Options.swift" "$HERE/Selftest.swift" "$HERE/Player.swift" \

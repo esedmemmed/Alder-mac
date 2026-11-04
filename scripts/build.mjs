@@ -184,6 +184,8 @@ function macPlatform() {
           ['controls.setSubtitleRaise((up) => subtitles.raise(up));', 'controls.setSubtitleRaise((up) => subtitles.raise(up));\n      macUnbindInput = macBindInput({ root: el, controls, options, engine, avplay: macAv, fullscreen: macFullscreenKey });'],
           ['if (mediaKey(evt)) return true;', 'if (macFullscreenKey(evt)) return true;\n      if (macPlayerKey(evt)) return true;\n      if (mediaKey(evt)) return true;'],
         ]],
+        // hover moves the highlight only: a card focused by the pointer (platform/mac/pointer.js sets window.__macHover) does not slide its row
+        [join(ROOT, 'src/ui/row.js'), [['reveal(i, true);', 'if (!window.__macHover) reveal(i, true);']]],
         // "TV" wording: the Mac build says Mac (and "Check the Mac's internet connection")
         [join(ROOT, 'src/screens/home.js'), [["Check the TV's connection.", "Check the Mac's internet connection."]]],
         [join(ROOT, 'src/screens/addons.js'), [["Check the TV's internet.", "Check the Mac's internet connection."]]],

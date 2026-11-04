@@ -43,7 +43,11 @@ html.av-live, html.av-live body, html.av-live #app, html.av-live .pl-screen { ba
   margin-left: 12px; min-width: 64px; height: 56px; padding: 0 20px; border-radius: 28px; border: var(--hairline) solid var(--glass-edge);
   background: rgba(14, 12, 10, 0.6); color: var(--text); font: inherit; font-size: var(--fs-small); cursor: pointer;
 }
-.mac-vol-btn:hover { background: var(--focus-fill); color: var(--focus-ink); }
+.mac-vol-btn:hover, .mac-back:hover { background: var(--focus-fill); color: var(--focus-ink); }
+.mac-back {
+  position: absolute; left: 96px; top: 130px; height: 64px; padding: 0 32px; border-radius: 32px; border: var(--hairline) solid var(--glass-edge);
+  background: rgba(14, 12, 10, 0.72); color: var(--text); font: inherit; font-size: var(--fs-body); pointer-events: auto; cursor: pointer;
+}
 .mac-vol-level { margin-left: 16px; min-width: 88px; color: var(--text-2); font-size: var(--fs-small); text-align: right; }
 .mac-osd {
   position: absolute; left: 50%; top: 120px; width: 360px; margin-left: -180px; padding: 16px 0; border-radius: 20px; text-align: center;

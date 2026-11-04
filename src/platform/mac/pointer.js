@@ -8,6 +8,9 @@ const OK_KEYCODE = 13;
 export const WHEEL_THRESHOLD = 40; // px of wheel travel per step
 export const WHEEL_INTERVAL = 140; // ms between steps: trackpad inertia would otherwise run through a whole row
 export const WHEEL_IDLE = 220;     // ms of quiet after which a new gesture starts from zero
+export const EDGE_MAX = 80;        // px: the edge zone of a row is 10% of its width, at most this
+export const EDGE_FRACTION = 0.1;
+export const EDGE_INTERVAL = 450;  // ms between the steps a pointer held in an edge zone gives (calm: about two cards a second)
 
 function isTextField(el) {
   const tag = el && el.tagName ? String(el.tagName).toUpperCase() : '';
@@ -47,6 +50,43 @@ export function wheelStep(state, e, now) {
   return { state: next, dir };
 }
 
+/** 'left' | 'right' when [x] (client px) is within the edge zone of [rect], else null. */
+export function edgeDir(x, rect) {
+  const w = rect.right - rect.left;
+  if (!(w > 0)) return null;
+  const zone = Math.min(EDGE_MAX, w * EDGE_FRACTION);
+  if (x - rect.left < zone) return 'left';
+  if (rect.right - x < zone) return 'right';
+  return null;
+}
+
+/**
+ * Hover scrolls a Home / library row only from its edge zones: while the pointer stays there, one step per EDGE_INTERVAL
+ * (the focus moves along the row, the row follows as it does for the keyboard). [timers] = { setInterval, clearInterval }.
+ */
+export function createEdgeScroller({ engine, timers }) {
+  let timer = null, row = null, dir = null;
+  const stop = () => { if (timer !== null) timers.clearInterval(timer); timer = null; row = null; dir = null; };
+  function tick() {
+    if (!row || !row.isConnected) { stop(); return; }
+    const cur = engine.current();
+    if (!(cur && row.contains(cur))) { engine.focus(row); return; }
+    const card = cur.closest ? cur.closest('.card') : null;
+    if (dir === 'left' && card && Number(card.getAttribute('data-index')) <= 0) return; // the first card: nothing to scroll back to
+    engine.move(dir);
+  }
+  function over(target, x) {
+    const r = target && target.closest ? target.closest('.row[data-focus-group]') : null;
+    const d = r ? edgeDir(x, r.getBoundingClientRect()) : null;
+    if (!d) { stop(); return; }
+    if (r === row && d === dir) return;
+    stop();
+    row = r; dir = d;
+    timer = timers.setInterval(tick, EDGE_INTERVAL);
+  }
+  return { over, stop, active: () => timer !== null };
+}
+
 /** Wires the mouse and trackpad to [engine] (the focus engine). Returns a function that removes the listeners. */
 export function installPointer(engine, win = window) {
   const doc = win.document;
@@ -61,9 +101,13 @@ export function installPointer(engine, win = window) {
     pos = { x: e.screenX, y: e.screenY };
     if (!moved) return;
     const el = hoverTarget(e.target, engine.current(), inScope);
-    if (el) engine.focus(el);
+    // Hover only moves the highlight: the row it sits in must not slide under the pointer (win.__macHover: the Mac patch of
+    // src/ui/row.js's focusin skips its reveal). A row scrolls from its edge zones (createEdgeScroller).
+    if (el) { win.__macHover = true; try { engine.focus(el); } finally { win.__macHover = false; } }
   };
-  const onMove = (e) => { pos = { x: e.screenX, y: e.screenY }; };
+  const edge = createEdgeScroller({ engine, timers: { setInterval: (f, ms) => win.setInterval(f, ms), clearInterval: (i) => win.clearInterval(i) } });
+  const onMove = (e) => { pos = { x: e.screenX, y: e.screenY }; edge.over(e.target, e.clientX); };
+  const onStop = () => edge.stop();
 
   // Click = OK. The pointer's own click is swallowed and replayed as Return on the focused item (keydown, keyup), so the
   // screen's onKey and engine.press() see exactly what the keyboard gives them and each click handler runs once.
@@ -73,6 +117,7 @@ export function installPointer(engine, win = window) {
     if (!el || el.hasAttribute('data-disabled')) return;
     e.preventDefault();
     e.stopPropagation();
+    edge.stop();
     if (engine.current() !== el) engine.focus(el);
     for (const type of ['keydown', 'keyup']) {
       const k = new win.Event(type, { bubbles: true, cancelable: true });
@@ -85,6 +130,7 @@ export function installPointer(engine, win = window) {
   const onWheel = (e) => {
     if (e.ctrlKey) return; // a pinch
     e.preventDefault();
+    edge.stop();
     const r = wheelStep(wheel, e, Date.now());
     wheel = r.state;
     if (!r.dir) return;
@@ -98,11 +144,16 @@ export function installPointer(engine, win = window) {
 
   doc.addEventListener('mouseover', onOver, true);
   doc.addEventListener('mousemove', onMove, true);
+  doc.documentElement.addEventListener('mouseleave', onStop);
+  win.addEventListener('keydown', onStop, true);
   win.addEventListener('click', onClick, true);
   win.addEventListener('wheel', onWheel, { passive: false, capture: true });
   return () => {
     doc.removeEventListener('mouseover', onOver, true);
     doc.removeEventListener('mousemove', onMove, true);
+    doc.documentElement.removeEventListener('mouseleave', onStop);
+    win.removeEventListener('keydown', onStop, true);
+    edge.stop();
     win.removeEventListener('click', onClick, true);
     win.removeEventListener('wheel', onWheel, { capture: true });
   };

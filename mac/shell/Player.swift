@@ -3,6 +3,7 @@
 // Nothing here logs, stores or emits the link: load arguments are passed straight to mpv.
 import Foundation
 import OpenGL
+import IOKit.pwr_mgt
 
 final class Player {
     let handle: OpaquePointer
@@ -19,6 +20,10 @@ final class Player {
     private var pageNames: Set<String> = ["time-pos", "duration", "pause"]
     private var observing: Set<String> = []
     private var lastValue: [String: Any] = [:]
+    /// Keep-awake: a no-display-sleep assertion held only while a file is loaded and mpv is not paused.
+    private var fileLoaded = false
+    private var paused = false
+    private var awake: IOPMAssertionID = 0
 
     /// The names the page may observe, set or read (docs/ops/INDEX.md, Bridge v2 wire).
     static let observable: Set<String> = [
@@ -183,6 +188,8 @@ final class Player {
                     if let t = m.text { recorder?.log(String(cString: t)) }
                 }
             } else if id == MPV_EVENT_FILE_LOADED {
+                fileLoaded = true
+                updateAwake()
                 emit?(["type": "fileLoaded"])
             } else if id == MPV_EVENT_PLAYBACK_RESTART {
                 // Info line for the measuring runs: the decoder in use, never the link.
@@ -213,6 +220,8 @@ final class Player {
             if let detail = getString("file-error"), !detail.isEmpty { message += ": " + detail }
             e["message"] = stripURLs(message)
         }
+        fileLoaded = false
+        updateAwake()
         recorder?.end(reason)
         emit?(e)
         onEndFile?(reason)
@@ -243,6 +252,7 @@ final class Player {
         }
         recorder?.prop(name, value)
         lastValue[name] = value
+        if name == "pause", let b = value as? Bool { paused = b; updateAwake() }
         if !pageNames.contains(name) { return }
         // time-pos changes every frame: pass it on four times a second, the overlay needs no more.
         if name == "time-pos" {
@@ -278,12 +288,28 @@ final class Player {
         return NSNull()
     }
 
+    /// Holds the assertion while playing, drops it otherwise (pause, end of file, sleep, exit).
+    private func updateAwake() {
+        let want = fileLoaded && !paused && !destroyed
+        if want && awake == 0 {
+            IOPMAssertionCreateWithName(kIOPMAssertionTypeNoDisplaySleep as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                                        "Alder is playing" as CFString, &awake)
+        } else if !want && awake != 0 {
+            IOPMAssertionRelease(awake)
+            awake = 0
+        }
+    }
+
+    /// The sleep notification: let go now, whatever mpv reports next.
+    func releaseAwake() { paused = true; updateAwake() }
+
     // MARK: teardown
 
     /// Update callback cleared and render context freed under the GL lock, then the core destroyed.
     func shutdown() {
         guard !destroyed else { return }
         destroyed = true
+        updateAwake()
         down = true
         mpv_set_wakeup_callback(handle, nil, nil)
         core?.destroyRender()

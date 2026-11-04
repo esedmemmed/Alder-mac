@@ -6,7 +6,9 @@
  *   click on the bar          acts on the bar only: a button does what OK does on it, the line seeks, the volume buttons set the volume
  *   mouse, pointer, wheel     the controls come up (and the cursor shows); IDLE_MS without any, while playing, they go down and the
  *                             cursor goes with them (class mac-idle on the screen, mac.css)
- *   Up / Down (bar hidden), M volume +/- VOLUME_STEP, mute; the level shows for OSD_MS (.mac-osd)
+ *   click on a row of the Audio & subtitles panel   the row is chosen as arrow keys + OK would (the panel's own key handler)
+ *   click on Back (top left of the bar)   the Back key's end: engine.exit() (save the place, return to the screen playback started from)
+ *   Up / Down (no panel or card open), M volume +/- VOLUME_STEP, mute; the level shows for OSD_MS (.mac-osd)
  * Volume rides the wire's `volume` (avplay.setVolume -> setProp): the shell does not allow `mute`, so mute is volume 0 with the level kept.
  * createPlayerInput is DOM-free (hit() and ui are injected: test/platform/mac.player-input.test.js); bindPlayerInput is the DOM glue.
  */
@@ -20,10 +22,12 @@ const BUTTON_IDS = ['audio', 'stream', 'play', 'next', 'info']; // the .pl-btn o
 
 /**
  * hit(target) -> { kind: 'btn', id } | { kind: 'bar', fraction } | { kind: 'vol' } | { kind: 'video' }; a click may carry its own e.fraction (0..1) for the bar
+ * hit may also say { kind: 'row', index, at } (a row of the open options panel: its index and the focused row's) or { kind: 'back' }.
+ * menu: the options panel's key(evt); a row click walks it to the row with Up / Down presses and presses OK.
  * ui: { cursor(on), osd(text), vol(level, muted) }; every one optional.
  * blocked(): the options panel or a card is up (the mouse leaves them alone).
  */
-export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, blocked = () => false, timers, ui = {} }) {
+export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, menu = null, blocked = () => false, timers, ui = {} }) {
   const later = timers.setTimeout, cancel = timers.clearTimeout;
   let pending = null, idle = null, osdTimer = null;
   let level = 100, muted = false;
@@ -72,6 +76,15 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, b
     const h = hit(e.target);
     if (h.kind === 'vol') return true; // the volume buttons act in their own handlers
     if (e.stopPropagation) e.stopPropagation();
+    if (h.kind === 'row') {
+      if (menu && h.index >= 0) {
+        const dir = h.index < h.at ? 'up' : 'down';
+        for (let i = Math.abs(h.index - h.at); i > 0; i--) menu.key({ type: 'press', action: dir, repeat: false });
+        menu.key({ type: 'press', action: 'ok', repeat: false });
+      }
+      return true;
+    }
+    if (h.kind === 'back') { if (!blocked()) engine.exit(); return true; }
     if (h.kind === 'btn') {
       if (!blocked()) { controls.show(h.id); controls.key({ type: 'press', action: 'ok', repeat: false }); }
       return true;
@@ -101,7 +114,7 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, b
   function key(evt) {
     if (!evt || evt.type !== 'press' || blocked()) return false;
     if (evt.action === 'mute') { if (!evt.repeat) toggleMute(); return true; }
-    if ((evt.action === 'up' || evt.action === 'down') && !controls.shown()) { stepVolume(evt.action === 'up' ? 1 : -1); return true; }
+    if ((evt.action === 'up' || evt.action === 'down') && true) { stepVolume(evt.action === 'up' ? 1 : -1); return true; }
     return false;
   }
 
@@ -137,6 +150,12 @@ export function bindPlayerInput({ root, controls, options, engine, avplay, fulls
   const hit = (target) => {
     const t = target && target.closest ? target : null;
     if (t && t.closest('.mac-vol')) return { kind: 'vol' };
+    if (t && t.closest('.mac-back')) return { kind: 'back' };
+    const prow = t && options.isOpen() ? t.closest('.pl-options .pl-row') : null;
+    if (prow) {
+      const all = Array.prototype.slice.call(prow.parentNode.querySelectorAll('.pl-row'));
+      return { kind: 'row', index: all.indexOf(prow), at: all.findIndex((r) => r.classList.contains('focus')) };
+    }
     const btn = t && t.closest('.pl-btn');
     if (btn) {
       const cells = Array.prototype.filter.call(btn.closest('.pl-buttons').children, (c) => c.classList.contains('pl-cell'));
@@ -151,8 +170,10 @@ export function bindPlayerInput({ root, controls, options, engine, avplay, fulls
     const px = ((e.clientX - r.left) / r.width) * BAR_WIDTH;
     return Math.max(0, Math.min(1, (px - BAR_END) / (BAR_WIDTH - 2 * BAR_END)));
   };
+  const back = mk('mac-back', '‹  Back', 'button');
+  if (bar) bar.appendChild(back);
   const bound = createPlayerInput({
-    controls, engine, avplay, fullscreen, timers, ui, hit,
+    controls, engine, avplay, fullscreen, timers, ui, hit, menu: options,
     blocked: () => options.isOpen() || controls.cardOpen(),
   });
   mute.addEventListener('click', (e) => { e.stopPropagation(); bound.toggleMute(); });
@@ -180,6 +201,7 @@ export function bindPlayerInput({ root, controls, options, engine, avplay, fulls
     bound.dispose();
     root.classList.remove('mac-idle');
     if (vol.parentNode) vol.parentNode.removeChild(vol);
+    if (back.parentNode) back.parentNode.removeChild(back);
     if (osd.parentNode) osd.parentNode.removeChild(osd);
   };
 }

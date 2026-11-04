@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func watchPowerAndAudio() {
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.player?.releaseAwake()
             _ = self?.player?.setString("pause", "yes")
             self?.bridge?.emit(["type": "sleep"])
         }
