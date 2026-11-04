@@ -12,7 +12,7 @@ import { buildReport } from '../../src/screens/diagnostics.js';
 import { createDiag } from '../../src/player/diag.js';
 import { createLogger } from '../../src/lib/log.js';
 import { createRequire } from 'node:module';
-import { buildMac } from '../../scripts/build.mjs';
+import { buildMacAppJs } from './mac-build-lock.js';
 
 const require = createRequire(import.meta.url);
 const bridgeFactory = require('../../mac/web/bridge.js');
@@ -204,8 +204,7 @@ test('Diagnostics export: no shell says so, a failed save says so; the name is t
 });
 
 test('build:mac says Mac, not TV, and carries the lifecycle and export hooks', async () => {
-  await buildMac({ log: () => {} });
-  const js = readFileSync(fileURLToPath(new URL('../../dist-mac/app.js', import.meta.url)), 'utf8');
+  const js = await buildMacAppJs();
   assert.ok(js.includes("Check the Mac's internet connection."));
   assert.ok(!js.includes("Check the TV's"), 'a TV connection hint survived');
   assert.ok(!/this TV|the TV's|My TV plays|TV language|TV interface|your TV/.test(js.replace(/\/\/.*$/gm, '')), 'a TV wording survived');

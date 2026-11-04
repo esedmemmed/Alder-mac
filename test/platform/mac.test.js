@@ -7,7 +7,7 @@ import { actionFor, attachKeys, registerKeys, REGISTER_KEYS } from '../../src/pl
 import { deviceProfile, describeDevice } from '../../src/platform/mac/device.js';
 import { createTvLanguage, twoLetters } from '../../src/platform/mac/language.js';
 import { macQuit, resetMacBridge } from '../../src/platform/mac/bridge.js';
-import { buildMac } from '../../scripts/build.mjs';
+import { buildMacAppJs } from './mac-build-lock.js';
 
 const require = createRequire(import.meta.url);
 const bridgeFactory = require('../../mac/web/bridge.js');
@@ -98,8 +98,7 @@ test('Mac exit: macQuit sends quit over the bridge; without a native shell it is
 });
 
 test('build:mac output holds no Tizen or webapis calls', async () => {
-  await buildMac({ log: () => {} });
-  const js = readFileSync(fileURLToPath(new URL('../../dist-mac/app.js', import.meta.url)), 'utf8');
+  const js = await buildMacAppJs();
   // (the Diagnostics screen's "AVPLAY TRACKS" heading is a label, not a call; the bare name `webapis` survives only as a parameter name)
   assert.ok(!/tizen/i.test(js), 'app.js mentions tizen');
   assert.ok(!/webapis\.|window\.webapis|application\/avplayer/.test(js), 'app.js reaches for webapis');

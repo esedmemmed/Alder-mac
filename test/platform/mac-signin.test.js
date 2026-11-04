@@ -7,7 +7,7 @@ import { createLogger } from '../../src/lib/log.js';
 import { KEYS } from '../../src/core/keys.js';
 import { passwordSignIn } from '../../src/platform/mac/signin-form.js';
 import { attachKeys } from '../../src/platform/mac/keys.js';
-import { buildMac } from '../../scripts/build.mjs';
+import { buildMacAppJs } from './mac-build-lock.js';
 import { fakeHttp, memoryStore } from '../core/helpers.js';
 
 const KEY = 'FIXTURE-AUTH-KEY-0001'; // dev/fixtures/api.strem.io/api/login.json
@@ -74,8 +74,7 @@ test('Mac keys: in a text field Backspace, Space, digits, letters and left / rig
 });
 
 test('build:mac: sign-in holds the native form, search no longer shows the letter grid, osk.js is the native one', async () => {
-  await buildMac({ log: () => {} });
-  const js = readFileSync(fileURLToPath(new URL('../../dist-mac/app.js', import.meta.url)), 'utf8');
+  const js = await buildMacAppJs();
   assert.ok(js.includes('Sign in to Stremio'));
   assert.ok(js.includes('osk-native'));
   assert.ok(!js.includes('TV keyboard'), 'the Tizen on-screen keyboard is in the Mac bundle');
