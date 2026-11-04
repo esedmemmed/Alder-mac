@@ -188,3 +188,92 @@ test('a click on the video with the options panel open closes it like Esc and do
   r.t.advance(CLICK_DELAY + 1);
   assert.deepEqual(keys, ['back', 'toggle'], 'closed: the next click is the plain pause click again');
 });
+
+// ---- the real hit() in bindPlayerInput: fake elements with closest (the full-screen .pl-options / .pl-cardhost layers must not swallow clicks) ----
+import { bindPlayerInput } from '../../src/platform/mac/player-input.js';
+
+/** el('div', 'pl-options', parent): closest() handles '.a', '.a .b' and comma lists over the class chain. */
+function el(tag, cls, parent = null, extra = {}) {
+  const e = { tagName: tag.toUpperCase(), className: cls, parentNode: parent, ...extra };
+  const has = (n, c) => (' ' + n.className + ' ').includes(' ' + c + ' ');
+  e.classList = { contains: (c) => has(e, c), toggle() {}, add() {}, remove() {} };
+  e.closest = (sel) => {
+    for (const part of sel.split(',').map((s) => s.trim())) {
+      const [a, b] = part.split(/\s+/);
+      for (let n = e; n; n = n.parentNode) {
+        if (has(n, (b || a).slice(1)) && (!b || (() => { for (let p = n.parentNode; p; p = p.parentNode) if (has(p, a.slice(1))) return true; return false; })())) return n;
+      }
+    }
+    return null;
+  };
+  return e;
+}
+
+function domRig({ options = false, card = null } = {}) {
+  const calls = [], logs = [], listeners = {};
+  const st = { options, card };
+  const mkEl = () => ({ className: '', appendChild() {}, addEventListener() {}, classList: { toggle() {}, add() {}, remove() {} }, parentNode: null });
+  const doc = { createElement: mkEl, addEventListener: (n, f) => { listeners[n] = f; }, removeEventListener() {} };
+  const win = { document: doc, setTimeout: (f) => { calls.push('timer'); return 1; }, clearTimeout() {}, AlderBridge: { createBridge: () => ({ log: (l) => { logs.push(l); return Promise.resolve(); } }) } };
+  const controls = {
+    el: { querySelector: (s) => (s === '.pl-card' && st.card ? { classList: { contains: (c) => c === 'pl-' + st.card } } : null) },
+    cardOpen: () => !!st.card, show() {}, hide() {}, quiet: (fn) => fn(), key: (e) => { calls.push('ckey:' + e.action); if (e.action === 'back') st.card = null; },
+  };
+  const options_ = { isOpen: () => st.options, key: (e) => { calls.push('okey:' + e.action); if (e.action === 'back') st.options = false; } };
+  const engine = { snapshot: () => ({ playing: true, duration: 1000 }), togglePlay: () => calls.push('toggle'), exit() {} };
+  const root = { appendChild() {}, classList: { toggle() {}, remove() {} } };
+  const unbind = bindPlayerInput({ root, controls, options: options_, engine, avplay: {}, fullscreen() {}, win });
+  const click = (target) => listeners.click({ target, isTrusted: true, detail: 1, stopPropagation() {} });
+  return { calls, logs, click, st, unbind };
+}
+
+test('real hit(): a click on the full-screen .pl-options root closes the open options panel (no pause); the panel itself is left alone', () => {
+  const r = domRig({ options: true });
+  const root = el('div', 'pl-options');
+  const panel = el('div', 'pl-opt-panel', root);
+  const row = el('div', 'pl-row', el('div', 'pl-opt-scroll', panel));
+  r.click(panel);
+  r.click(el('div', 'pl-opt-bar', root));
+  assert.deepEqual(r.calls, [], 'inside the visible menu: nothing');
+  r.click(root);
+  assert.deepEqual(r.calls, ['okey:back']);
+  assert.equal(r.st.options, false);
+  assert.match(r.logs[r.logs.length - 1], /^menu-click: open=options target=div\.pl-options kind=video action=close$/);
+  assert.ok(!r.calls.includes('toggle'));
+  r.unbind();
+  void row;
+});
+
+test('real hit(): a click on a row of the open options panel is still a row hit', () => {
+  const r = domRig({ options: true });
+  const root = el('div', 'pl-options');
+  const list = el('div', 'pl-opt-scroll', el('div', 'pl-opt-panel', root));
+  const a = el('div', 'pl-row focus', list), b = el('div', 'pl-row', list);
+  list.querySelectorAll = () => [a, b];
+  a.parentNode = list;
+  b.parentNode = list;
+  r.click(b);
+  assert.deepEqual(r.calls, ['okey:down', 'okey:ok'], 'walked to the row and pressed OK');
+});
+
+for (const kind of ['info', 'upnext', 'stall', 'error']) {
+  test('real hit(): ' + kind + ' card closes on a click outside its box (the card host layer counts as the video) and is left alone inside', () => {
+    const r = domRig({ card: kind });
+    const host = el('div', 'pl-cardhost');
+    const card = el('div', 'pl-card pl-' + kind, host);
+    r.click(el('div', 'pl-pill', card));
+    assert.deepEqual(r.calls, [], 'inside the card: unchanged');
+    assert.match(r.logs[0], new RegExp('^menu-click: open=card:' + kind + ' target=div\.pl-pill kind=card action=card$'));
+    r.click(host);
+    assert.deepEqual(r.calls, ['ckey:back']);
+    assert.equal(r.st.card, null);
+    assert.match(r.logs[1], new RegExp('open=card:' + kind + ' target=div\.pl-cardhost kind=video action=close$'));
+    r.unbind();
+  });
+}
+
+test('real hit(): with nothing open a click is the plain pause click and logs nothing', () => {
+  const r = domRig();
+  r.click(el('div', 'pl-cardhost'));
+  assert.deepEqual(r.logs, []);
+});

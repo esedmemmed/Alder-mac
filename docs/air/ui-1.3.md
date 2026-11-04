@@ -34,8 +34,26 @@ His words, summarised:
 
 Fixing task: T12.1. Walk 3 follows on the T12.1 build (push 4).
 
-## Walk 3: push 4 (pending his walk)
+## Walk 3: app-27da36d, 2026-11-05 (push 4)
 Command: `PY air/run_from_windows.py --ui-check --out .run/1.3/walk3`, then he uses the app.
-Report: to be filed stripped as `docs/air/raw-1.3/ui-check-walk3.json` (walk 2 filed none).
+Report: none arrived (`.run/1.3/walk3` absent on 2026-11-05); nothing filed in `docs/air/raw-1.3/`.
 Walk-2 defects to check: subtitle pick by mouse; screen kept awake while playing; Up/Down volume keys; home-row hover scroll speed; Back button top-left.
-His words: (pending)
+His words:
+- row scroll on home and the library is slower now: fixed
+- subtitle pick by mouse works: fixed
+- scrolling a row right or left splits the screen in two and cuts the side menu (Home, Movies, My list) in half: defect -> T12.1.1 (side menu stays whole and fixed, only the row moves)
+- with the subtitle or audio menu open, a click on the video does not close it: defect -> T12.1.1 (closes like Esc, no play/pause toggle)
+- subtitle delay steps of 0.25 s are too coarse: defect -> T12.1.1 (0.1 s on the Mac; Tizen unchanged)
+
+Fixing task: T12.1.1. Walk 4 follows on the T12.1.1 build (push 5).
+
+## Walk 4: app-d380b3d, 2026-11-05 (push 5)
+His words:
+- the side menu no longer splits when a row scrolls: fixed
+- the screen stays awake while playing: fixed
+- Up and Down change the volume: works
+- the Back button works
+- subtitle delay steps of 0.1 s work
+- with the subtitle or audio menu open, a click on the video still does not close it: defect -> T12.1.1.1
+
+Cause found (from code): the full-size `.pl-options` root swallowed the click as a 'panel' hit, so the close never ran. Fixing task: T12.1.1.1 (only the visible panel and bar count as the menu; cards close the same way; each click while a menu or card is open logs a `menu-click:` line). Walk 5 checks the `menu-click:` lines in the ui-check report.

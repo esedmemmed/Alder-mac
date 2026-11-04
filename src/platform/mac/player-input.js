@@ -8,11 +8,15 @@
  *                             cursor goes with them (class mac-idle on the screen, mac.css)
  *   click on a row of the Audio & subtitles panel   the row is chosen as arrow keys + OK would (the panel's own key handler)
  *   click on the video while the Audio & subtitles panel is open   closes it as Esc does (the panel's Back key); no play / pause
+ *     (the video = anywhere outside the visible panel and its bar; the full-screen .pl-options root is not the panel)
+ *   click on the video while a card is open (Info, Up next, stall, Source failed)   closes it as Back does; no play / pause
  *   click on Back (top left of the bar)   the Back key's end: engine.exit() (save the place, return to the screen playback started from)
  *   Up / Down (no panel or card open), M volume +/- VOLUME_STEP, mute; the level shows for OSD_MS (.mac-osd)
  * Volume rides the wire's `volume` (avplay.setVolume -> setProp): the shell does not allow `mute`, so mute is volume 0 with the level kept.
  * createPlayerInput is DOM-free (hit() and ui are injected: test/platform/mac.player-input.test.js); bindPlayerInput is the DOM glue.
  */
+import { macBridge } from './bridge.js';
+
 export const CLICK_DELAY = 250; // ms a single click waits for a second one
 export const IDLE_MS = 3000;    // ms without pointer activity after which the controls and the cursor go
 export const VOLUME_STEP = 5;
@@ -28,8 +32,13 @@ const BUTTON_IDS = ['audio', 'stream', 'play', 'next', 'info']; // the .pl-btn o
  * ui: { cursor(on), osd(text), vol(level, muted) }; every one optional.
  * blocked(): the options panel or a card is up (the mouse leaves them alone).
  * menuOpen(): the options panel is up; a click on the video then closes it (menu.key back) instead of pausing.
+ * cardOpen(): a card (Info, Up next, stall, Source failed) is up; a click outside its box closes it as Back does (controls.key back).
+ *   hit says { kind: 'card' } for a click inside the card's own box (left alone; pointer.js replays it as OK).
+ * openName() -> '' | 'options' | 'card:<kind>' and log(open, hitKind, action): one diagnostic line per click while something is up (bridge log).
+ * hit() in the DOM glue: the options root (.pl-options) and the card host (.pl-cardhost) are full-screen transparent layers, so only the
+ *   visible boxes count (panel, bar, elapsed, left; .pl-card): a click on the layer itself is the video.
  */
-export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, menu = null, blocked = () => false, menuOpen = () => false, timers, ui = {} }) {
+export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, menu = null, blocked = () => false, menuOpen = () => false, cardOpen = () => false, openName = () => '', log = null, timers, ui = {} }) {
   const later = timers.setTimeout, cancel = timers.clearTimeout;
   let pending = null, idle = null, osdTimer = null;
   let level = 100, muted = false;
@@ -76,7 +85,9 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, m
   function click(e) {
     if (e.isTrusted === false) return false;
     const h = hit(e.target);
-    if (h.kind === 'vol') return true; // the volume buttons act in their own handlers
+    const open = log ? openName() : ''; // what is up before this click acts (a close changes it)
+    const say = (action) => { if (open) log(open, h.kind, action); return true; };
+    if (h.kind === 'vol') return say('vol'); // the volume buttons act in their own handlers
     if (e.stopPropagation) e.stopPropagation();
     if (h.kind === 'row') {
       if (menu && h.index >= 0) {
@@ -84,22 +95,24 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, m
         for (let i = Math.abs(h.index - h.at); i > 0; i--) menu.key({ type: 'press', action: dir, repeat: false });
         menu.key({ type: 'press', action: 'ok', repeat: false });
       }
-      return true;
+      return say('row');
     }
-    if (h.kind === 'panel') return true;
-    if (h.kind === 'back') { if (!blocked()) engine.exit(); return true; }
+    if (h.kind === 'panel') return say('panel');
+    if (h.kind === 'card') return say('card'); // inside a card's own box: pointer.js replays it as OK
+    if (h.kind === 'back') { if (!blocked()) engine.exit(); return say('back'); }
     if (h.kind === 'btn') {
       if (!blocked()) { controls.show(h.id); controls.key({ type: 'press', action: 'ok', repeat: false }); }
-      return true;
+      return say('btn');
     }
     if (h.kind === 'bar') {
       const d = engine.snapshot().duration;
       const f = e.fraction !== undefined ? e.fraction : h.fraction;
       if (!blocked() && d > 0 && f >= 0) engine.seekTo(f * d);
-      return true;
+      return say('bar');
     }
-    if (menuOpen()) { if (menu) menu.key({ type: 'press', action: 'back', repeat: false }); return true; } // outside the panel: close it like Esc
-    if (blocked()) return true;
+    if (menuOpen()) { if (menu) menu.key({ type: 'press', action: 'back', repeat: false }); return say('close'); } // outside the panel: close it like Esc
+    if (cardOpen()) { controls.key({ type: 'press', action: 'back', repeat: false }); return say('close'); } // outside the card: close it like Back
+    if (blocked()) return say('ignored');
     if (e.detail >= 2) { cancel(pending); pending = null; return true; } // the second click of a double click
     cancel(pending);
     pending = later(() => { pending = null; controls.quiet(() => engine.togglePlay()); }, CLICK_DELAY);
@@ -155,12 +168,14 @@ export function bindPlayerInput({ root, controls, options, engine, avplay, fulls
     const t = target && target.closest ? target : null;
     if (t && t.closest('.mac-vol')) return { kind: 'vol' };
     if (t && t.closest('.mac-back')) return { kind: 'back' };
-    if (t && options.isOpen() && t.closest('.pl-options') && !t.closest('.pl-options .pl-row')) return { kind: 'panel' };
     const prow = t && options.isOpen() ? t.closest('.pl-options .pl-row') : null;
+    // the visible menu only: the .pl-options root is a transparent full-screen layer and counts as the video
+    if (t && options.isOpen() && !prow && t.closest('.pl-opt-panel, .pl-opt-bar, .pl-opt-elapsed, .pl-opt-left')) return { kind: 'panel' };
     if (prow) {
       const all = Array.prototype.slice.call(prow.parentNode.querySelectorAll('.pl-row'));
       return { kind: 'row', index: all.indexOf(prow), at: all.findIndex((r) => r.classList.contains('focus')) };
     }
+    if (t && controls.cardOpen() && t.closest('.pl-card')) return { kind: 'card' };
     const btn = t && t.closest('.pl-btn');
     if (btn) {
       const cells = Array.prototype.filter.call(btn.closest('.pl-buttons').children, (c) => c.classList.contains('pl-cell'));
@@ -177,9 +192,27 @@ export function bindPlayerInput({ root, controls, options, engine, avplay, fulls
   };
   const back = mk('mac-back', '‹  Back', 'button');
   if (bar) bar.appendChild(back);
+  let lastTarget = null;
+  const cardKind = () => {
+    const c = controls.el.querySelector('.pl-card');
+    const cl = c ? c.classList : null;
+    return !cl ? '?' : cl.contains('pl-info') ? 'info' : cl.contains('pl-upnext') ? 'upnext' : cl.contains('pl-error') ? 'error' : 'stall';
+  };
+  const describe = (t) => {
+    if (!t || !t.tagName) return '?';
+    const c = typeof t.className === 'string' ? t.className : (t.getAttribute && t.getAttribute('class')) || '';
+    return t.tagName.toLowerCase() + (c ? '.' + c.trim().split(/\s+/).join('.') : '');
+  };
+  // one bridge log line per click while a menu or card is up (the shell's report carries it as `log: ...`); no links, no addresses
+  const log = (open, kind, action) => {
+    const b = macBridge(win);
+    if (!b || !b.log) return;
+    try { const p = b.log('menu-click: open=' + open + ' target=' + describe(lastTarget) + ' kind=' + kind + ' action=' + action); if (p && p.catch) p.catch(() => {}); } catch (e) { /* no shell */ }
+  };
   const bound = createPlayerInput({
-    controls, engine, avplay, fullscreen, timers, ui, hit, menu: options,
-    blocked: () => options.isOpen() || controls.cardOpen(), menuOpen: () => options.isOpen(),
+    controls, engine, avplay, fullscreen, timers, ui, hit, menu: options, log,
+    blocked: () => options.isOpen() || controls.cardOpen(), menuOpen: () => options.isOpen(), cardOpen: () => controls.cardOpen(),
+    openName: () => (options.isOpen() ? 'options' : controls.cardOpen() ? 'card:' + cardKind() : ''),
   });
   mute.addEventListener('click', (e) => { e.stopPropagation(); bound.toggleMute(); });
   down.addEventListener('click', (e) => { e.stopPropagation(); bound.stepVolume(-1); });
@@ -187,6 +220,7 @@ export function bindPlayerInput({ root, controls, options, engine, avplay, fulls
 
   const onClick = (e) => {
     if (!e.isTrusted) return;
+    lastTarget = e.target;
     const h = hit(e.target);
     bound.click(h.kind === 'bar' ? { target: e.target, detail: e.detail, stopPropagation: () => e.stopPropagation(), fraction: barFraction(e) } : e);
   };
