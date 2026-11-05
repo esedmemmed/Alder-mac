@@ -277,3 +277,52 @@ test('real hit(): with nothing open a click is the plain pause click and logs no
   r.click(el('div', 'pl-cardhost'));
   assert.deepEqual(r.logs, []);
 });
+
+// ---- wheel / trackpad over an open menu (T12.1.1.1.1): the list scrolls, the event is consumed, volume and seek never move
+function wheelRig({ menu = true, card = false } = {}) {
+  const keys = [], vols = [], seeks = [];
+  const st = { menu, card };
+  const engine = { snapshot: () => ({ playing: true, duration: 600000 }), seekTo: (ms) => seeks.push(ms) };
+  const input = createPlayerInput({
+    controls: { shown: () => false, show() {}, hide() {}, quiet: (f) => f(), key() {} }, engine, avplay: { setVolume: (v) => vols.push(v) },
+    fullscreen() {}, hit: () => VIDEO, timers: clock(), menu: { key: (e) => keys.push(e.action) },
+    blocked: () => st.menu || st.card, menuOpen: () => st.menu, cardOpen: () => st.card,
+  });
+  const ev = (dy, dx = 0) => { const e = { deltaY: dy, deltaX: dx, prevented: false, preventDefault() { e.prevented = true; } }; return e; };
+  return { input, keys, vols, seeks, st, ev };
+}
+
+test('wheel over an open menu steps the list down and up and is consumed', () => {
+  const r = wheelRig();
+  const e1 = r.ev(60);
+  assert.equal(r.input.wheel(e1, 1000), true);
+  assert.equal(e1.prevented, true);
+  assert.equal(r.input.wheel(r.ev(-60), 1500), true);
+  assert.deepEqual(r.keys, ['down', 'up']);
+  assert.deepEqual(r.vols, []);
+  assert.deepEqual(r.seeks, []);
+});
+
+test('wheel over an open menu: small travel adds up, inertia is throttled, sideways does not move the list', () => {
+  const r = wheelRig();
+  r.input.wheel(r.ev(20), 1000);
+  assert.deepEqual(r.keys, []);
+  r.input.wheel(r.ev(30), 1010);
+  assert.deepEqual(r.keys, ['down']);
+  r.input.wheel(r.ev(80), 1020);
+  assert.deepEqual(r.keys, ['down'], 'inside WHEEL_INTERVAL: no second step');
+  r.input.wheel(r.ev(0, 90), 2000);
+  assert.deepEqual(r.keys, ['down'], 'sideways: consumed, no step');
+});
+
+test('wheel with a card open is consumed without stepping; with nothing open it is left to the page', () => {
+  const r = wheelRig({ menu: false, card: true });
+  const e = r.ev(80);
+  assert.equal(r.input.wheel(e, 1000), true);
+  assert.equal(e.prevented, true);
+  assert.deepEqual(r.keys, []);
+  r.st.card = false;
+  const e2 = r.ev(80);
+  assert.equal(r.input.wheel(e2, 3000), false);
+  assert.equal(e2.prevented, false);
+});

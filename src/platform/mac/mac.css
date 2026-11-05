@@ -54,3 +54,10 @@ html.av-live, html.av-live body, html.av-live #app, html.av-live .pl-screen { ba
   background: rgba(14, 12, 10, 0.78); color: var(--text); font-size: var(--fs-body); opacity: 0; transition: opacity 150ms linear; pointer-events: none;
 }
 .mac-osd.on { opacity: 1; }
+
+/* Back on the other screens (platform/mac/back-button.js): same look as the player's, top left, over the screen */
+.mac-screen-back {
+  position: absolute; left: 96px; top: 36px; height: 64px; padding: 0 32px; border-radius: 32px; border: var(--hairline) solid var(--glass-edge);
+  background: rgba(14, 12, 10, 0.72); color: var(--text); font: inherit; font-size: var(--fs-body); cursor: pointer;
+}
+.mac-screen-back:hover { background: var(--focus-fill); color: var(--focus-ink); }

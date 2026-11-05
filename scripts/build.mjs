@@ -118,8 +118,9 @@ const MAC_SWAPS = {
 };
 // src/main.js is shared and holds the Tizen exit and key registration: the Mac plugin patches its text on load (and throws if a piece moved).
 const MAIN_PATCHES = [ // also diagnostics.js (webapis) and settings.js (the About text) below
-  ["import { installed as polyfilled } from './lib/compat.js';", "import { installed as polyfilled } from './lib/compat.js';\nimport { macExit, installMacLifecycle } from './platform/mac/lifecycle.js';\nimport './platform/mac/layout.js';\nimport { installPointer, installPlayHook } from './platform/mac/index.js';"],
+  ["import { installed as polyfilled } from './lib/compat.js';", "import { installed as polyfilled } from './lib/compat.js';\nimport { macExit, installMacLifecycle } from './platform/mac/lifecycle.js';\nimport './platform/mac/layout.js';\nimport { installPointer, installPlayHook, installBackButton } from './platform/mac/index.js';"],
   ['const engine = createFocusEngine({ root: document.body });', 'const engine = createFocusEngine({ root: document.body });\n  installPointer(engine);\n  installMacLifecycle();'],
+  ['context.router = router;', 'context.router = router;\n  installBackButton(router);'], // a Back button where Esc is the only way back
   ['router.push(first.name, first.params);', 'router.push(first.name, first.params);\n  installPlayHook({ router, log });'], // the play check (?play= from the shell --page)
   ['registerKeys(window.tizen)', 'registerKeys()'],
   ['webapis: window.webapis,', 'webapis: null,'],
@@ -172,6 +173,9 @@ function macPlatform() {
         // tracks, so the DOM subtitle line stays hidden
         [join(ROOT, 'src/player/engine.js'), [
           ['parseSubtitles(await http.get(choice.sub.url), choice.sub.format)', 'parseSubtitles(((t) => { avplay.addSubtitle(t, choice.sub); return t; })(await http.get(choice.sub.url)), choice.sub.format)'],
+          // add-on subtitle lists: all add-ons at once, the menu fills as each answers, kept per video id, timing logged (platform/mac/subtitle-fetch.js)
+          ["import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';", "import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';\nimport { macLoadAddonSubtitles } from '#platform/subtitle-fetch';"],
+          ['async function loadAddonSubtitles() {', 'async function loadAddonSubtitles() {\n    if (stremio && authKey) return macLoadAddonSubtitles({ stremio, authKey, type, videoId, tvLanguage, choose: chooseAddonSubtitles, set: (v) => { addonSubs = v; }, changed: () => emit(\'tracks\'), say, warn, diag, isShut: () => shut });'],
           ['avplay.subtitlesOn(false);', "avplay.subtitlesOn(subMode === 'addon');"],
           ['in the TV language', 'in the Mac language'], // (decision lines on the Diagnostics screen)
           ['by the TV', 'by the player'],

@@ -715,6 +715,34 @@ def keep_results(data, out_dir):
     return files, removed
 
 
+SLOW_ADDON_MS = 3000  # an add-on that takes this long to answer for subtitles is called slow
+SUBS_LINE_RE = re.compile(r'subs-addon: (start|done|fail) name="([^"]*)"(?: ms=(\d+))?(?: count=(\d+))?')
+
+
+def subtitle_summary(text):
+    """The page's `subs-addon:` log lines (start, done with ms and count, fail with ms) as plain report lines, one per add-on request,
+    and a `slow add-on` line for each one that took SLOW_ADDON_MS or more (or never answered). Empty string when there are none."""
+    asked, out = [], {}
+    for kind, name, ms, count in SUBS_LINE_RE.findall(text):
+        if kind == "start":
+            asked.append(name)
+        else:
+            out[name] = (kind, int(ms or 0), int(count or 0))
+    names = list(dict.fromkeys(asked + list(out)))
+    if not names:
+        return ""
+    lines = ["", "Subtitle add-ons (from the page's log):"]
+    for name in names:
+        if name not in out:
+            lines.append("  %s: asked, no answer logged -- slow add-on" % name)
+            continue
+        kind, ms, count = out[name]
+        lines.append("  %s: %s in %d ms, %d subtitles" % (name, "answered" if kind == "done" else "failed", ms, count))
+        if ms >= SLOW_ADDON_MS:
+            lines.append("  slow add-on: %s took %d ms" % (name, ms))
+    return "\n".join(lines) + "\n"
+
+
 def keep_ui_report(data, out_dir):
     """Write the posted --ui-check report to out_dir/ui-report.txt, links and keys stripped a second time.
     Returns (files kept, items removed)."""
@@ -722,6 +750,9 @@ def keep_ui_report(data, out_dir):
     text = data.decode("utf-8", "replace")
     text, n = LINK_RE.subn("[link removed]", text)
     text, k = KEY_RE.subn(r"\1\2[removed]", text)
+    summary = subtitle_summary(text)
+    if summary:
+        text = text.rstrip("\n") + "\n" + summary
     with open(os.path.join(out_dir, "ui-report.txt"), "w", encoding="utf-8", newline="") as f:
         f.write(text)
     return 1, n + k

@@ -11,11 +11,14 @@
  *     (the video = anywhere outside the visible panel and its bar; the full-screen .pl-options root is not the panel)
  *   click on the video while a card is open (Info, Up next, stall, Source failed)   closes it as Back does; no play / pause
  *   click on Back (top left of the bar)   the Back key's end: engine.exit() (save the place, return to the screen playback started from)
+ *   wheel / trackpad over the player while the panel or a card is open   scrolls the panel (Up / Down steps, as the keys); the event is
+ *     consumed, so neither volume nor the picture moves (pointer.js's wheelHook asks this module first)
  *   Up / Down (no panel or card open), M volume +/- VOLUME_STEP, mute; the level shows for OSD_MS (.mac-osd)
  * Volume rides the wire's `volume` (avplay.setVolume -> setProp): the shell does not allow `mute`, so mute is volume 0 with the level kept.
  * createPlayerInput is DOM-free (hit() and ui are injected: test/platform/mac.player-input.test.js); bindPlayerInput is the DOM glue.
  */
 import { macBridge } from './bridge.js';
+import { wheelStep, setWheelHook } from './pointer.js';
 
 export const CLICK_DELAY = 250; // ms a single click waits for a second one
 export const IDLE_MS = 3000;    // ms without pointer activity after which the controls and the cursor go
@@ -43,6 +46,7 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, m
   let pending = null, idle = null, osdTimer = null;
   let level = 100, muted = false;
   let pos = { x: -1, y: -1 };
+  let wheelState = { acc: { x: 0, y: 0 }, last: -1e9, seen: -1e9 };
   const toUi = (name, ...a) => { if (ui[name]) ui[name](...a); };
 
   function applyVolume(text) {
@@ -119,6 +123,16 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, m
     return true;
   }
 
+  /** A wheel event while the panel or a card is open: steps the panel's list as Up / Down would and consumes the event (true). Else false. */
+  function wheel(e, now = Date.now()) {
+    if (!menuOpen() && !cardOpen()) return false;
+    if (e.preventDefault) e.preventDefault();
+    const r = wheelStep(wheelState, e, now);
+    wheelState = r.state;
+    if (menuOpen() && menu && (r.dir === 'up' || r.dir === 'down')) menu.key({ type: 'press', action: r.dir, repeat: false });
+    return true;
+  }
+
   function dblclick(e) {
     if (hit(e.target).kind !== 'video' || blocked()) return false;
     cancel(pending);
@@ -137,7 +151,7 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, m
 
   function dispose() { cancel(pending); cancel(idle); cancel(osdTimer); pending = idle = osdTimer = null; }
 
-  return { click, dblclick, activity, key, stepVolume, toggleMute, dispose, state: () => ({ level, muted }) };
+  return { click, dblclick, wheel, activity, key, stepVolume, toggleMute, dispose, state: () => ({ level, muted }) };
 }
 
 /** The DOM glue: listeners on [win].document while the player screen is up, the volume buttons in the bar, the level on screen. */
@@ -232,8 +246,9 @@ export function bindPlayerInput({ root, controls, options, engine, avplay, fulls
   ACT.forEach((n) => doc.addEventListener(n, onAct, { capture: true, passive: true }));
 
   current = bound;
+  setWheelHook((e) => bound.wheel(e));
   return () => {
-    if (current === bound) current = null;
+    if (current === bound) { current = null; setWheelHook(null); }
     doc.removeEventListener('click', onClick, true);
     doc.removeEventListener('dblclick', onDbl, true);
     ACT.forEach((n) => doc.removeEventListener(n, onAct, { capture: true }));

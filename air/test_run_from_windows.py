@@ -426,6 +426,23 @@ esac
 
 
 class KeepUiReport(unittest.TestCase):
+    def test_subtitle_addon_summary_flags_a_slow_one(self):
+        out = tempfile.mkdtemp()
+        try:
+            rep = (b'log: subs-addon: start name="Fast"\nlog: subs-addon: start name="Slow"\nlog: subs-addon: start name="Mute"\n'
+                   b'log: subs-addon: done name="Fast" ms=420 count=7\nlog: subs-addon: done name="Slow" ms=5200 count=3\n')
+            rw.keep_ui_report(rep, out)
+            text = open(os.path.join(out, "ui-report.txt")).read()
+            self.assertIn("Fast: answered in 420 ms, 7 subtitles", text)
+            self.assertIn("slow add-on: Slow took 5200 ms", text)
+            self.assertIn("Mute: asked, no answer logged -- slow add-on", text)
+            self.assertNotIn("slow add-on: Fast", text)
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_no_subtitle_lines_leave_the_report_as_posted(self):
+        self.assertEqual(rw.subtitle_summary("log: boot: ready\n"), "")
+
     def test_strips_links_and_keys(self):
         out = tempfile.mkdtemp()
         try:

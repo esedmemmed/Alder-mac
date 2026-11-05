@@ -50,6 +50,10 @@ export function wheelStep(state, e, now) {
   return { state: next, dir };
 }
 
+let wheelHook = null;
+/** The player asks first (platform/mac/player-input.js): a hook returning true has consumed the wheel event (an open menu scrolls). */
+export function setWheelHook(fn) { wheelHook = fn; }
+
 /** 'left' | 'right' when [x] (client px) is within the edge zone of [rect], else null. */
 export function edgeDir(x, rect) {
   const w = rect.right - rect.left;
@@ -129,6 +133,7 @@ export function installPointer(engine, win = window) {
   // Wheel / trackpad: sideways moves along the hovered row, vertical pages up and down. Throttled (wheelStep).
   const onWheel = (e) => {
     if (e.ctrlKey) return; // a pinch
+    if (wheelHook && wheelHook(e)) { edge.stop(); return; } // the player's open menu or card takes it
     e.preventDefault();
     edge.stop();
     const r = wheelStep(wheel, e, Date.now());

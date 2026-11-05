@@ -57,3 +57,12 @@ His words:
 - with the subtitle or audio menu open, a click on the video still does not close it: defect -> T12.1.1.1
 
 Cause found (from code): the full-size `.pl-options` root swallowed the click as a 'panel' hit, so the close never ran. Fixing task: T12.1.1.1 (only the visible panel and bar count as the menu; cards close the same way; each click while a menu or card is open logs a `menu-click:` line). Walk 5 checks the `menu-click:` lines in the ui-check report.
+
+## Walk 5: app-780cc28, 2026-11-05 (push 6)
+His words:
+- a click on the video now closes the subtitle menu: works
+- the detail page with Resume, Start over and Add to list has no Back button; only Esc goes back: defect -> T12.1.1.1.1 (a Back button, top left, on every screen above Home except the player, which has its own; a click is the Esc press)
+- some add-ons' subtitles show up late in the menu: defect -> T12.1.1.1.1 (all add-ons asked at once, the menu fills as each answers, answers kept per video id; each request logs `subs-addon:` start, ms and count, and the ui-check report gets a line per add-on and a `slow add-on` line at 3000 ms or more)
+- the mouse wheel and trackpad do not scroll the audio and subtitle menus, only Up/Down keys: defect -> T12.1.1.1.1 (the wheel steps the open list like Up/Down and is consumed, so volume and seek never change)
+
+Fixing task: T12.1.1.1.1. Walk 6 follows on its build. Nothing measured on the Air yet.
