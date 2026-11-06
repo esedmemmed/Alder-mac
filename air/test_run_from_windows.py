@@ -454,6 +454,58 @@ class KeepUiReport(unittest.TestCase):
         finally:
             shutil.rmtree(out, ignore_errors=True)
 
+    def test_subtitle_delay_lines_are_printed(self):
+        out = tempfile.mkdtemp()
+        try:
+            rep = b'log: delay: 0.0 s file\nlog: delay: 0.3 s addon\nlog: delay: -1.2 s file\n'
+            rw.keep_ui_report(rep, out)
+            text = open(os.path.join(out, "ui-report.txt")).read()
+            self.assertIn("Subtitle delay (from the page's log):", text)
+            self.assertIn("  0.0 s (file track)", text)
+            self.assertIn("  0.3 s (add-on subtitle)", text)
+            self.assertIn("  -1.2 s (file track)", text)
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_subtitle_memory_lines_have_their_own_wording(self):
+        rep = (b'log: memory: found by=sub_off\nlog: memory: found by=sub_file source=2\nlog: memory: found by=sub_addon source=3\n'
+               b'log: memory: not offered by=sub\nlog: memory: not offered\nlog: memory: found by=group source=1\n')
+        text = rw.memory_summary(rep.decode())
+        self.assertIn("Subtitle memory (from the page's log):\n  subtitles off, as picked before\n"
+                      "  remembered subtitle: the file's track 2\n  remembered subtitle: add-on subtitle 3\n"
+                      "  remembered subtitle language not offered, normal start rule\n", text)
+        self.assertIn("Source memory (from the page's log):\n  remembered source not offered, normal ranking\n"
+                      "  remembered source found by group (source 1)\n", text)
+        self.assertNotIn("sub_", text)
+
+    def test_name_match_lines_are_printed(self):
+        out = tempfile.mkdtemp()
+        try:
+            rw.keep_ui_report(b'log: match: best=7 named=2/5\nlog: match: replaced best=9 named=3/6\n', out)
+            text = open(os.path.join(out, "ui-report.txt")).read()
+            self.assertIn("  name match: best score 7, 2 of 5 subtitles named", text)
+            self.assertIn("  name match (replaced): best score 9, 3 of 6 subtitles named", text)
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_delay_memory_lines_are_printed_as_logged(self):
+        out = tempfile.mkdtemp()
+        try:
+            rep = (b'log: delay: applied 0.3 s\nlog: delay: remembered -1.2 s\nlog: delay: forgotten (back to 0)\n'
+                   b'log: delay: not remembered (add-on subtitle without id)\nlog: delay: none (no release identity)\n'
+                   b'log: delay: 0.3 s addon\n')
+            rw.keep_ui_report(rep, out)
+            text = open(os.path.join(out, "ui-report.txt")).read()
+            self.assertIn("Subtitle delay memory (from the page's log):\n  delay: applied 0.3 s\n  delay: remembered -1.2 s\n"
+                          "  delay: forgotten (back to 0)\n  delay: not remembered (add-on subtitle without id)\n"
+                          "  delay: none (no release identity)\n", text)
+            self.assertIn("  0.3 s (add-on subtitle)", text)  # the old delay summary stays
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_no_delay_lines_leave_the_report_as_posted(self):
+        self.assertEqual(rw.delay_summary("log: boot: ready\n"), "")
+
     def test_no_memory_lines_leave_the_report_as_posted(self):
         self.assertEqual(rw.memory_summary("log: boot: ready\n"), "")
 
@@ -511,6 +563,7 @@ class UiCheck(unittest.TestCase):
             self.assertEqual(rc.get("rc"), 0, shown)
             self.assertIn("Finished", p.stdout)
             self.assertNotIn("Stremio", shown)
+            self.assertIn("report received: " + os.path.abspath(os.path.join(out, "ui-report.txt")), buf.getvalue())
             with open(os.path.join(out, "ui-report.txt")) as rf:
                 report = rf.read()
             self.assertNotRegex(report, r"https?://")
@@ -533,6 +586,61 @@ class UiCheck(unittest.TestCase):
         report, calls = self.run_check([], 18795)
         self.assertEqual(calls, ["index.html"])
         self.assertIn("log: plain run", report)
+
+    def test_server_down_keeps_the_report_on_the_air(self):
+        work = tempfile.mkdtemp()
+        try:
+            script = (rw.UI_SCRIPT.replace("__BASE__", "http://127.0.0.1:1/tok").replace("__UIMODE__", "open")
+                      .replace("__APPURL__", "").replace("__APPTAG__", ""))
+            stub = os.path.join(work, "AlderProof")
+            with open(stub, "w", newline="\n") as sf:
+                sf.write(STUB_APP)
+            os.chmod(stub, 0o755)
+            air = os.path.join(work, "air")
+            env = dict(os.environ, ALDERPROOF_DIR=air, ALDERPROOF_BIN=stub, STUB_CALLS=os.path.join(work, "calls.txt"),
+                       ALDERPROOF_RETRY_WAIT="0")
+            p = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=60)
+            m = re.search(r"report NOT sent; kept at (\S+)", p.stdout)
+            self.assertTrue(m, p.stdout + p.stderr)
+            self.assertEqual(os.path.dirname(m.group(1)), air)
+            self.assertRegex(os.path.basename(m.group(1)), r"^ui-report-.+\.txt$")
+            kept = open(m.group(1)).read()
+            self.assertIn("log: plain run", kept)
+            self.assertNotIn("ui-report.txt", os.listdir(air))
+            self.assertNotIn("ui-report.clean", os.listdir(air))
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_idle_timeout_prints_no_report(self):
+        work = tempfile.mkdtemp()
+        buf = hold_output()
+        old = rw.find_app_release
+        rw.find_app_release = lambda: None
+        try:
+            with contextlib.redirect_stdout(buf):
+                rc = rw.main(["--host", "127.0.0.1", "--out", os.path.join(work, "o"), "--port", "18811", "--idle", "0", "--ui-check"])
+            self.assertEqual(rc, 1)
+            self.assertIn("no report: idle timeout", buf.getvalue())
+            self.assertNotIn("report received", buf.getvalue())
+        finally:
+            rw.find_app_release = old
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_alive_keeps_contact_and_prints_nothing(self):
+        said = []
+        st = rw.State("tok12", {}, "", tempfile.gettempdir(), said.append)
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), rw.make_handler(st))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            st.contact = 0
+            req = urllib.request.Request("http://127.0.0.1:%d/tok12/alive" % server.server_address[1], data=b"", method="POST")
+            with urllib.request.urlopen(req, timeout=10) as r:
+                self.assertEqual(r.status, 200)
+            self.assertGreater(st.contact, time.time() - 30)
+            self.assertEqual(said, [])
+        finally:
+            server.shutdown()
+            server.server_close()
 
 
 class PlayCheck(unittest.TestCase):

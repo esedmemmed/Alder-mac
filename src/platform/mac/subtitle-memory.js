@@ -11,9 +11,13 @@
  * line and one `memory:` line to the shell's report (the Air's ui-report prints it with the source memory's):
  *   memory: found by=sub_off | sub_file source=<track> | sub_addon source=<n>
  *   memory: not offered                                  nothing in that language: the normal start rule
- * Safari 14: no lookbehind, no class fields. Nothing here sorts.
+ * Name match (T3, core/subtitle-match.js): within the language, the file's own track first, then the add-on subtitle whose id/label best matches the
+ * playing release (score >= THRESHOLD), then the remembered add-on, then the add-on order. `match: best=<score> named=<k>/<N>` is the report line.
+ * Safari 14: no lookbehind, no class fields. Nothing here sorts (the match ranking is stableSort).
  */
 import { macBridge } from './bridge.js';
+import { signature } from './release-memory.js';
+import { THRESHOLD, rankByMatch, matchStats, scoreSubtitle } from '../../core/subtitle-match.js';
 
 const keyOf = (metaId) => 'subs/' + metaId;
 
@@ -42,19 +46,33 @@ export function createSubtitleMemory(store, { report = bridgeLog } = {}) {
   };
 }
 
+/** The playing source's name and 1.4 signature, for the name match; both null when there is no source. */
+export function matchContext(source) {
+  if (!source) return { filename: null, sig: null };
+  return { filename: source.filename || null, sig: signature(source) };
+}
+
 /**
- * What the remembered choice means for this start: { kind: 'off' } | { kind: 'file', track } | { kind: 'addon', sub, index } |
+ * What the remembered choice means for this start: { kind: 'off' } | { kind: 'file', track } | { kind: 'addon', sub, index, matched, stats } |
  * { kind: 'wait' } (nothing yet, add-ons still answering) | { kind: 'none' } (add-ons are done and none has it).
- * textTracks: the file's (tracks.js parseTextTracks); addonSubs: the add-on subtitles so far (Subtitle: lang, addon); lang: toIso1.
+ * textTracks: the file's (tracks.js parseTextTracks); addonSubs: the add-on subtitles so far (Subtitle: lang, addon, id, label); lang: toIso1;
+ * match: { filename, sig } of the playing release (null: no name match). `matched`: the pick scored >= THRESHOLD; `stats`: matchStats of the language.
  */
-export function subtitlePlan(choice, { textTracks, addonSubs, addonsDone, lang }) {
+export function subtitlePlan(choice, { textTracks, addonSubs, addonsDone, lang, match = null }) {
   if (choice.kind === 'off') return { kind: 'off' };
   const mine = textTracks.filter((t) => t.language && t.language === choice.language);
   const track = mine.find((t) => !t.forced) || mine[0];
   if (track) return { kind: 'file', track };
-  let index = -1;
-  if (choice.addon) index = addonSubs.findIndex((s) => s.addon === choice.addon && lang(s.lang) === choice.language);
-  if (index < 0) index = addonSubs.findIndex((s) => lang(s.lang) === choice.language);
-  if (index >= 0) return { kind: 'addon', sub: addonSubs[index], index };
+  const inLang = addonSubs.filter((s) => lang(s.lang) === choice.language);
+  const stats = match ? matchStats(inLang, match) : { best: 0, named: 0, n: inLang.length };
+  let pick = null;
+  let matched = false;
+  if (match && inLang.length) {
+    const best = rankByMatch(inLang, match)[0];
+    if (scoreSubtitle(best, match) >= THRESHOLD) { pick = best; matched = true; }
+  }
+  if (!pick && choice.addon) pick = inLang.find((s) => s.addon === choice.addon) || null;
+  if (!pick) pick = inLang[0] || null;
+  if (pick) return { kind: 'addon', sub: pick, index: addonSubs.indexOf(pick), matched, stats };
   return { kind: addonsDone ? 'none' : 'wait' };
 }

@@ -431,7 +431,8 @@ ALDERPROOF_BIN=${ALDERPROOF_BIN:-/Applications/AlderProof.app/Contents/MacOS/Ald
 umask 077
 say() { curl -s -m 20 -X POST --data-binary "$1" "$base/status" >/dev/null 2>&1 </dev/null; echo "$1"; }
 cleanup() { rm -rf "$dir/ui-report.txt" "$dir/ui-report.clean"; }
-trap cleanup EXIT
+alive=""
+trap 'kill "$alive" 2>/dev/null; cleanup' EXIT
 mkdir -p "$dir" || { say "cannot make $dir"; return 1; }
 say "air started: $(sw_vers -productVersion 2>/dev/null) $(sysctl -n hw.model 2>/dev/null)"
 
@@ -482,15 +483,27 @@ if [ "$mode" = "probe" ]; then
     done
 else
     say "opening the app; use it, then quit it with Cmd-Q"
+    ( while :; do sleep 120; curl -s -m 20 -X POST --data-binary "" "$base/alive" >/dev/null 2>&1 </dev/null; done ) >/dev/null 2>&1 </dev/null &
+    alive=$!
     "$ALDERPROOF_BIN" --page index.html --report "$rep" </dev/null >/dev/null 2>&1  # was proof.html: the 1.1 bar, black with no video (T9 Air walk)
     say "app closed: exit $?"
+    kill "$alive" 2>/dev/null
 fi
+kill "$alive" 2>/dev/null
 [ -f "$rep" ] || echo "(the app wrote no report)" > "$rep"
 strip < "$rep" > "$dir/ui-report.clean"
-if curl -fsS -m 60 --data-binary @"$dir/ui-report.clean" "$base/ui-report" >/dev/null </dev/null; then
+sent=no
+for try in 1 2 3; do
+    if curl -fsS -m 60 --data-binary @"$dir/ui-report.clean" "$base/ui-report" >/dev/null </dev/null; then sent=yes; break; fi
+    [ "$try" -lt 3 ] && sleep "${ALDERPROOF_RETRY_WAIT:-10}"
+done
+if [ "$sent" = yes ]; then
     say "report sent"
 else
-    say "report could not be sent"
+    kept="$dir/ui-report-$(date +%Y%m%d-%H%M%S).txt"
+    cp "$dir/ui-report.clean" "$kept"
+    echo "report NOT sent; kept at $kept"
+    say "report NOT sent; kept at $kept"
 fi
 cleanup
 echo
@@ -678,6 +691,7 @@ class State:
         self.done = threading.Event()
         self.kept = None
         self.ui_check = False
+        self.unreadable = False
 
     def fresh(self, label):
         """The url for `label` asked of its add-on again now: the one whose release text matches, else the stored one.
@@ -749,17 +763,62 @@ MEMORY_LINE_RE = re.compile(r'memory: (found|not offered|failed, falling back)(?
 def memory_summary(text):
     """The page's `memory:` log lines (found by file / signature / group, not offered, failed and falling back) as plain report lines,
     in the order they were logged. Empty string when there are none."""
-    lines = []
+    lines, subs = [], []
     for kind, how, source in MEMORY_LINE_RE.findall(text):
-        if kind == "found":
+        if kind == "found" and how == "sub_off":
+            subs.append("  subtitles off, as picked before")
+        elif kind == "found" and how == "sub_file":
+            subs.append("  remembered subtitle: the file's track %s" % source)
+        elif kind == "found" and how == "sub_addon":
+            subs.append("  remembered subtitle: add-on subtitle %s" % source)
+        elif kind == "not offered" and how == "sub":
+            subs.append("  remembered subtitle language not offered, normal start rule")
+        elif kind == "found":
             lines.append("  remembered source found by %s (source %s)" % (how, source))
         elif kind == "not offered":
             lines.append("  remembered source not offered, normal ranking")
         else:
             lines.append("  remembered source failed (by %s), falling back" % how)
+    out = ""
+    if lines:
+        out += "\n".join(["", "Source memory (from the page's log):"] + lines) + "\n"
+    if subs:
+        out += "\n".join(["", "Subtitle memory (from the page's log):"] + subs) + "\n"
+    return out
+
+
+DELAY_LINE_RE = re.compile(r'delay: (-?\d+\.\d) s (file|addon)\b')
+DELAY_KINDS = {"file": "file track", "addon": "add-on subtitle"}
+
+
+def delay_summary(text):
+    """The page's `delay:` log lines (each subtitle delay change, in seconds, and what it applied to) as plain report lines, in the order
+    they were logged. Empty string when there are none."""
+    lines = ["  %s s (%s)" % (value, DELAY_KINDS[kind]) for value, kind in DELAY_LINE_RE.findall(text)]
     if not lines:
         return ""
-    return "\n".join(["", "Source memory (from the page's log):"] + lines) + "\n"
+    return "\n".join(["", "Subtitle delay (from the page's log):"] + lines) + "\n"
+
+
+MATCH_LINE_RE = re.compile(r'match: (replaced )?best=(-?[\d.]+) named=(\d+)/(\d+)')
+DELAY_MEM_RE = re.compile(r'(?m)(delay: (?:applied|remembered|forgotten|not remembered|none)[^\r\n]*)')
+
+
+def match_summary(text):
+    """The page's `match:` log lines (the subtitle name match per start) as plain report lines. Empty string when there are none."""
+    lines = ["  name match%s: best score %s, %s of %s subtitles named" % (" (replaced)" if was else "", best, k, n)
+             for was, best, k, n in MATCH_LINE_RE.findall(text)]
+    if not lines:
+        return ""
+    return "\n".join(["", "Subtitle name match (from the page's log):"] + lines) + "\n"
+
+
+def delay_memory_summary(text):
+    """The page's delay-memory lines (`delay: applied|remembered|forgotten|not remembered|none ...`), printed as logged. Empty when none."""
+    lines = ["  " + m.rstrip() for m in DELAY_MEM_RE.findall(text)]
+    if not lines:
+        return ""
+    return "\n".join(["", "Subtitle delay memory (from the page's log):"] + lines) + "\n"
 
 
 def keep_ui_report(data, out_dir):
@@ -775,6 +834,10 @@ def keep_ui_report(data, out_dir):
     summary = memory_summary(text)
     if summary:
         text = text.rstrip("\n") + "\n" + summary
+    for fn in (match_summary, delay_summary, delay_memory_summary):
+        summary = fn(text)
+        if summary:
+            text = text.rstrip("\n") + "\n" + summary
     with open(os.path.join(out_dir, "ui-report.txt"), "w", encoding="utf-8", newline="") as f:
         f.write(text)
     return 1, n + k
@@ -944,6 +1007,8 @@ def make_handler(st):
             body = self.rfile.read(n)  # before any reply: a 404 sent with the body unread resets the client's connection (flaky test)
             if r is None:
                 return self._send(404)
+            if r == ["alive"]:
+                return self._send(200)  # _route already refreshed st.contact; nothing printed
             if r == ["status"]:
                 st.say("Air: " + scrub(body.decode("utf-8", "replace"))[:300])
                 return self._send(200)
@@ -960,6 +1025,8 @@ def make_handler(st):
                     st.kept = keep_ui_report(body, st.out_dir)
                 except Exception as e:
                     st.say("report could not be read (%s)" % type(e).__name__)
+                    st.unreadable = True
+                    st.done.set()
                     return self._send(400)
                 st.done.set()
                 return self._send(200)
@@ -1040,6 +1107,8 @@ def main(argv=None, creds=None, play_input=None):
     host, others = (a.host, [a.host]) if a.host else lan_addresses()
     if not host:
         say("No network address found. Is the Windows computer on Wi-Fi?")
+        if a.ui_check:
+            print("no report: no network address", flush=True)
         return 1
     token = "".join(secrets.choice(TOKEN_CHARS) for _ in range(5))
     server = None
@@ -1052,6 +1121,8 @@ def main(argv=None, creds=None, play_input=None):
             continue
     if not server:
         say("Could not open a port. Close other programs and run again.")
+        if a.ui_check:
+            print("no report: no port", flush=True)
         return 1
     base = "http://%s:%d/%s" % (host, server.server_address[1], token)
     app_tag, app_url = "", ""
@@ -1104,16 +1175,27 @@ def main(argv=None, creds=None, play_input=None):
         while not st.done.wait(5):
             if time.time() - st.contact > a.idle:
                 say("No word from the Air for a long time. Stopping; nothing was kept.")
+                if a.ui_check:
+                    print("no report: idle timeout", flush=True)
                 return 1
+    except KeyboardInterrupt:
+        if a.ui_check:
+            print("no report: Ctrl-C", flush=True)
+        raise
     finally:
         server.shutdown()
         server.server_close()
         st.links.clear()
         links.clear()
         sources.clear()
+    if a.ui_check and st.unreadable:
+        print("no report: report unreadable", flush=True)
+        return 1
     files, removed = st.kept
     say("Results kept: %d file(s), %d link(s) stripped." % (files, removed))
     say("They are in " + os.path.abspath(a.out))
+    if a.ui_check:
+        print("report received: " + os.path.abspath(os.path.join(a.out, "ui-report.txt")), flush=True)
     if a.play_check:
         finish_play_check(todo, a.out, say, input_fn=play_input or input)
         say("Answers and verdict are in " + os.path.abspath(a.out))

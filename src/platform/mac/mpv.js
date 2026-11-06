@@ -348,6 +348,12 @@ export function createAvplay({ bridge = null, log = null } = {}) {
       return true;
     },
 
+    /** The subtitle delay in seconds (mpv's sub-delay; positive shows the subtitle later), for the file's tracks and the add-on's alike. */
+    setSubDelay(seconds) {
+      send('sub-delay', bridgeOrThrow().setProp('sub-delay', Number(seconds)));
+      return true;
+    },
+
     /** The file's own subtitles: mpv draws them (sub-visibility). */
     subtitlesOn(on) {
       send('sub-visibility', bridgeOrThrow().setProp('sub-visibility', !!on));

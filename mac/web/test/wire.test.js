@@ -122,6 +122,18 @@ test('setProp reaches the six names only; aid and sid pick tracks; getProp reads
   await assert.rejects(denied2, /not settable/);
 });
 
+test('setProp sub-delay (seconds) is allowed and reads back', async () => {
+  const s = setup();
+  await playing(s);
+  const set = s.bridge.setProp('sub-delay', -0.3);
+  s.clock.advance(5);
+  await set;
+  assert.equal(s.mock.prop('sub-delay'), -0.3);
+  const g = s.bridge.getProp('sub-delay');
+  s.clock.advance(5);
+  assert.equal(await g, -0.3);
+});
+
 test('subAdd adds an external track and selects it; it needs text and a playing file', async () => {
   const s = setup();
   const early = s.bridge.subAdd('1\n00:00:01,000 --> 00:00:02,000\nhi\n', 'eng', 'English (add-on)');

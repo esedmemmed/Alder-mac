@@ -7,9 +7,11 @@
  *   an answer is kept per add-on and video id for CACHE_MS, so reopening the title or switching source asks nobody twice; a failure is not kept
  *   each request logs `subs-addon: start|done|fail name="..." ms=.. count=..` to the shell's report (the Air's ui-report turns it into a line per
  *   add-on and a "slow add-on" line); names only, never links
+ *   the menu lists a subtitle whose id/label matches the playing release first within its language (core/subtitle-match.js; match() gives the release)
  * The subtitle text itself is still fetched by the page (src/lib/http.js) when a file is chosen; this module only asks for the lists.
  */
 import { macBridge } from './bridge.js';
+import { rankRuns } from '../../core/subtitle-match.js';
 
 export const CACHE_MS = 10 * 60 * 1000;
 const CACHE_MAX = 200;
@@ -31,7 +33,7 @@ function bridgeLog(line) {
  * set(list): the chosen rows so far (engine's addonSubs); changed(): the options menu rebuilds; choose(entries, language): core chooseAddonSubtitles.
  */
 export async function macLoadAddonSubtitles({ stremio, authKey, type, videoId, tvLanguage, choose, set, changed, say = () => {}, warn = () => {}, diag = null,
-  isShut = () => false, now = Date.now, report = bridgeLog }) {
+  isShut = () => false, now = Date.now, report = bridgeLog, match = null }) {
   const asked = new Map(); // add-on identity -> slot
   const entries = [];      // { addon, subs, done } in the order the add-ons were first seen (stable rows)
   const runs = [];
@@ -39,7 +41,8 @@ export async function macLoadAddonSubtitles({ stremio, authKey, type, videoId, t
 
   const publish = () => {
     if (isShut()) return;
-    set(choose(entries.filter((e) => e.done).map((e) => ({ addon: e.addon, subs: e.subs })), tvLanguage()));
+    const chosen = choose(entries.filter((e) => e.done).map((e) => ({ addon: e.addon, subs: e.subs })), tvLanguage());
+    set(match ? rankRuns(chosen, match()) : chosen);
     changed();
   };
 

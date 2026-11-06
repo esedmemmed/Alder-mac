@@ -14,11 +14,13 @@
  *   wheel / trackpad over the player while the panel or a card is open   scrolls the panel (Up / Down steps, as the keys); the event is
  *     consumed, so neither volume nor the picture moves (pointer.js's wheelHook asks this module first)
  *   Up / Down (no panel or card open), M volume +/- VOLUME_STEP, mute; the level shows for OSD_MS (.mac-osd)
+ *   Z / X (no panel or card open, subtitles on)   the subtitle delay -0.1 s / +0.1 s; the value shows for OSD_MS
  * Volume rides the wire's `volume` (avplay.setVolume -> setProp): the shell does not allow `mute`, so mute is volume 0 with the level kept.
  * createPlayerInput is DOM-free (hit() and ui are injected: test/platform/mac.player-input.test.js); bindPlayerInput is the DOM glue.
  */
 import { macBridge } from './bridge.js';
 import { wheelStep, setWheelHook } from './pointer.js';
+import { clampDelay, delayText, DELAY_STEP } from './subtitle-delay.js';
 
 export const CLICK_DELAY = 250; // ms a single click waits for a second one
 export const IDLE_MS = 3000;    // ms without pointer activity after which the controls and the cursor go
@@ -145,6 +147,15 @@ export function createPlayerInput({ controls, engine, avplay, fullscreen, hit, m
   function key(evt) {
     if (!evt || evt.type !== 'press' || blocked()) return false;
     if (evt.action === 'mute') { if (!evt.repeat) toggleMute(); return true; }
+    if (evt.action === 'subearlier' || evt.action === 'sublater') { // Z / X: the subtitle delay, 0.1 s a press (platform/mac/subtitle-delay.js)
+      const t = engine.tracks();
+      if (!t.canShift) return false;
+      engine.setSubtitleDelay(clampDelay(t.subDelay + (evt.action === 'sublater' ? DELAY_STEP : -DELAY_STEP)));
+      toUi('osd', 'Subtitle delay ' + delayText(engine.tracks().subDelay));
+      cancel(osdTimer);
+      osdTimer = later(() => { osdTimer = null; toUi('osd', null); }, OSD_MS);
+      return true;
+    }
     if ((evt.action === 'up' || evt.action === 'down') && true) { stepVolume(evt.action === 'up' ? 1 : -1); return true; }
     return false;
   }

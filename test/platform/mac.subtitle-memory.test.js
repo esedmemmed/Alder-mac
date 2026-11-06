@@ -50,7 +50,7 @@ const addon = (clock, name, langs, delay = 0) => ({
 async function play({ store, videoId = 'tt9:1:1', tracks = TR_EN, addons = [], menu = null, ms = 40000 }) {
   const reports = [];
   const mem = createReleaseMemory(store, createSourceMemory(store), { report: () => {} });
-  mem.subtitles = createSubtitleMemory(store, { report: l => reports.push(l) });
+  mem.subtitles = createSubtitleMemory(store, { report: l => { if (!/^match:/.test(l)) reports.push(l); } }); // the T3 match: line is tested in mac.subtitle-match.test.js
   const src = stream('Movie 1080p WEB-DL x264-A', { tracks: JSON.stringify(tracks) });
   const t = makeEngine({ adapter: 'mpv', createEngine, memory: mem, sources: [src], params: { type: 'series', metaId: 'tt9', videoId }, http: { get: async () => SRT } });
   t.stremio.addons = async () => addons.map(a => addon(t.clock, a.name, a.langs, a.delay || 0));
@@ -153,9 +153,9 @@ test('no track in the remembered language: the normal start rule plus the reason
   assert.equal(t.info().textIndex, 0, 'the normal rule: English');
   assert.equal(t.memLines().length, 1);
   assert.match(t.memLines()[0], /no Turkish subtitles/);
-  assert.deepEqual(t.reports, ['memory: not offered']);
+  assert.deepEqual(t.reports, ['memory: not offered by=sub']);
   const noAddons = await play({ store, tracks: EN_ONLY });
-  assert.deepEqual(noAddons.reports, ['memory: not offered']);
+  assert.deepEqual(noAddons.reports, ['memory: not offered by=sub']);
   assert.deepEqual(store.m.get('subs/tt9'), { kind: 'lang', language: 'tr' }, 'not overwritten by the start rule');
 });
 

@@ -1,6 +1,6 @@
 /*
  * Mac keys, for the module swap in scripts/build.mjs (npm run build:mac): same exports as src/lib/keys.js, no registration.
- * Esc = back, Return = OK, arrows move, F = fullscreen (player), M = mute (player), E = save the report (Diagnostics). Backspace and Space are Back and Play/Pause only while no text field has focus.
+ * Esc = back, Return = OK, arrows move, F = fullscreen (player), M = mute (player), Z / X = subtitle delay earlier / later (player), E = save the report (Diagnostics). Backspace and Space are Back and Play/Pause only while no text field has focus.
  */
 import { createKeyDispatcher, isDigit, HOLD_MS } from '../../lib/keys.js';
 
@@ -15,6 +15,7 @@ export const KEY_ACTIONS = {
   70: 'fullscreen', // F: the player screen
   69: 'export', // E: the Diagnostics screen saves its report
   77: 'mute', // M: the player's volume (Cmd-M is the system's)
+  90: 'subearlier', 88: 'sublater', // Z / X: the subtitle delay -0.1 s / +0.1 s (the player; Cmd-Z, Cmd-X are the system's)
 };
 for (let d = 0; d <= 9; d++) { KEY_ACTIONS[48 + d] = String(d); KEY_ACTIONS[96 + d] = String(d); }
 
@@ -45,7 +46,7 @@ export function attachKeys({ target, onAction, holdMs = HOLD_MS, timers, isTypin
   function resolve(e) {
     const action = actionFor(e.keyCode);
     if (!action) return null;
-    if ((action === 'fullscreen' || action === 'export' || action === 'mute') && (e.metaKey || e.ctrlKey || e.altKey)) return null; // Cmd-F and friends are the system's
+    if ((action === 'fullscreen' || action === 'export' || action === 'mute' || action === 'subearlier' || action === 'sublater') && (e.metaKey || e.ctrlKey || e.altKey)) return null; // Cmd-F and friends are the system's
     if (isTyping(e) && (e.keyCode === 8 || !TYPING_OK[action])) return null;
     return action;
   }
