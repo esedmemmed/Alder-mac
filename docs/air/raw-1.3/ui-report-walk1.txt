@@ -1,0 +1,15 @@
+log: boot: html
+log: boot: bridge loaded
+log: boot: app.js loaded
+log: boot: first screen
+nav: finished
+play: label=fa7d83f3 wall=189.1 adv=1061.1 rt=-,1.000,1.000,1.000 fdrop=70 ddrop=0 vodelay=0 mistimed=0 hwdec=no video=vc1 1920x1080 23.98fps 8bit pix=yuv420p audio=dts 6ch underruns=2 cache=0/0.0s fs=yes end=stop
+play: label=d0476b22 wall=2236.9 adv=1287.8 rt=-,0.999,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.001,-,1.002 fdrop=10 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=h264 1920x1080 23.98fps 8bit pix=videotoolbox audio=aac 2ch underruns=1 cache=0/0.0s fs=yes end=stop
+play: label=571d53ff wall=1531.3 adv=794.8 rt=-,1.000,1.000,1.000,1.000,1.000,-,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,1.000,0.999,1.001,1.000,1.000,1.000,1.000,1.000,1.000,1.000,- fdrop=9 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=h264 1920x1080 23.98fps 8bit pix=videotoolbox audio=pcm_s24le 2ch underruns=1 cache=1/1.0s fs=yes end=stop
+play: label=9b429e55 wall=316.9 adv=548.7 rt=-,-,-,- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1280x536 0.00fps 8bit pix=videotoolbox audio=unknown 0ch underruns=0 cache=0/0.0s fs=no end=stop
+play: label=2750d3e9 wall=2.2 adv=265.6 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x1080 0.00fps 8bit pix=videotoolbox audio=unknown 6ch underruns=0 cache=0/0.0s fs=no end=stop
+play: label=97614c57 wall=0.0 adv=0.0 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=unavailable video=unknown 0x0 0.00fps 8bit pix=unknown audio=unknown 0ch underruns=0 cache=0/0.0s fs=no end=error
+play: label=f7e11e5b wall=82.1 adv=298.5 rt=- fdrop=3 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=h264 1920x1080 23.98fps 8bit pix=videotoolbox audio=eac3 6ch underruns=0 cache=0/0.0s fs=yes end=stop
+play: label=44863409 wall=0.0 adv=0.0 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=unavailable video=unknown 0x0 0.00fps 8bit pix=unknown audio=unknown 0ch underruns=0 cache=0/0.0s fs=yes end=stop
+play: label=3b9c48b1 wall=3.5 adv=794.6 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x1080 0.00fps 8bit pix=videotoolbox audio=unknown 2ch underruns=0 cache=0/0.0s fs=yes end=stop
+play: label=4720cd92 wall=10.1 adv=0.0 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x1080 0.00fps 8bit pix=videotoolbox audio=unknown 0ch underruns=0 cache=0/0.0s fs=yes end=stop

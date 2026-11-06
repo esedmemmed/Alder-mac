@@ -66,3 +66,10 @@ His words:
 - the mouse wheel and trackpad do not scroll the audio and subtitle menus, only Up/Down keys: defect -> T12.1.1.1.1 (the wheel steps the open list like Up/Down and is consumed, so volume and seek never change)
 
 Fixing task: T12.1.1.1.1. Walk 6 follows on its build. Nothing measured on the Air yet.
+
+## Walk 6: app-e6a4bec, 2026-11-06 (push 7)
+His words: "Everything is okay".
+- Back button on every Esc-only screen, subtitle arrival, wheel scroll in the menus: accepted
+- the next episode of a series switches the subtitle back to English instead of keeping his choice (Turkish): carried to phase 1.4 (subtitle choice memory), no task reopened
+
+Report: `docs/air/raw-1.3/ui-report-walk6.txt`. Subtitle add-on times (per add-on lines): opensubtitles PRO 1.3 to 10.1 s, 10 to 12 subtitles; SELection 5.2 s, 0 subtitles; SubMaker | ElfHosted failed in 97 ms. The delay is the add-on servers', not Alder's.

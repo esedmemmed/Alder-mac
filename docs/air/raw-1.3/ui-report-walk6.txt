@@ -1,0 +1,78 @@
+log: boot: html
+log: boot: bridge loaded
+log: boot: app.js loaded
+log: boot: first screen
+nav: finished
+log: subs-addon: start name="SELection"
+log: subs-addon: start name="opensubtitles PRO"
+log: subs-addon: start name="SubMaker | ElfHosted"
+log: subs-addon: done name="SELection" ms=245 count=9
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=350 count=0
+log: subs-addon: done name="opensubtitles PRO" ms=1306 count=11
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-options kind=video action=close
+log: subs-addon: start name="SELection"
+log: subs-addon: start name="opensubtitles PRO"
+log: subs-addon: start name="SubMaker | ElfHosted"
+play: label=571d53ff wall=32.5 adv=1122.2 rt=- fdrop=1 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=h264 1920x1080 23.98fps 8bit pix=videotoolbox audio=pcm_s24le 2ch underruns=0 cache=0/0.0s fs=yes end=stop
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=103 count=0
+log: subs-addon: done name="SELection" ms=5227 count=0
+log: subs-addon: done name="opensubtitles PRO" ms=7779 count=12
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.chosen.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.chosen.focus kind=row action=row
+log: menu-click: open=options target=div.pl-options kind=video action=close
+log: subs-addon: start name="SELection"
+log: subs-addon: start name="opensubtitles PRO"
+log: subs-addon: start name="SubMaker | ElfHosted"
+play: label=8b444c97 wall=38.8 adv=35.1 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=h264 1920x1080 23.98fps 8bit pix=videotoolbox audio=flac 2ch underruns=0 cache=1/2.1s fs=yes end=stop
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=92 count=0
+log: subs-addon: done name="SELection" ms=5237 count=0
+log: subs-addon: done name="opensubtitles PRO" ms=10141 count=11
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=div.pl-options kind=video action=close
+log: subs-addon: start name="SubMaker | ElfHosted"
+log: subs-addon: done name="SELection" ms=0 count=0 cached=1
+log: subs-addon: done name="opensubtitles PRO" ms=1 count=11 cached=1
+play: label=c84b62f7 wall=55.3 adv=33.3 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=h264 1920x1080 23.98fps 8bit pix=videotoolbox audio=flac 2ch underruns=0 cache=3/6.2s fs=yes end=stop
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=94 count=0
+log: subs-addon: start name="SELection"
+log: subs-addon: start name="opensubtitles PRO"
+log: subs-addon: start name="SubMaker | ElfHosted"
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=97 count=0
+play: label=c84b62f7 wall=40.1 adv=35.5 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x1080 0.00fps 8bit pix=videotoolbox audio=unknown 0ch underruns=0 cache=0/0.0s fs=yes end=stop
+log: subs-addon: done name="SELection" ms=5245 count=0
+log: subs-addon: done name="opensubtitles PRO" ms=7972 count=10
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=div.pl-row.focus kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=span.pl-opt-tag.t-small.t-3 kind=row action=row
+log: menu-click: open=options target=div.pl-options kind=video action=close
+
+Subtitle add-ons (from the page's log):
+  SELection: answered in 5245 ms, 0 subtitles
+  slow add-on: SELection took 5245 ms
+  opensubtitles PRO: answered in 7972 ms, 10 subtitles
+  slow add-on: opensubtitles PRO took 7972 ms
+  SubMaker | ElfHosted: failed in 97 ms, 0 subtitles

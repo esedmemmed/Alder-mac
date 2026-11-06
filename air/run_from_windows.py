@@ -743,6 +743,25 @@ def subtitle_summary(text):
     return "\n".join(lines) + "\n"
 
 
+MEMORY_LINE_RE = re.compile(r'memory: (found|not offered|failed, falling back)(?: by=(\w+))?(?: source=(\d+))?')
+
+
+def memory_summary(text):
+    """The page's `memory:` log lines (found by file / signature / group, not offered, failed and falling back) as plain report lines,
+    in the order they were logged. Empty string when there are none."""
+    lines = []
+    for kind, how, source in MEMORY_LINE_RE.findall(text):
+        if kind == "found":
+            lines.append("  remembered source found by %s (source %s)" % (how, source))
+        elif kind == "not offered":
+            lines.append("  remembered source not offered, normal ranking")
+        else:
+            lines.append("  remembered source failed (by %s), falling back" % how)
+    if not lines:
+        return ""
+    return "\n".join(["", "Source memory (from the page's log):"] + lines) + "\n"
+
+
 def keep_ui_report(data, out_dir):
     """Write the posted --ui-check report to out_dir/ui-report.txt, links and keys stripped a second time.
     Returns (files kept, items removed)."""
@@ -751,6 +770,9 @@ def keep_ui_report(data, out_dir):
     text, n = LINK_RE.subn("[link removed]", text)
     text, k = KEY_RE.subn(r"\1\2[removed]", text)
     summary = subtitle_summary(text)
+    if summary:
+        text = text.rstrip("\n") + "\n" + summary
+    summary = memory_summary(text)
     if summary:
         text = text.rstrip("\n") + "\n" + summary
     with open(os.path.join(out_dir, "ui-report.txt"), "w", encoding="utf-8", newline="") as f:

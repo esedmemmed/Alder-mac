@@ -131,8 +131,65 @@ const MAIN_PATCHES = [ // also diagnostics.js (webapis) and settings.js (the Abo
 // Mac-only ranking: HEVC is listed (macProfile.hevc), but auto-play and BEST MATCH take only what the profile's autoOk accepts (H.264 8-bit
 // 1080p30). src/core/ranking.js stays untouched so the Tizen bundle is byte-identical; a no-op where the profile has no autoOk.
 export const RANKING_PATCHES = [
-  ['rank(streams.filter(s => playable(s) && wanted(s)))', 'rank(streams.filter(s => playable(s) && wanted(s) && (!tv.autoOk || tv.autoOk(s))))'],
+  // a release the viewer watched before (platform/mac/release-memory.js: file, signature, bingeGroup) is auto-eligible even outside autoOk, and leads
+  ['rank(streams.filter(s => playable(s) && wanted(s)))', 'rank(streams.filter(s => playable(s) && wanted(s) && (!tv.autoOk || tv.autoOk(s) || (memory && memory.level && memory.level(videoId, metaId, s) > 0))))'],
   ['const best = eligible.find(quiet) || null', 'const best = eligible.find(s => quiet(s) && (!tv.autoOk || tv.autoOk(s))) || null'],
+  ["[s => file !== null && s.filename === file, 'desc'],", "[s => (memory && memory.level ? memory.level(videoId, metaId, s, file) : (file !== null && s.filename === file ? 4 : 0)), 'desc'],"], // was: file name only
+];
+
+// Mac release memory: the session builds it over the shared source memory; the engine tells it when a source opens and when one fails (one decide()
+// line and one `memory:` report line per case). Every call is guarded, so a memory without these methods changes nothing.
+export const SESSION_PATCHES = [
+  ["import { createRanker, createSourceMemory } from '../core/ranking.js'", "import { createRanker, createSourceMemory } from '../core/ranking.js'\nimport { createReleaseMemory } from '#platform/release-memory'"],
+  ['const memory = createSourceMemory(store)', 'const memory = createReleaseMemory(store, createSourceMemory(store))'],
+];
+export const ENGINE_MEMORY_PATCHES = [
+  ['function load(position, message = null) {', 'function load(position, message = null) {\n    if (memory && memory.noteLoad) memory.noteLoad({ videoId, metaId, sources, at, picked: params.picked, decide });'],
+  ['function next(reason = "didn\'t start") {', 'function next(reason = "didn\'t start") {\n    if (memory && memory.noteFailed) memory.noteFailed({ videoId, metaId, sources, at, reason, picked: params.picked, decide });'],
+];
+
+// Mac subtitle memory (platform/mac/subtitle-memory.js): what the viewer picked in the Subtitles menu for a title (Off, a file track, an add-on
+// subtitle) is started again for the next episode and on a rewatch. The session hangs it on the memory (memory.subtitles); the engine writes it
+// only in selectSubtitle (a menu pick), and reads it once at the start of the tracks and again as each add-on answers. One decide() line and one
+// `memory:` report line per start. Every call is guarded, so a memory without `subtitles` changes nothing. Anchors are on the original text of engine.js.
+export const SUBTITLE_SESSION_PATCHES = [
+  ["import { createRanker, createSourceMemory } from '../core/ranking.js'", "import { createRanker, createSourceMemory } from '../core/ranking.js'\nimport { createSubtitleMemory } from '#platform/subtitle-memory'"],
+  ['const settings = createSettings({ store, activeProfileId: () => base.activeId(), tvLanguage })', 'memory.subtitles = createSubtitleMemory(store)\n  const settings = createSettings({ store, activeProfileId: () => base.activeId(), tvLanguage })'],
+];
+export const SUBTITLE_MEMORY_PATCHES = [
+  ["import { parseTextTracks, startSubtitle } from './tracks.js';", "import { parseTextTracks, startSubtitle } from './tracks.js';\nimport { subtitlePlan } from '#platform/subtitle-memory';"],
+  ['let subsPicked = false;', 'let subsPicked = false;\n  const macSub = { started: false, final: false, choice: null, addonsDone: false }; // the remembered subtitle choice, resolved once'],
+  ['const emit = (name, data = {}) => {', "const emit = (name, data = {}) => {\n    if (name === 'tracks' && macSub.started && !macSub.final) macSubTry();"],
+  ["// Releases flag foreign subtitles as forced or default: start with subtitles only in the TV's language, else none.", "macSubStart();\n    // Releases flag foreign subtitles as forced or default: start with subtitles only in the TV's language, else none."],
+  ['    loadAddonSubtitles();\n', '    loadAddonSubtitles().then(() => { macSub.addonsDone = true; if (macSub.started && !macSub.final) macSubTry(); });\n'],
+  ['async function loadAddonSubtitles() {', `// Mac subtitle memory: Off -> none; a language -> the file's track, else the first add-on subtitle in it as the answers arrive; else the normal rule
+  function macSubStart() {
+    if (macSub.started || !memory || !memory.subtitles || !settings.subtitles()) return;
+    macSub.started = true;
+    macSub.choice = memory.subtitles.get(metaId);
+    macSubTry();
+  }
+  function macSubTry() {
+    if (!macSub.choice || macSub.final || shut) return;
+    const plan = subtitlePlan(macSub.choice, { textTracks, addonSubs, addonsDone: macSub.addonsDone, lang: toIso1 });
+    if (plan.kind === 'wait') return;
+    macSub.final = true;
+    const language = languageName(macSub.choice.language || '');
+    const said = (line, how) => { decide('memory: ' + line); memory.subtitles.report('memory: ' + how); };
+    if (plan.kind === 'off') { subsPicked = true; subMode = 'off'; textIndex = null; said('subtitles off, as picked before', 'found by=sub_off'); applySubtitleMode(); }
+    else if (plan.kind === 'file') { subsPicked = true; subMode = 'file'; textIndex = plan.track.index; said('subtitles ' + language + ' from the file (track #' + plan.track.index + ')', 'found by=sub_file source=' + (plan.track.index + 1)); applySubtitleMode(); }
+    else if (plan.kind === 'addon') { said('subtitles ' + language + ' from ' + plan.sub.addon, 'found by=sub_addon source=' + (plan.index + 1)); selectSubtitle({ kind: 'addon', sub: plan.sub }, true); }
+    else said('no ' + language + ' subtitles in the file or from the add-ons, normal rule', 'not offered');
+  }
+  function macSubRemember(choice) { if (memory && memory.subtitles) memory.subtitles.remember(metaId, choice); }
+  function macSubRememberFile(index) { const t = textTracks.find((x) => x.index === index); if (t && t.language) macSubRemember({ kind: 'lang', language: t.language }); }
+
+  async function loadAddonSubtitles() {`],
+  ['async function selectSubtitle(choice) {', 'async function selectSubtitle(choice, fromMemory = false) {'],
+  ['const token = ++subChoiceToken;', 'if (!fromMemory) macSub.final = true; // a menu pick ends the remembered start\n    const token = ++subChoiceToken;'],
+  ["decide('subtitles: add-on file from ' + choice.sub.addon + ' (' + choice.sub.language + ', ' + cues.length + ' cues)');", "decide('subtitles: add-on file from ' + choice.sub.addon + ' (' + choice.sub.language + ', ' + cues.length + ' cues)');\n      if (!fromMemory) macSubRemember({ kind: 'lang', language: toIso1(choice.sub.lang), addon: choice.sub.addon });"],
+  ["decide('subtitles: the file\\'s track #' + choice.index); }", "decide('subtitles: the file\\'s track #' + choice.index); if (!fromMemory) macSubRememberFile(choice.index); }"],
+  ["decide('subtitles: off'); }", "decide('subtitles: off'); if (!fromMemory) macSubRemember({ kind: 'off' }); }"],
 ];
 
 // Mac-only subtitle timing: 0.1 s steps from -2 s to +2 s (Alder's list is -2, -1, -0.5, 0, 0.5, 1, 2 s). src/player/tracks.js stays untouched.
@@ -156,6 +213,7 @@ function macPlatform() {
         // Safari before 16.4 (Big Sur, the Air) throws a SyntaxError on a lookbehind regex, and this one is built at module load: the
         // whole bundle died before boot (black window, T3.1). Same word-start test without a lookbehind; Tizen's build keeps the original.
         [join(ROOT, 'src/core/ranking.js'), RANKING_PATCHES],
+        [join(ROOT, 'src/app/session.js'), [...SESSION_PATCHES, ...SUBTITLE_SESSION_PATCHES]],
         [join(ROOT, 'src/core/audio.js'), [
           ["const START = '(?<![a-z0-9])'", "const START = '(?:^|[^a-z0-9])'"],
           ["NO_SOUND_TAG = 'No sound on this TV'", "NO_SOUND_TAG = 'No sound on this Mac'"],
@@ -172,6 +230,8 @@ function macPlatform() {
         // add-on subtitles: the text the page fetched goes to mpv (adapter addSubtitle) and mpv draws it; mpv also draws the file's own
         // tracks, so the DOM subtitle line stays hidden
         [join(ROOT, 'src/player/engine.js'), [
+          ...ENGINE_MEMORY_PATCHES,
+          ...SUBTITLE_MEMORY_PATCHES,
           ['parseSubtitles(await http.get(choice.sub.url), choice.sub.format)', 'parseSubtitles(((t) => { avplay.addSubtitle(t, choice.sub); return t; })(await http.get(choice.sub.url)), choice.sub.format)'],
           // add-on subtitle lists: all add-ons at once, the menu fills as each answers, kept per video id, timing logged (platform/mac/subtitle-fetch.js)
           ["import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';", "import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';\nimport { macLoadAddonSubtitles } from '#platform/subtitle-fetch';"],

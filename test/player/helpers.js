@@ -44,6 +44,7 @@ function mpvScript(url) {
   const spec = {};
   if (q.get('mock.duration')) spec.duration = Number(q.get('mock.duration')); // seconds, as Tizen's
   if (q.get('mock.start') === 'never') spec.freeze = true; // loads and plays, but the time never advances: no picture
+  if (q.get('mock.tracks')) spec.tracks = JSON.parse(q.get('mock.tracks')); // mpv track-list entries (text tracks in the file)
   const prepare = q.get('mock.prepare') || '';
   if (prepare === 'hang') spec.hang = true; // the load never answers (Mac only: Tizen's equivalent is slow:<ms>)
   if (prepare.startsWith('fail:')) spec.fail = MPV_FAIL_TEXT[prepare.slice(5)] || 'Unknown error';
@@ -104,7 +105,7 @@ export function makeEngine(opts = {}) {
   if (opts.settings && opts.settings.subtitles === false) store.set('settings/subtitles', false);
   if (opts.settings && opts.settings.pictureSize) store.set('settings/pictureSize@p1', opts.settings.pictureSize);
   const library = createLibrary({ now: () => 1700000000000 + clock.now() });
-  const memory = createSourceMemory(store);
+  const memory = opts.memory || createSourceMemory(store); // a test may bring its own (the Mac release memory)
   const puts = [];
   const item = opts.item === undefined ? libraryItem() : opts.item;
   const stremio = {
@@ -120,7 +121,7 @@ export function makeEngine(opts = {}) {
   };
   const diag = createDiag({ now: clock.now });
   const params = Object.assign({ type: 'movie', metaId: 'tt15239678', videoId: 'tt15239678', name: 'Dune: Part Two', sources: opts.sources || [], picked: false }, opts.params || {});
-  const engine = createEngine(params, {
+  const engine = (opts.createEngine || createEngine)(params, {
     avplay, clock, stremio, authKey: 'FIXTURE-AUTH-KEY-0001', library, settings, memory, device: tu8000Profile(),
     http: opts.http || null, log, diag, tvLanguage: () => opts.tvLanguage || 'en',
     loadMeta: () => Promise.resolve(opts.meta || null),

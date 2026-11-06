@@ -440,6 +440,23 @@ class KeepUiReport(unittest.TestCase):
         finally:
             shutil.rmtree(out, ignore_errors=True)
 
+    def test_source_memory_lines_are_printed(self):
+        out = tempfile.mkdtemp()
+        try:
+            rep = (b'log: memory: found by=signature source=1\nlog: memory: failed, falling back by=signature\n'
+                   b'log: memory: not offered\n')
+            rw.keep_ui_report(rep, out)
+            text = open(os.path.join(out, "ui-report.txt")).read()
+            self.assertIn("Source memory (from the page's log):", text)
+            self.assertIn("remembered source found by signature (source 1)", text)
+            self.assertIn("remembered source failed (by signature), falling back", text)
+            self.assertIn("remembered source not offered, normal ranking", text)
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_no_memory_lines_leave_the_report_as_posted(self):
+        self.assertEqual(rw.memory_summary("log: boot: ready\n"), "")
+
     def test_no_subtitle_lines_leave_the_report_as_posted(self):
         self.assertEqual(rw.subtitle_summary("log: boot: ready\n"), "")
 

@@ -1,0 +1,7 @@
+log: boot: html
+log: boot: bridge loaded
+log: boot: app.js loaded
+log: boot: first screen
+nav: finished
+play: label=b72fe6e0 wall=110.0 adv=246.6 rt=-,-,- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x960 0.00fps 8bit pix=videotoolbox audio=unknown 6ch underruns=0 cache=3/9.5s fs=no end=stop
+play: label=571d53ff wall=39.9 adv=898.1 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x1080 0.00fps 8bit pix=videotoolbox audio=unknown 2ch underruns=0 cache=0/0.0s fs=no end=stop
