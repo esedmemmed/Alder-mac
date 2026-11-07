@@ -12,6 +12,7 @@
  *   memory: found by=file|signature|group source=<n>      the remembered release is among the sources the player was given
  *   memory: not offered                                    something was remembered, no source matches it: the normal ranking
  *   memory: failed, falling back by=<how>                  the remembered source failed: the failover goes on as always
+ *   memory: waiting for add-ons                            the sources page held the start for the other add-ons: the first answers had none of it (T8)
  * Safari 14: no lookbehind, no class fields. The sort stays stable (core/util.js); nothing here sorts.
  */
 import { macBridge } from './bridge.js';
@@ -81,6 +82,10 @@ export function createReleaseMemory(store, base, { report = bridgeLog } = {}) {
     binge: base.binge,
     level,
     match: (videoId, metaId, s) => how(level(videoId, metaId, s)) || null,
+
+    /** The sources page asks (build.mjs FINDER_MEMORY_PATCHES): something is remembered for this video and none of the answers so far is it. */
+    pending: (videoId, metaId, streams) => anyRemembered(videoId, metaId) && !streams.some(s => level(videoId, metaId, s) > 0),
+    noteHeld() { report('memory: waiting for add-ons'); },
 
     /** Called by the player once a source shows a picture: the shared memory's file and group, and the signatures. */
     remember(videoId, metaId, s) {

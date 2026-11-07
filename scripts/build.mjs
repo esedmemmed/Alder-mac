@@ -135,6 +135,11 @@ export const RANKING_PATCHES = [
   ['rank(streams.filter(s => playable(s) && wanted(s)))', 'rank(streams.filter(s => playable(s) && wanted(s) && (!tv.autoOk || tv.autoOk(s) || (memory && memory.level && memory.level(videoId, metaId, s) > 0))))'],
   ['const best = eligible.find(quiet) || null', 'const best = eligible.find(s => quiet(s) && (!tv.autoOk || tv.autoOk(s))) || null'],
   ["[s => file !== null && s.filename === file, 'desc'],", "[s => (memory && memory.level ? memory.level(videoId, metaId, s, file) : (file !== null && s.filename === file ? 4 : 0)), 'desc'],"], // was: file name only
+  // T8: what the finder asks (FINDER_MEMORY_PATCHES): is a release remembered for this video that none of the answers so far is, and say so once
+  ['    /** The streams worth listing: real videos this TV can decode. */', `    /** Mac: something is remembered for this video and none of [streams] is it (platform/mac/release-memory.js pending). */
+    memoryPending: (streams) => !!(memory && memory.pending && memory.pending(videoId, metaId, streams)),
+    memoryHeld: () => { if (memory && memory.noteHeld) memory.noteHeld() },
+    /** The streams worth listing: real videos this TV can decode. */`],
 ];
 
 // Mac release memory: the session builds it over the shared source memory; the engine tells it when a source opens and when one fails (one decide()
@@ -146,6 +151,19 @@ export const SESSION_PATCHES = [
 export const ENGINE_MEMORY_PATCHES = [
   ['function load(position, message = null) {', 'function load(position, message = null) {\n    if (memory && memory.noteLoad) memory.noteLoad({ videoId, metaId, sources, at, picked: params.picked, decide });'],
   ['function next(reason = "didn\'t start") {', 'function next(reason = "didn\'t start") {\n    if (memory && memory.noteFailed) memory.noteFailed({ videoId, metaId, sources, at, reason, picked: params.picked, decide });'],
+];
+
+// Mac Resume (T8): the finder (core/finder.js) starts as soon as the first add-on has something playable, so a release the viewer watched
+// before that comes from a slower add-on never got its turn (a race: Back to the title page and Resume lost it now and then). When something is
+// remembered for the video and the answers so far hold none of it, the start waits for the other add-ons: until all have answered, or the
+// finder's own 800 ms wait for earlier add-ons ends (allowGaps), as in 1.4. Tizen's finder.js is untouched; a ranker without memoryPending changes nothing.
+export const FINDER_MEMORY_PATCHES = [
+  ['    if (best.length === 0 && this.answers.some(a => a === null)) return\n', `    if (best.length === 0 && this.answers.some(a => a === null)) return
+    if (best.length > 0 && !allowGaps && this.answers.some(a => a === null) && this.ranker.memoryPending && this.ranker.memoryPending(ready)) {
+      if (!this.macHeld) { this.macHeld = true; this.ranker.memoryHeld() }
+      return
+    }
+`],
 ];
 
 // Mac subtitle memory (platform/mac/subtitle-memory.js): what the viewer picked in the Subtitles menu for a title (Off, a file track, an add-on
@@ -272,6 +290,7 @@ function macPlatform() {
         // Safari before 16.4 (Big Sur, the Air) throws a SyntaxError on a lookbehind regex, and this one is built at module load: the
         // whole bundle died before boot (black window, T3.1). Same word-start test without a lookbehind; Tizen's build keeps the original.
         [join(ROOT, 'src/core/ranking.js'), RANKING_PATCHES],
+        [join(ROOT, 'src/core/finder.js'), FINDER_MEMORY_PATCHES],
         [join(ROOT, 'src/app/session.js'), [...SESSION_PATCHES, ...SUBTITLE_SESSION_PATCHES]],
         [join(ROOT, 'src/core/audio.js'), [
           ["const START = '(?<![a-z0-9])'", "const START = '(?:^|[^a-z0-9])'"],
