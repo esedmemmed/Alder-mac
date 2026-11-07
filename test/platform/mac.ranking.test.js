@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { withMacBuildLock } from './mac-build-lock.js';
 import { macProfile } from '../../src/platform/mac/device.js';
 import { Stream } from '../../src/core/addon.js';
 import { RANKING_PATCHES } from '../../scripts/build.mjs';
@@ -15,9 +16,11 @@ for (const [from, to] of RANKING_PATCHES) {
   assert.ok(text.includes(from), 'anchor present: ' + from);
   text = text.split(from).join(to);
 }
-writeFileSync(copy, text);
 let createRanker;
-try { ({ createRanker } = await import(pathToFileURL(copy).href)); } finally { rmSync(copy, { force: true }); }
+await withMacBuildLock(async () => {
+  writeFileSync(copy, text);
+  try { ({ createRanker } = await import(pathToFileURL(copy).href)); } finally { rmSync(copy, { force: true }); }
+});
 
 const names = {
   k4: 'Movie.2160p.WEB-DL.DDP5.1.HEVC-A.mkv',

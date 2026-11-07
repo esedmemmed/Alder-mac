@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { withMacBuildLock } from './mac-build-lock.js';
 import { Addon, Subtitle } from '../../src/core/addon.js';
 import { chooseAddonSubtitles } from '../../src/core/playback.js';
 import { createSourceMemory } from '../../src/core/ranking.js';
@@ -23,8 +24,10 @@ async function patched(file, copyName, patches, swaps = []) {
     text = text.split(from).join(to);
   }
   for (const [a, b] of swaps) text = text.split(a).join(b);
-  writeFileSync(copy, text);
-  try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  return withMacBuildLock(async () => {
+    writeFileSync(copy, text);
+    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  });
 }
 const { createEngine } = await patched('player/engine.js', 'mac-match-test', [...SUBTITLE_MEMORY_PATCHES, ...SUBTITLE_FETCH_PATCHES], [['#platform/subtitle-memory', '../platform/mac/subtitle-memory.js'], ['#platform/subtitle-fetch', '../platform/mac/subtitle-fetch.js']]);
 const { Addon: MacAddon } = await patched('core/addon.js', 'mac-match-test', SUBTITLE_ID_PATCHES);

@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { withMacBuildLock } from './mac-build-lock.js';
 import { macProfile } from '../../src/platform/mac/device.js';
 import { Stream } from '../../src/core/addon.js';
 import { createSourceMemory } from '../../src/core/ranking.js';
@@ -22,8 +23,10 @@ async function patched(rel, copyName, patches) {
     assert.ok(text.includes(from), 'anchor present: ' + from);
     text = text.split(from).join(to);
   }
-  writeFileSync(copy, text);
-  try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  return withMacBuildLock(async () => {
+    writeFileSync(copy, text);
+    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  });
 }
 const { createRanker } = await patched('src/core/ranking.js', 'ranking.mac-memory-test.js', RANKING_PATCHES);
 const { createEngine } = await patched('src/player/engine.js', 'engine.mac-memory-test.js', ENGINE_MEMORY_PATCHES);

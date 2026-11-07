@@ -85,6 +85,16 @@ cp "$ROOT/LICENSE" "$LIC/GPL-3.0.txt"
   echo "  asset sources-$PIN.tar.gz at $REPO_URL/releases/download/stack-$PIN/sources-$PIN.tar.gz"
 } > "$LIC/SOURCE.txt"
 
+# App icon from the tracked 512x512 icon.png (no 1024 slot: no upscaling); the iconset is scratch, removed after.
+SET="$OUT/Alder.iconset"
+rm -rf "$SET"; mkdir -p "$SET"
+for s in 16 32 128 256 512; do
+  sips -z $s $s "$ROOT/icon.png" --out "$SET/icon_${s}x${s}.png" >/dev/null
+  if [ $s -le 256 ]; then sips -z $((s*2)) $((s*2)) "$ROOT/icon.png" --out "$SET/icon_${s}x${s}@2x.png" >/dev/null; fi
+done
+iconutil -c icns "$SET" -o "$APP/Contents/Resources/Alder.icns"
+rm -rf "$SET"
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -94,6 +104,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>com.esedmemmed.alderproof</string>
   <key>CFBundleName</key><string>Alder</string>
   <key>CFBundleDisplayName</key><string>Alder</string>
+  <key>CFBundleIconFile</key><string>Alder</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>${BUILD_NUMBER:-0}</string>

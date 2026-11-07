@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { withMacBuildLock } from './mac-build-lock.js';
 import { Subtitle } from '../../src/core/addon.js';
 import { createSourceMemory } from '../../src/core/ranking.js';
 import { createReleaseMemory } from '../../src/platform/mac/release-memory.js';
@@ -22,8 +23,10 @@ async function patchedEngine() {
     text = text.split(from).join(to);
   }
   text = text.split('#platform/subtitle-memory').join('../platform/mac/subtitle-memory.js');
-  writeFileSync(copy, text);
-  try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  return withMacBuildLock(async () => {
+    writeFileSync(copy, text);
+    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  });
 }
 const { createEngine } = await patchedEngine();
 

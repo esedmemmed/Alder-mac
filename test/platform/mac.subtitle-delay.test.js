@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { withMacBuildLock } from './mac-build-lock.js';
 import { createRequire } from 'node:module';
 import { Subtitle } from '../../src/core/addon.js';
 import { SUBTITLE_DELAY_PATCHES, SUBTITLE_DELAY_OPTIONS_PATCHES } from '../../scripts/build.mjs';
@@ -23,8 +24,10 @@ async function patchedEngine() {
     text = text.split(from).join(to);
   }
   text = text.split('#platform/subtitle-delay').join('../platform/mac/subtitle-delay.js');
-  writeFileSync(copy, text);
-  try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  return withMacBuildLock(async () => {
+    writeFileSync(copy, text);
+    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  });
 }
 const { createEngine } = await patchedEngine();
 

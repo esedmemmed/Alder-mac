@@ -110,6 +110,7 @@ test('Mac build: Subtitle timing steps are 0.1 s from -2 s to +2 s; the shared l
   const { readFileSync, writeFileSync, rmSync } = await import('node:fs');
   const { fileURLToPath, pathToFileURL } = await import('node:url');
   const { TRACKS_PATCHES } = await import('../../scripts/build.mjs');
+  const { withMacBuildLock } = await import('./mac-build-lock.js');
   const src = fileURLToPath(new URL('../../src/player/tracks.js', import.meta.url));
   const copy = fileURLToPath(new URL('../../src/player/tracks.mac-test.js', import.meta.url));
   let text = readFileSync(src, 'utf8');
@@ -117,9 +118,11 @@ test('Mac build: Subtitle timing steps are 0.1 s from -2 s to +2 s; the shared l
     assert.ok(text.includes(from), 'anchor present: ' + from);
     text = text.split(from).join(to);
   }
-  writeFileSync(copy, text);
   let mac;
-  try { mac = await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  await withMacBuildLock(async () => {
+    writeFileSync(copy, text);
+    try { mac = await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  });
   assert.equal(mac.TIMING_STEPS.length, 41);
   assert.equal(mac.TIMING_STEPS[0], -2000);
   assert.equal(mac.TIMING_STEPS[20], 0);

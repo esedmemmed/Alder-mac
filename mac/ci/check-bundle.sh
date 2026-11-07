@@ -144,6 +144,9 @@ EOF
   got=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist" 2>/dev/null || true)
   if [ "$got" = "com.esedmemmed.alderproof" ]; then echo "ok: CFBundleIdentifier $got"; else fail "$app: CFBundleIdentifier '$got' != com.esedmemmed.alderproof"; fi
 
+  got=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$plist" 2>/dev/null || true)
+  if [ -n "$got" ] && [ -s "$app/Contents/Resources/${got%.icns}.icns" ]; then echo "ok: CFBundleIconFile $got"; else fail "$app: CFBundleIconFile '$got' missing or no ${got%.icns}.icns in Resources"; fi
+
   for lic in GPL-3.0.txt NOTICE.txt SOURCE.txt; do
     if [ -s "$app/Contents/Resources/licenses/$lic" ]; then
       echo "ok: licenses/$lic"

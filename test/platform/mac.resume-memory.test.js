@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { withMacBuildLock } from './mac-build-lock.js';
 import { macProfile } from '../../src/platform/mac/device.js';
 import { createSourceMemory } from '../../src/core/ranking.js';
 import { createReleaseMemory } from '../../src/platform/mac/release-memory.js';
@@ -18,8 +19,10 @@ async function patched(rel, copyName, patches) {
   const copy = fileURLToPath(new URL('../../' + rel.replace(/[^/]+$/, copyName), import.meta.url));
   let text = readFileSync(src, 'utf8');
   for (const [from, to] of patches) { assert.ok(text.includes(from), 'anchor present: ' + from); text = text.split(from).join(to); }
-  writeFileSync(copy, text);
-  try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  return withMacBuildLock(async () => {
+    writeFileSync(copy, text);
+    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
+  });
 }
 const { createRanker } = await patched('src/core/ranking.js', 'ranking.mac-resume-test.js', RANKING_PATCHES);
 const { SourceFinder } = await patched('src/core/finder.js', 'finder.mac-resume-test.js', FINDER_MEMORY_PATCHES);
