@@ -1,0 +1,122 @@
+log: boot: html
+log: boot: bridge loaded
+log: boot: app.js loaded
+log: boot: first screen
+nav: finished
+log: memory: found by=file source=1
+log: subs-addon: start name="SELection"
+log: subs-addon: start name="opensubtitles PRO"
+log: subs-addon: start name="SubMaker | ElfHosted"
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=363 count=0
+log: subs-addon: done name="SELection" ms=1130 count=8
+log: subs-addon: done name="opensubtitles PRO" ms=1464 count=12
+log: memory: found by=sub_addon source=17
+log: match: best=2 named=4/4
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s file
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s addon
+log: memory: found by=file source=1
+log: subs-addon: start name="SubMaker | ElfHosted"
+log: subs-addon: done name="SELection" ms=1 count=8 cached=1
+log: subs-addon: done name="opensubtitles PRO" ms=2 count=12 cached=1
+play: label=6308ce26 wall=16.4 adv=83.6 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x1080 0.00fps 8bit pix=videotoolbox audio=unknown 2ch underruns=0 cache=1/0.6s fs=yes end=stop
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=117 count=0
+log: memory: found by=sub_addon source=17
+log: match: best=2 named=4/4
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s file
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s addon
+log: memory: found by=file source=1
+log: subs-addon: start name="SubMaker | ElfHosted"
+log: subs-addon: done name="SELection" ms=1 count=8 cached=1
+log: subs-addon: done name="opensubtitles PRO" ms=1 count=12 cached=1
+play: label=bbb6f3de wall=10.0 adv=86.4 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x1080 0.00fps 8bit pix=videotoolbox audio=unknown 0ch underruns=0 cache=0/0.0s fs=yes end=stop
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=102 count=0
+log: memory: found by=sub_addon source=17
+log: match: best=2 named=4/4
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s file
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s addon
+log: memory: found by=file source=1
+log: subs-addon: start name="SubMaker | ElfHosted"
+log: subs-addon: done name="SELection" ms=1 count=8 cached=1
+log: subs-addon: done name="opensubtitles PRO" ms=1 count=12 cached=1
+play: label=6308ce26 wall=10.1 adv=90.1 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x1080 0.00fps 8bit pix=videotoolbox audio=unknown 0ch underruns=0 cache=0/0.0s fs=yes end=stop
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=152 count=0
+log: memory: found by=sub_addon source=17
+log: match: best=2 named=4/4
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s file
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s addon
+log: memory: found by=file source=1
+log: subs-addon: start name="SELection"
+log: subs-addon: start name="opensubtitles PRO"
+log: subs-addon: start name="SubMaker | ElfHosted"
+play: label=6308ce26 wall=14.7 adv=92.8 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 1920x1080 0.00fps 8bit pix=videotoolbox audio=unknown 0ch underruns=0 cache=0/0.0s fs=yes end=stop
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=108 count=0
+log: subs-addon: done name="SELection" ms=1069 count=19
+log: subs-addon: done name="opensubtitles PRO" ms=1621 count=22
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s file
+log: menu-click: open=options target=div.pl-options kind=video action=close
+log: memory: found by=file source=1
+log: subs-addon: start name="SubMaker | ElfHosted"
+log: subs-addon: done name="SELection" ms=0 count=19 cached=1
+log: subs-addon: done name="opensubtitles PRO" ms=1 count=22 cached=1
+play: label=d30b8863 wall=21.3 adv=1999.9 rt=- fdrop=0 ddrop=0 vodelay=0 mistimed=0 hwdec=videotoolbox video=unknown 960x720 0.00fps 8bit pix=videotoolbox audio=unknown 6ch underruns=0 cache=0/0.0s fs=yes end=stop
+log: subs-addon: fail name="SubMaker | ElfHosted" ms=105 count=0
+log: delay: none kept, 0.0 s
+log: delay: 0.0 s file
+
+Subtitle add-ons (from the page's log):
+  SELection: answered in 0 ms, 19 subtitles
+  opensubtitles PRO: answered in 1 ms, 22 subtitles
+  SubMaker | ElfHosted: failed in 105 ms, 0 subtitles
+
+Source memory (from the page's log):
+  remembered source found by file (source 1)
+  remembered source found by file (source 1)
+  remembered source found by file (source 1)
+  remembered source found by file (source 1)
+  remembered source found by file (source 1)
+  remembered source found by file (source 1)
+
+Subtitle memory (from the page's log):
+  remembered subtitle: add-on subtitle 17
+  remembered subtitle: add-on subtitle 17
+  remembered subtitle: add-on subtitle 17
+  remembered subtitle: add-on subtitle 17
+
+Subtitle name match (from the page's log):
+  name match: best score 2, 4 of 4 subtitles named
+  name match: best score 2, 4 of 4 subtitles named
+  name match: best score 2, 4 of 4 subtitles named
+  name match: best score 2, 4 of 4 subtitles named
+
+Subtitle delay (from the page's log):
+  0.0 s (file track)
+  0.0 s (add-on subtitle)
+  0.0 s (file track)
+  0.0 s (add-on subtitle)
+  0.0 s (file track)
+  0.0 s (add-on subtitle)
+  0.0 s (file track)
+  0.0 s (add-on subtitle)
+  0.0 s (file track)
+  0.0 s (file track)
+
+Subtitle delay memory (from the page's log):
+  delay: none kept, 0.0 s
+  delay: none kept, 0.0 s
+  delay: none kept, 0.0 s
+  delay: none kept, 0.0 s
+  delay: none kept, 0.0 s
+  delay: none kept, 0.0 s
+  delay: none kept, 0.0 s
+  delay: none kept, 0.0 s
+  delay: none kept, 0.0 s
+  delay: none kept, 0.0 s

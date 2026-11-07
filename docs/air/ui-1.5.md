@@ -9,3 +9,11 @@ Verdict (2026-11-07, his words): "Everything works but there is one problem -- w
 - match: ok by his eye; report `match: best=2 named=6/6`, `named=4/4` (every add-on subtitle carried a comparable name)
 - defect: Back to the title page then Resume re-searches sources instead of starting the remembered one; from Home it does. Owner: new fix task (source memory on the Resume path, from 1.4).
 Report: arrived; `docs/air/raw-1.5/ui-report-walk1.txt` (0 links, unchanged).
+
+## Walk 2 (app-bea4622, public bea4622, from main 7e3b306)
+Pre-push gates (Windows): all 7 exit 0. CI app.yml: green, 2m7s.
+Steps: movie and episode played, Back to the title page, Resume (repeated); delay and match spot-checked.
+Verdict (2026-11-07, his words): "it worked correctly".
+- Resume: same source started each time; report `memory: found by=file source=1` on every start, no `memory: failed`
+- match: `match: best=2 named=4/4` on each play
+Report: `docs/air/raw-1.5/ui-report-walk2.txt` (0 links, unchanged).

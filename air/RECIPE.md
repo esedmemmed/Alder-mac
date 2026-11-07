@@ -15,7 +15,7 @@ If the Air says the player would not start, tell Claude; the status is already o
 
 Checks the Alder page inside the Mac web view: the engine versions, which Stremio hosts the page can reach, and whether the page keeps data between launches. It needs no Stremio login and no links, so nothing secret is involved. The Air must be on the same Wi-Fi as this Windows computer, with its lid open and the internet working.
 
-1. On Windows, in the project folder, run `python air/run_from_windows.py --ui-check --probe` (use the Python named in `.claude/pa.json`). Leave out `--probe` to have the app open for you to use instead.
+1. On Windows, in the project folder, run `python air/run_from_windows.py --ui-check --probe` (use the Python named in `.claude/pa.json`). Leave out `--probe` to have the app open for you to use instead. Add `--installed` to skip the download and test the app already in Applications (`Alder.app`, else `AlderProof.app`); the report then starts with `app:` and `app version:` lines.
 2. It prints one line starting `curl -sS http://` (it looks up the newest app build first). If Windows asks about its firewall, tick Public networks and press Allow.
 3. On the Air press Cmd-Space, type Terminal, press Return, type that line exactly and press Return.
 4. The Air downloads the newest app build and opens it twice, a few seconds each; a full-screen window appears and closes by itself. If a window stays open, press Cmd-Q. Without `--probe` the app opens once and stays until you press Cmd-Q; use it as you like (the page's errors are reported too).

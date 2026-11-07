@@ -77,6 +77,7 @@ jobs:
         env:
           PINHASH: ${{ steps.stack.outputs.pinhash }}
           COMMIT: ${{ github.sha }}
+          BUILD_NUMBER: ${{ github.run_number }}
         run: /bin/bash mac/shell/build-app.sh "$RUNNER_TEMP/out"
 
       - name: Check app (Mach-O arch, minos, linkage, signature, licences)
@@ -120,6 +121,48 @@ jobs:
           echo "selftest exit code (mounted dmg): $rc"
           test "$rc" -eq 0
 
+      - name: Pack Alder-<version>.dmg
+        id: beta
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          version="$(tr -d '[:space:]' < mac/VERSION)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          root="$RUNNER_TEMP/betaroot"
+          mkdir -p "$root"
+          ditto "$RUNNER_TEMP/out/AlderProof.app" "$root/Alder.app"
+          ln -s /Applications "$root/Applications"
+          cp mac/release/FIRST-OPEN.md "$root/Open Alder the first time.txt"
+          dmg="$RUNNER_TEMP/Alder-$version.dmg"
+          n=0
+          until hdiutil create -volname Alder -srcfolder "$root" -ov -format UDZO "$dmg"; do
+            n=$((n + 1))
+            test "$n" -lt 3
+            echo "hdiutil create failed, retry $n"
+            sleep 15
+          done
+          ls -l "$dmg"
+
+      - name: Mount Alder-<version>.dmg, check and selftest Alder.app
+        if: ${{ !cancelled() && steps.beta.outcome == 'success' }}
+        env:
+          VERSION: ${{ steps.beta.outputs.version }}
+        run: |
+          mnt="$RUNNER_TEMP/betamnt"
+          mkdir -p "$mnt"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$RUNNER_TEMP/Alder-$VERSION.dmg"
+          trap 'hdiutil detach "$mnt" -force || true' EXIT
+          test -L "$mnt/Applications"
+          test "$(readlink "$mnt/Applications")" = /Applications
+          test -s "$mnt/Open Alder the first time.txt"
+          got="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$mnt/Alder.app/Contents/Info.plist")"
+          echo "plist version: $got, mac/VERSION: $VERSION"
+          test "$got" = "$VERSION"
+          /bin/bash mac/ci/check-bundle.sh --app "$mnt/Alder.app"
+          rc=0
+          "$mnt/Alder.app/Contents/MacOS/AlderProof" --selftest mac/test/clip.mp4 || rc=$?
+          echo "selftest exit code (Alder dmg): $rc"
+          test "$rc" -eq 0
+
       - name: Publish prerelease app-<short sha>
         run: |
           short="${GITHUB_SHA:0:7}"
@@ -128,3 +171,16 @@ jobs:
           notes="commit $GITHUB_SHA, stack $stack"
           gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --prerelease --target "$GITHUB_SHA" --title "$tag" --notes "$notes"
           gh release upload "$tag" "$RUNNER_TEMP/AlderProof.dmg" --clobber
+
+      # Created once per mac/VERSION; an existing beta is left alone (a new beta is a version bump).
+      - name: Publish beta-<version> (latest) when missing
+        env:
+          VERSION: ${{ steps.beta.outputs.version }}
+        run: |
+          tag="beta-$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag exists, left alone"
+            exit 0
+          fi
+          gh release create "$tag" "$RUNNER_TEMP/Alder-$VERSION.dmg" --target "$GITHUB_SHA" --latest \
+            --title "Alder $VERSION beta" --notes-file mac/release/FIRST-OPEN.md

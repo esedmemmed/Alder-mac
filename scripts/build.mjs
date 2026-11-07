@@ -126,6 +126,10 @@ const MAIN_PATCHES = [ // also diagnostics.js (webapis) and settings.js (the Abo
   ['webapis: window.webapis,', 'webapis: null,'],
   ['window.tizen.application.getCurrentApplication().exit();', "if (!macExit()) log.info('app', 'exit requested (no native shell)');"], // saves the player's place first
   ['Leave the app and go back to the TV.', 'Leave the app.'],
+  // log lines (the Diagnostics screen shows the log, so she can read them)
+  [" + ' TV keys'", " + ' keys'"],
+  ['no TV key registration (desktop browser?)', 'no key registration (Mac)'],
+  ['exit requested (not on a TV)', 'exit requested (not in the Mac shell)'],
 ];
 
 // Mac-only ranking: HEVC is listed (macProfile.hevc), but auto-play and BEST MATCH take only what the profile's autoOk accepts (H.264 8-bit
@@ -351,7 +355,9 @@ function macPlatform() {
           ['Alder for Tizen is a port of Alder', 'Alder for Mac is a port of Alder'],
           ['this TV can play', 'this Mac can play'], ["the TV's language", "the Mac's language"], ['on this TV', 'on this Mac'],
           ['This TV follows its order.', 'Alder follows its order.'], ["this TV's language", "this Mac's language"], ["the TV's own settings", "the Mac's own settings"],
-          ['from this TV.', 'from this Mac.'], ['TV interface', 'Mac interface'], ['this TV reported', 'this Mac reported'],
+          ['from this TV.', 'from this Mac.'], ['Alder is a TV interface', 'Alder is a Mac app'], ['A TV interface', 'A Mac app'], // the Alder row and its panel
+          ['the Android TV Stremio client', 'the Android Stremio client'], // About: upstream credit, both lines
+          ['this TV reported', 'this Mac reported'],
         ]],
         // sign-in leads with e-mail + password in native fields (platform/mac/signin-form.js), Return continues the name step
         [join(ROOT, 'src/screens/signin.js'), [
@@ -404,7 +410,8 @@ export async function buildMac({ log = console.log, dev = false, outDir: outDirA
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
-  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(pkg.version) };
+  const macVersion = readFileSync(join(ROOT, 'mac/VERSION'), 'utf8').trim(); // the Mac app's own version (the TV keeps package.json's)
+  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(macVersion) };
   const common = { bundle: true, target: MAC_TARGET, logLevel: 'silent', absWorkingDir: ROOT, legalComments: 'external', minify: !dev,
     // esbuild cannot lower destructuring for safari14 (a WebKit 14 bug in some destructuring forms), so it fails the build
     // instead; the shell's WebKit runs it as written (T3.c1 note; revisit if the Air shows a Safari 14 fault).

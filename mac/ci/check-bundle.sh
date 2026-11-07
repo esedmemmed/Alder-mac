@@ -137,6 +137,13 @@ EOF
     fail "$app: web/index.html is the TV page, not the Mac page"
   fi
 
+  local plist="$app/Contents/Info.plist" want got
+  want=$(tr -d '[:space:]' < "$HERE/../VERSION")
+  got=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist" 2>/dev/null || true)
+  if [ "$got" = "$want" ]; then echo "ok: CFBundleShortVersionString $got"; else fail "$app: CFBundleShortVersionString '$got' != mac/VERSION '$want'"; fi
+  got=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist" 2>/dev/null || true)
+  if [ "$got" = "com.esedmemmed.alderproof" ]; then echo "ok: CFBundleIdentifier $got"; else fail "$app: CFBundleIdentifier '$got' != com.esedmemmed.alderproof"; fi
+
   for lic in GPL-3.0.txt NOTICE.txt SOURCE.txt; do
     if [ -s "$app/Contents/Resources/licenses/$lic" ]; then
       echo "ok: licenses/$lic"

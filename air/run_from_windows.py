@@ -426,6 +426,7 @@ UI_SCRIPT = r'''#!/bin/bash
 main() {
 base="__BASE__"
 mode="__UIMODE__"
+installed="__INSTALLED__"
 dir=${ALDERPROOF_DIR:-$HOME/AlderProof}
 ALDERPROOF_BIN=${ALDERPROOF_BIN:-/Applications/AlderProof.app/Contents/MacOS/AlderProof}; export ALDERPROOF_BIN
 umask 077
@@ -435,6 +436,29 @@ alive=""
 trap 'kill "$alive" 2>/dev/null; cleanup' EXIT
 mkdir -p "$dir" || { say "cannot make $dir"; return 1; }
 say "air started: $(sw_vers -productVersion 2>/dev/null) $(sysctl -n hw.model 2>/dev/null)"
+
+if [ "$installed" = 1 ]; then
+    apps=${ALDER_APPS_DIR:-/Applications}
+    app=""
+    if [ -d "$apps/Alder.app" ]; then app="$apps/Alder.app"; elif [ -d "$apps/AlderProof.app" ]; then app="$apps/AlderProof.app"; fi
+    if [ -z "$app" ]; then
+        say "no Alder app found in $apps"
+        echo "Alder is not in Applications. Install it (steps 2 to 4 of the steps page), then run this line again."
+        return 1
+    fi
+    plistval() {
+        local v
+        v=$(defaults read "$app/Contents/Info" "$1" 2>/dev/null)
+        [ -n "$v" ] || v=$(plutil -extract "$1" raw -o - "$app/Contents/Info.plist" 2>/dev/null)
+        [ -n "$v" ] || v=$(grep -A1 "<key>$1</key>" "$app/Contents/Info.plist" 2>/dev/null | sed -n 's#.*<string>\(.*\)</string>.*#\1#p' | head -n 1)
+        echo "$v"
+    }
+    exe=$(plistval CFBundleExecutable); [ -n "$exe" ] || exe=$(basename "$app" .app)
+    appver=$(plistval CFBundleShortVersionString); [ -n "$appver" ] || appver=unknown
+    ALDERPROOF_BIN="$app/Contents/MacOS/$exe"
+    say "app: $app"
+    say "app version: $appver"
+fi
 
 appurl="__APPURL__"; apptag="__APPTAG__"
 if [ -n "$appurl" ]; then
@@ -491,6 +515,7 @@ else
 fi
 kill "$alive" 2>/dev/null
 [ -f "$rep" ] || echo "(the app wrote no report)" > "$rep"
+if [ "$installed" = 1 ]; then printf 'app: %s\napp version: %s\n' "$app" "$appver" >> "$rep"; fi
 strip < "$rep" > "$dir/ui-report.clean"
 sent=no
 for try in 1 2 3; do
@@ -1067,6 +1092,7 @@ def main(argv=None, creds=None, play_input=None):
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--ui-check", action="store_true", help="T2: install the app on the Air and check its page (no login)")
     ap.add_argument("--probe", action="store_true", help="with --ui-check: run the page probe twice instead of opening the app")
+    ap.add_argument("--installed", action="store_true", help="with --ui-check: use the app already in Applications, download nothing")
     ap.add_argument("--shell-check", action="store_true", help="T7.1: the AlderProof shell check (webview-1.1 steps 7-11)")
     ap.add_argument("--play-check", action="store_true", help="1.3 T6: the play matrix through the app and bare mpv, then questions and a verdict")
     a = ap.parse_args(argv)
@@ -1076,6 +1102,8 @@ def main(argv=None, creds=None, play_input=None):
 
     if a.probe and not a.ui_check:
         ap.error("--probe goes with --ui-check")
+    if a.installed and not a.ui_check:
+        ap.error("--installed goes with --ui-check")
     if a.play_check and (a.ui_check or a.shell_check):
         ap.error("--play-check stands alone")
     wanted = PLAY_LABELS if a.play_check else SHELL_LABELS if a.shell_check else LABELS
@@ -1127,8 +1155,10 @@ def main(argv=None, creds=None, play_input=None):
     base = "http://%s:%d/%s" % (host, server.server_address[1], token)
     app_tag, app_url = "", ""
     if a.shell_check or a.ui_check or a.play_check:
-        rel = find_app_release()
-        if rel:
+        rel = None if a.installed else find_app_release()
+        if a.installed:
+            say("Using the app installed in Applications; nothing is downloaded.")
+        elif rel:
             app_tag, app_url = rel
             say("Newest AlderProof build: %s (the Air will fetch it)." % app_tag)
         else:
@@ -1140,7 +1170,7 @@ def main(argv=None, creds=None, play_input=None):
         todo, plan = play_plan(rows, links, a.cooldown)
         script = play_script(base, rows, found, app_url, app_tag)
     else:
-        script = air_script(base, found, template, app_url, app_tag).replace("__UIMODE__", "probe" if a.probe else "open")
+        script = air_script(base, found, template, app_url, app_tag).replace("__UIMODE__", "probe" if a.probe else "open").replace("__INSTALLED__", "1" if a.installed else "")
     if a.end and not a.play_check:
         script = script.replace('main "$@"', 'MEASURE_END=%d; export MEASURE_END\nmain "$@"' % a.end)
     script = script.replace("cool=${ALDER_COOLDOWN:-180}", "cool=${ALDER_COOLDOWN:-%d}" % a.cooldown)

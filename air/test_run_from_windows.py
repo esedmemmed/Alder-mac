@@ -611,6 +611,73 @@ class UiCheck(unittest.TestCase):
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
+    def run_installed(self, bundles):
+        """UI_SCRIPT rendered with __INSTALLED__=1 against fake bundles {name: (exe, version)} in a temp ALDER_APPS_DIR."""
+        work = tempfile.mkdtemp()
+        try:
+            script = (rw.UI_SCRIPT.replace("__BASE__", "http://127.0.0.1:1/tok").replace("__UIMODE__", "open")
+                      .replace("__INSTALLED__", "1").replace("__APPURL__", "").replace("__APPTAG__", ""))
+            apps = os.path.join(work, "apps")
+            for name, (exe, ver) in bundles.items():
+                macos = os.path.join(apps, name + ".app", "Contents", "MacOS")
+                os.makedirs(macos)
+                with open(os.path.join(apps, name + ".app", "Contents", "Info.plist"), "w") as pf:
+                    pf.write('<plist><dict>\n<key>CFBundleExecutable</key>\n<string>%s</string>\n'
+                             '<key>CFBundleShortVersionString</key>\n<string>%s</string>\n</dict></plist>\n' % (exe, ver))
+                with open(os.path.join(macos, exe), "w", newline="\n") as sf:
+                    sf.write(STUB_APP)
+                os.chmod(os.path.join(macos, exe), 0o755)
+            air = os.path.join(work, "air")
+            env = dict(os.environ, ALDERPROOF_DIR=air, ALDER_APPS_DIR=apps, STUB_CALLS=os.path.join(work, "calls.txt"),
+                       ALDERPROOF_RETRY_WAIT="0")
+            env.pop("ALDERPROOF_BIN", None)
+            p = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=60)
+            m = re.search(r"report NOT sent; kept at (\S+)", p.stdout)
+            kept = open(m.group(1)).read() if m else ""
+            return p, kept, apps
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_installed_picks_alder_app_and_reports_it(self):
+        p, kept, apps = self.run_installed({"Alder": ("AlderExe", "1.2.3"), "AlderProof": ("AlderProof", "0.9")})
+        self.assertIn("app: " + apps + "/Alder.app", p.stdout)
+        self.assertIn("app version: 1.2.3", p.stdout)
+        self.assertIn("app: " + apps + "/Alder.app\n", kept)
+        self.assertIn("app version: 1.2.3\n", kept)
+        self.assertIn("log: plain run", kept)  # the stub behind CFBundleExecutable ran
+
+    def test_installed_falls_back_to_alderproof_app(self):
+        p, kept, apps = self.run_installed({"AlderProof": ("AlderProof", "0.9")})
+        self.assertIn("app: " + apps + "/AlderProof.app\n", kept)
+        self.assertIn("app version: 0.9\n", kept)
+
+    def test_installed_with_no_app_says_so(self):
+        p, kept, apps = self.run_installed({})
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("Alder is not in Applications", p.stdout)
+
+    def test_installed_skips_the_release_lookup(self):
+        work = tempfile.mkdtemp()
+        buf = hold_output()
+        old = rw.find_app_release
+
+        def boom():
+            raise AssertionError("find_app_release was called")
+        rw.find_app_release = boom
+        try:
+            with contextlib.redirect_stdout(buf):
+                rc = rw.main(["--host", "127.0.0.1", "--out", os.path.join(work, "o"), "--port", "18813", "--idle", "0",
+                              "--ui-check", "--installed"])
+            self.assertEqual(rc, 1)
+            self.assertIn("Using the app installed in Applications; nothing is downloaded.", buf.getvalue())
+        finally:
+            rw.find_app_release = old
+            shutil.rmtree(work, ignore_errors=True)
+
+    def test_installed_without_ui_check_errors(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            rw.main(["--installed"])
+
     def test_idle_timeout_prints_no_report(self):
         work = tempfile.mkdtemp()
         buf = hold_output()

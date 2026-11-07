@@ -13,6 +13,7 @@ ROOT=$(cd "$HERE/../.." && pwd)
 STACK=${STACK_PREFIX:-$HOME/stack}
 PIN=${PINHASH:-$(/bin/bash "$ROOT/mac/deps/build-stack.sh" pinhash)}
 COMMIT=${COMMIT:-$(git -C "$ROOT" rev-parse HEAD)}
+VERSION=$(tr -d '[:space:]' < "$ROOT/mac/VERSION") # the Info.plist version; BUILD_NUMBER (CI run number, default 0) is CFBundleVersion
 REPO_URL=https://github.com/esedmemmed/Alder-mac
 STACK_URL=$REPO_URL/releases/tag/stack-$PIN
 
@@ -91,10 +92,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleExecutable</key><string>AlderProof</string>
   <key>CFBundleIdentifier</key><string>com.esedmemmed.alderproof</string>
-  <key>CFBundleName</key><string>AlderProof</string>
+  <key>CFBundleName</key><string>Alder</string>
+  <key>CFBundleDisplayName</key><string>Alder</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1</string>
-  <key>CFBundleVersion</key><string>${COMMIT:0:7}</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>${BUILD_NUMBER:-0}</string>
+  <key>AlderCommit</key><string>${COMMIT:0:7}</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
