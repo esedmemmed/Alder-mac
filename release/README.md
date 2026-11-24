@@ -4,6 +4,7 @@ The latest build to install with Apps2Samsung (docs/SETUP.md).
 
 | Version | Size | SHA-256 |
 |---|---|---|
+| 0.7.1 | 485.1 KB | 22b41b2fb7144606474b6b6d43f720de7af78240f17589add5fc769285980526 |
 | 0.7.0 | 483.2 KB | 028bcbfaabc1abfccc67f89703f62fcdee6f1cd016d245bd6e48870ceae3fcb8 |
 | 0.6.1 | 481.0 KB | 075ecb27167f472e6697cda896b9b78913872a56b1cf2580c88a93d42d323bd7 |
 | 0.6.0 | 479.7 KB | cbaa554f9f0978f8002f9f995af425f87936b563fdb2c96859d24a2ede0e7230 |

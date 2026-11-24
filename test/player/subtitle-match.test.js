@@ -70,13 +70,13 @@ test('plan: file track first; then the best match; then the remembered add-on; t
   assert.equal(ctx.sig, '1080p|web|avc|grp');
   const base = { addonSubs: subs, addonsDone: true, lang, textTracks: [] };
   const plan = subtitlePlan({ kind: 'lang', language: 'en', addon: 'A' }, { ...base, match: ctx });
-  assert.deepEqual([plan.kind, plan.sub.addon, plan.matched, plan.stats], ['addon', 'C', true, { best: 13, named: 2, n: 3 }], 'the match beats the remembered add-on');
+  assert.deepEqual([plan.kind, plan.sub.addon, plan.matched, plan.stats], ['addon', 'C', true, { best: 15, named: 2, n: 3 }], 'the match beats the remembered add-on');
   const file = subtitlePlan({ kind: 'lang', language: 'en' }, { ...base, match: ctx, textTracks: [{ index: 0, language: 'en', forced: false }] });
   assert.equal(file.kind, 'file');
   const remembered = subtitlePlan({ kind: 'lang', language: 'en', addon: 'B' }, { ...base, addonSubs: subs.slice(0, 2), match: ctx });
   assert.deepEqual([remembered.sub.addon, remembered.matched], ['B', false]);
   const order = subtitlePlan({ kind: 'lang', language: 'en' }, { ...base, addonSubs: subs.slice(0, 2), match: ctx });
-  assert.deepEqual([order.sub.addon, order.matched], ['A', false], 'no match: the add-on order, as 1.4');
+  assert.deepEqual([order.sub.addon, order.matched], ['B', false], 'no name match, but B is the same source (WEB): ahead of the add-on order');
   assert.equal(subtitlePlan({ kind: 'lang', language: 'tr' }, { ...base, match: ctx }).kind, 'none');
 });
 
@@ -84,7 +84,7 @@ test('start: the matching add-on subtitle starts, not the first; one decide line
   const r = await play({ addons: [{ name: 'A', subs: [en(NUMERIC, null)] }, { name: 'B', subs: [en('2', OTHER), en('3', OWN)] }] });
   assert.equal(r.info().subMode, 'addon');
   assert.equal(r.info().chosenSub.id, '3');
-  assert.deepEqual(r.matchLines, ['match: best=13 named=2/3']);
+  assert.deepEqual(r.matchLines, ['match: best=15 named=2/3']);
   assert.equal(r.decisions.filter(d => /name match/.test(d)).length, 1);
   assert.ok(!/https?:|example|\.srt/i.test(JSON.stringify([r.reports, r.decisions.filter(d => /name match/.test(d))])), 'no link in the lines');
 });
@@ -105,7 +105,7 @@ test('start: nothing matches (numeric id only): 1.4 order, the first add-on subt
 test('late match: replaces the unmatched add-on subtitle within 15 s, one more decide and match: line', async () => {
   const r = await play({ addons: [{ name: 'A', subs: [en(NUMERIC, null)] }, { name: 'B', subs: [en('3', OWN)], delay: 3000 }] });
   assert.equal(r.info().chosenSub.id, '3');
-  assert.deepEqual(r.matchLines, ['match: best=0 named=0/1', 'match: replaced best=13 named=1/2']);
+  assert.deepEqual(r.matchLines, ['match: best=0 named=0/1', 'match: replaced best=15 named=1/2']);
   assert.equal(r.decisions.filter(d => /replaces the one started/.test(d)).length, 1);
 });
 

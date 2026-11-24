@@ -58,6 +58,7 @@ export function timingText(state, t) {
   if (state === 'hash') return 'Timed to this file';
   if (state === 'aligned' && t) return 'Aligned to English: ' + shift();
   if (state === 'remembered' && t) return 'Remembered alignment: ' + shift();
+  if (state === 'aligned-release' && t) return 'Aligned to English (same release): ' + shift();
   if (state === 'listening') return "Checking against the file's English subtitles…";
   if (state === 'aligned-file' && t) return "Aligned to the file's English track: " + shift();
   if (state === 'noref') return 'Not checked: no English subtitle matched to this file';
@@ -119,17 +120,26 @@ export async function syncSubtitle(c) {
   try {
     const ref = referenceFor(c.addonSubs);
     const say = (line, state) => { c.decide(line); if (c.state) c.state(state); };
-    if (!ref) { say('timing: no English reference matched to this file' + (c.suffix ? c.suffix() : ''), 'noref'); return; }
     let refCues = null;
-    try { refCues = c.parse(await c.http.get(ref.url), ref.format); } catch (e) { refCues = null; }
-    if (!c.current()) return;
-    if (!refCues || !refCues.length) { say('timing: the English reference did not load', 'noref'); return; }
+    let via = null; // set when the reference is English made for the same release (releaseReference)
+    if (!ref) {
+      say('timing: no English reference matched to this file' + (c.suffix ? c.suffix() : ''), 'noref');
+      if (!c.release) return;
+      const found = await c.release();
+      if (!c.current()) return;
+      if (!found) { c.decide('timing: no English for the same release'); return; }
+      refCues = found.cues; via = found;
+    } else {
+      try { refCues = c.parse(await c.http.get(ref.url), ref.format); } catch (e) { refCues = null; }
+      if (!c.current()) return;
+      if (!refCues || !refCues.length) { say('timing: the English reference did not load', 'noref'); return; }
+    }
     const refTimes = timesOf(refCues);
-    const mine = (await c.compute(refTimes, [{ id: 'self', cues: timesOf(c.cues) }]))[0];
+    const mine = (await c.compute(refTimes, [{ id: 'self', cues: timesOf(c.cues) }], c.opts))[0];
     if (!c.current()) return;
     if (mine.checked === 'high') {
       const m = c.minChange; // a subtitle already timed to this file moves only for a clear difference
-      if (!m || Math.abs(mine.offset) > m.offset || Math.abs(mine.ratio - 1) > m.ratio) c.apply(mine, c.sub, false);
+      if (!m || Math.abs(mine.offset) > m.offset || Math.abs(mine.ratio - 1) > m.ratio) c.apply(mine, c.sub, false, via);
       return;
     }
     if (c.noSwitch) return;
@@ -141,20 +151,53 @@ export async function syncSubtitle(c) {
       const cands = [];
       got.forEach((cues, i) => { if (cues && cues.length) cands.push({ id: i, cues: timesOf(cues) }); });
       if (cands.length) {
-        const ranked = await c.compute(refTimes, cands);
+        const ranked = await c.compute(refTimes, cands, c.opts);
         if (!c.current()) return;
         const top = ranked[0];
         if (top.gain > bestGain) bestGain = top.gain;
-        if (top.checked === 'high') { c.apply(top, others[top.id], true); return; }
+        if (top.checked === 'high') { c.apply(top, others[top.id], true, via); return; }
       }
     }
-    say('timing: not changed (best gain ' + Math.max(0, bestGain).toFixed(2) + ' below ' + CHECKED.highGain.toFixed(2) + ')', 'nochange');
+    say('timing: not changed (best gain ' + Math.max(0, bestGain).toFixed(2) + ' below ' + CHECKED.highGain.toFixed(2) + ')', via ? undefined : 'nochange');
   } catch (e) {
     try { c.decide('timing: not changed (failed)'); if (c.state) c.state('nochange'); } catch (e2) { /* nothing to say it to */ }
   }
 }
 
 export { alignChecked };
+
+// ---- English made for the same release (0.7.1) ----
+
+/** Two English files agree when the aligner says 'high' with the same time (300 ms) and no stretch. */
+export function agrees(r) { return !!r && r.checked === 'high' && Math.abs(r.offset) <= 300 && Math.abs(r.ratio - 1) < 0.0005; }
+
+/**
+ * The English reference for a file with no hash match and no usable track: an English subtitle of the same group alone, else English subtitles of the same
+ * source of which two agree (the first up to 4 are compared pairwise, in the worker); at most 5 files are fetched.
+ * c: { english: [Subtitle], want: { source, group }, releaseOf(sub), fetchCues(sub) -> [{ start, end }] | null, compute(ref, cands) }.
+ * Returns { cues, how: 'group' | 'source', source, group, agree } or null.
+ */
+export async function releaseReference(c) {
+  const want = c.want || {};
+  if (want.group) {
+    const g = c.english.find((s) => c.releaseOf(s).group === want.group);
+    if (g) {
+      const cues = await c.fetchCues(g);
+      if (cues && cues.length) return { cues, how: 'group', source: want.source || c.releaseOf(g).source, group: want.group, agree: 1 };
+    }
+  }
+  if (!want.source) return null;
+  const same = c.english.filter((s) => c.releaseOf(s).source === want.source).slice(0, 4);
+  const loaded = [];
+  const got = await Promise.all(same.map((s) => c.fetchCues(s)));
+  got.forEach((cues) => { if (cues && cues.length) loaded.push(cues); });
+  for (let i = 0; i + 1 < loaded.length; i++) {
+    const cands = loaded.slice(i + 1).map((cues, j) => ({ id: j, cues }));
+    const ranked = await c.compute(loaded[i], cands);
+    if (ranked.some(agrees)) return { cues: loaded[i], how: 'source', source: want.source, group: null, agree: 2 };
+  }
+  return null;
+}
 
 // ---- the file's own English track, collected while playing (0.7.0) ----
 

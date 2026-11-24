@@ -16,8 +16,8 @@ test('nameLike: numbers only or no words is not a name', () => {
 test('score: the same release scores well above the threshold, another group and 720p stays under it', () => {
   const same = scoreSubtitle(sub('1954712345', 'Show.S01E02.1080p.WEB-DL.x264-GRP'), ctx);
   const other = scoreSubtitle(sub('1954712346', 'Show.S01E02.720p.WEB-DL.x264-OTHER'), ctx);
-  assert.equal(same, 13);
-  assert.equal(other, 5);
+  assert.equal(same, 15);
+  assert.equal(other, 7);
   assert.ok(same >= THRESHOLD && other < THRESHOLD);
 });
 
@@ -57,6 +57,6 @@ test('rankRuns: each language run is ranked inside itself, the runs keep their o
 
 test('matchStats: best score, how many are name-like, how many', () => {
   const list = [sub('1954712345', undefined), sub('2', 'English'), sub('3', 'Show.S01E02.1080p.WEB-DL.x264-GRP')];
-  assert.deepEqual(matchStats(list, ctx), { best: 13, named: 2, n: 3 });
+  assert.deepEqual(matchStats(list, ctx), { best: 15, named: 2, n: 3 });
   assert.deepEqual(matchStats([], ctx), { best: 0, named: 0, n: 0 });
 });

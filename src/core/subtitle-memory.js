@@ -17,7 +17,7 @@
  */
 import { report as sinkReport } from '../lib/report.js';
 import { signature } from './release-memory.js';
-import { THRESHOLD, rankByMatch, matchStats, scoreSubtitle } from './subtitle-match.js';
+import { THRESHOLD, rankByMatch, matchStats, scoreSubtitle, releaseInfo, subtitleRelease } from './subtitle-match.js';
 
 const keyOf = (metaId) => 'subs/' + metaId;
 
@@ -42,8 +42,11 @@ export function createSubtitleMemory(store, { report = sinkReport } = {}) {
 
 /** The playing source's name and 1.4 signature, for the name match; both null when there is no source. */
 export function matchContext(source) {
-  if (!source) return { filename: null, sig: null };
-  return { filename: source.filename || null, sig: signature(source) };
+  if (!source) return { filename: null, sig: null, release: { source: null, group: null, fps: null } };
+  // the release the file is: its name first, then the stream's title and description where the name says less
+  const release = releaseInfo(source.filename || '');
+  [source.title, source.description].forEach((t) => { const r = releaseInfo(t || ''); if (!release.source) release.source = r.source; if (!release.group) release.group = r.group; if (!release.fps) release.fps = r.fps; });
+  return { filename: source.filename || null, sig: signature(source), release };
 }
 
 /**
@@ -68,9 +71,17 @@ export function subtitlePlan(choice, { textTracks, addonSubs, addonsDone, lang, 
   // a subtitle OpenSubtitles matched to this very file by its hash beats the name match and the remembered add-on
   const hashed = inLang.find((s) => s.matchedBy === 'hash') || null;
   if (hashed) { pick = hashed; matched = true; }
+  // then a subtitle made for the same release: the same group, else the same source (ahead of the remembered add-on)
+  let release = null;
+  const want = match && match.release;
+  if (!hashed && want && (want.group || want.source)) {
+    const group = want.group ? inLang.find((s) => subtitleRelease(s).group === want.group) : null;
+    const source = !group && want.source ? inLang.find((s) => subtitleRelease(s).source === want.source) : null;
+    if (group || source) { pick = group || source; matched = !!group; release = { kind: group ? 'group' : 'source', source: want.source, group: group ? want.group : null }; }
+  }
   if (!pick && choice.addon) pick = inLang.find((s) => s.addon === choice.addon) || null;
   if (!pick) pick = inLang[0] || null;
-  if (pick) return { kind: 'addon', sub: pick, index: addonSubs.indexOf(pick), matched, hashed: !!hashed, stats };
+  if (pick) return { kind: 'addon', sub: pick, index: addonSubs.indexOf(pick), matched, hashed: !!hashed, release, stats };
   return { kind: addonsDone ? 'none' : 'wait' };
 }
 

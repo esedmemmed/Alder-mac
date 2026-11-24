@@ -163,6 +163,7 @@ export function createAvplay({ bridge = null, log = null } = {}) {
       let info;
       if (type === 'VIDEO') {
         info = { Width: String(t.selected && params.w ? params.w : t['demux-w'] || 0), Height: String(t.selected && params.h ? params.h : t['demux-h'] || 0), fourCC: String(t.codec || '') };
+        if (Number.isFinite(t['demux-fps']) && t['demux-fps'] > 0) info.fps = String(t['demux-fps']);
         if (t.selected && Number.isFinite(params.par) && params.par > 0 && params.par !== 1) info.pixel_aspect_ratio = String(params.par);
       } else if (type === 'AUDIO') {
         info = { language: t.lang || 'und', channels: String(Number.isFinite(t['audio-channels']) ? t['audio-channels'] : 2), fourCC: audioCodecName(t.codec, t['codec-profile']), name: t.title || '' };

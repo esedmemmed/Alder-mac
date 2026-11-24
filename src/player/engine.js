@@ -64,7 +64,10 @@ import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';
 import { fetchAddonSubtitles } from './subtitle-fetch.js';
 import { resolvePlayableUrl } from './sources.js';
 import { createSubtitleDelay } from './subtitle-delay.js';
-import { syncSubtitle, createAligner, mapCues, alignedLine, referenceFor, timingText, timesOf, pickEnglishTrack, createCollector, createLiveFit } from './subtitle-sync.js';
+import { RATIOS } from '../core/subtitle-align.js';
+import { SOURCE_NAMES, subtitleRelease } from '../core/subtitle-match.js';
+import { parseExtraInfo } from '../core/audio.js';
+import { releaseReference, syncSubtitle, createAligner, mapCues, alignedLine, referenceFor, timingText, timesOf, pickEnglishTrack, createCollector, createLiveFit } from './subtitle-sync.js';
 import { PICTURE, PICTURE_NAMES, normalisePicture, parseVideoShape, shapeText, shapeNote, hasBars, cropPercent } from './picture.js';
 
 const { TICK, PUSH_EVERY, RESUME_SLACK, SKIP_SHOWN, START_WAIT, START_WAIT_CACHED, RETRIES, RETRY_WAIT, SEEK_SETTLE, STALL_WINDOW, STALLS_FOR_LOWER } = PLAYER;
@@ -176,6 +179,7 @@ export function createEngine(params, deps) {
   // mpv (setSubSpeed present): sub-speed and sub-delay; elsewhere the page's own cues are mapped (alignedCues) and the viewer's delay is shifted on top.
   const hasSubSpeed = hasSubDelay && typeof avplay.setSubSpeed === 'function';
   let alignT = null;
+  let alignKind = null; // what the applied alignment came from: 'ref' (a hash-matched English), 'release' (English of the same release), 'file' (the file's own English track)
   let alignedCues = null;
   let speedSet = false;
   let syncToken = 0;
@@ -988,7 +992,7 @@ export function createEngine(params, deps) {
     const said = (line, how) => { decide('memory: ' + line); memory.subtitles.report('memory: ' + how); };
     if (plan.kind === 'off') { subsPicked = true; subMode = 'off'; textIndex = null; said('subtitles off, as picked before', 'found by=sub_off'); applySubtitleMode(); }
     else if (plan.kind === 'file') { subsPicked = true; subMode = 'file'; textIndex = plan.track.index; said('subtitles ' + language + ' from the file (track #' + plan.track.index + ')', 'found by=sub_file source=' + (plan.track.index + 1)); applySubtitleMode(); }
-    else if (plan.kind === 'addon') { said('subtitles ' + language + ' from ' + plan.sub.addon, 'found by=sub_addon source=' + (plan.index + 1)); if (plan.hashed) decide('subtitles: ' + plan.sub.language + ' matched to this file by its hash (' + plan.sub.addon + ')'); macMatchSaid(plan, 'started');  if (!plan.matched && !macSub.addonsDone) macSub.watch = true; macSub.auto = { addon: plan.sub.addon, language: toIso1(plan.sub.lang), matched: !!plan.matched, at: clock.now() }; selectSubtitle({ kind: 'addon', sub: plan.sub }, true); }
+    else if (plan.kind === 'addon') { said('subtitles ' + language + ' from ' + plan.sub.addon, 'found by=sub_addon source=' + (plan.index + 1)); if (plan.hashed) decide('subtitles: ' + plan.sub.language + ' matched to this file by its hash (' + plan.sub.addon + ')'); if (plan.release) decide('subtitles: ' + plan.sub.language + ' made for the same release (' + (plan.release.kind === 'group' ? [SOURCE_NAMES[plan.release.source], plan.release.group].filter(Boolean).join(' ') : 'same source: ' + SOURCE_NAMES[plan.release.source]) + ')'); macMatchSaid(plan, 'started');  if (!plan.matched && !macSub.addonsDone) macSub.watch = true; macSub.auto = { addon: plan.sub.addon, language: toIso1(plan.sub.lang), matched: !!plan.matched, at: clock.now() }; selectSubtitle({ kind: 'addon', sub: plan.sub }, true); }
     else said('no ' + language + ' subtitles in the file or from the add-ons, normal rule', 'not offered by=sub');
   }
   function macSubRemember(choice) { if (memory && memory.subtitles) memory.subtitles.remember(metaId, choice); }
@@ -1010,7 +1014,7 @@ export function createEngine(params, deps) {
   }
   const timedNote = (sub) => emit('notice', { message: String(sub.language || 'Subtitle') + ' timed to this file' });
   function alignClear() {
-    syncToken++; syncWait = null; syncSub = null; syncRunning = false; alignT = null; alignedCues = null; timingState = null;
+    syncToken++; syncWait = null; syncSub = null; syncRunning = false; alignT = null; alignKind = null; alignedCues = null; timingState = null;
     liveFit.reset(); // a new Turkish file is fitted again from what was heard; the capture itself goes on
     if (speedSet) { speedSet = false; try { avplay.setSubSpeed(1); avplay.setSubDelay(subDelay / 1000); } catch (e) { /* no bridge */ } } // the viewer's own delay only
   }
@@ -1056,7 +1060,9 @@ export function createEngine(params, deps) {
   function liveApply(fit, again) {
     if (!chosenSub || !subCues) return;
     const t = { ratio: fit.ratio, offset: fit.offset, gain: fit.gain };
-    alignApply(t);
+    // a fit from English of the same release stands unless the file's own track clearly says otherwise
+    if (alignKind === 'release' && alignT && Math.abs(t.offset - alignT.offset) <= 300 && Math.abs(t.ratio - alignT.ratio) <= 0.0003) return;
+    alignApply(t, 'file');
     if (memory && memory.aligns) memory.aligns.remember(sources && sources[at], chosenSub, t, 'file track');
     decide("timing: aligned to the file's English track: " + secondsLine(t) + ', gain ' + t.gain.toFixed(2) + (again ? ' (again)' : ''));
     setTiming('aligned-file', t);
@@ -1069,8 +1075,9 @@ export function createEngine(params, deps) {
     liveDiag();
   }
   function secondsLine(t) { return (t.offset < 0 ? '-' : '+') + (Math.abs(t.offset) / 1000).toFixed(1) + ' s' + (Math.abs(t.ratio - 1) > 0.0005 ? ', speed ' + t.ratio.toFixed(4) : ''); }
-  function alignApply(t) {
+  function alignApply(t, kind) {
     alignT = { ratio: t.ratio, offset: t.offset };
+    alignKind = kind || 'ref';
     if (hasSubSpeed) {
       // mpv: sub-speed multiplies the subtitle event timestamps, sub-delay is added after: shown = time * sub-speed + sub-delay, which is
       // subtitle-align's mapTime (time * ratio + offset) with sub-speed = ratio and sub-delay = offset (+ the viewer's own delay, added in macDelay's setSubDelay).
@@ -1079,7 +1086,7 @@ export function createEngine(params, deps) {
     } else if (subCues) { alignedCues = mapCues(subCues, t); applyCueShift(); }
   }
   function alignStart(sub, cues, aligned) {
-    if (aligned) { alignApply(aligned); setTiming('aligned', aligned); timedNote(sub); return; }
+    if (aligned) { alignApply(aligned, aligned.via ? 'release' : 'ref'); setTiming(aligned.via ? 'aligned-release' : 'aligned', aligned); timedNote(sub); return; }
     if (!sub.isLocal(subtitleLanguage()) || sub.isEnglish()) return;
     if (sub.matchedBy === 'hash') { // OpenSubtitles timed it to this very file: no change needed, still checked against an English reference
       decide('timing: matched to this file by OpenSubtitles (no change needed)');
@@ -1094,6 +1101,46 @@ export function createEngine(params, deps) {
     syncSub = sub; syncCues = cues; syncHadRef = false;
     alignRun();
   }
+  // ---- English made for the same release, and the frame rate ----
+  const releaseCues = new Map(); // url -> cues of an English file, kept for this play
+  async function fetchTimes(sub) {
+    if (releaseCues.has(sub.url)) return releaseCues.get(sub.url);
+    let times = null;
+    try { times = timesOf(parseSubtitles(await http.get(sub.url), sub.format)); } catch (e) { times = null; }
+    releaseCues.set(sub.url, times);
+    return times;
+  }
+  function releaseFor() {
+    const want = macMatch().release;
+    if (!want || !(want.group || want.source)) return Promise.resolve(null);
+    const english = refSubs().filter((x) => x.isEnglish() && !isNoticeSub(x));
+    return releaseReference({ english, want, releaseOf: subtitleRelease, fetchCues: fetchTimes, compute: (ref, cands) => aligner.compute(ref, cands) });
+  }
+  function releaseLine(via, t) {
+    const name = via.how === 'group' ? [SOURCE_NAMES[via.source], via.group].filter(Boolean).join(' ') : 'same source ' + SOURCE_NAMES[via.source] + ', ' + via.agree + ' agree';
+    return 'timing: aligned to English for the same release (' + name + '): ' + secondsLine(t) + ', gain ' + t.gain.toFixed(2);
+  }
+  // the file's frame rate where the platform says it: AVPlay's video track info, mpv's demux-fps (Mac), ExoPlayer's frame rate (Android)
+  function fileFps() {
+    let found = null;
+    try {
+      (avplay.totalTracks() || []).forEach((tr) => {
+        if (found || !tr || String(tr.type).toUpperCase() !== 'VIDEO') return;
+        const info = parseExtraInfo(tr.extra_info !== undefined ? tr.extra_info : tr.extraInfo);
+        ['fps', 'framerate', 'frame_rate', 'Frame_rate', 'FPS', 'FrameRate'].forEach((k) => { const v = Number(String(info[k] === undefined ? '' : info[k]).replace(',', '.')); if (!found && isFinite(v) && v > 1) found = v; });
+      });
+    } catch (e) { found = null; }
+    return found;
+  }
+  // a subtitle made for another frame rate than the file's: that exact ratio joins the ratios tried (and one line says so)
+  function fpsOpts(sub) {
+    const theirs = Number(sub.fps) > 0 ? Number(sub.fps) : subtitleRelease(sub).fps;
+    const mine = fileFps();
+    if (!theirs || !mine || Math.abs(theirs - mine) < 0.05) return undefined;
+    const r = theirs / mine;
+    decide('timing: subtitle made for ' + theirs + ' fps, file is ' + (Math.round(mine * 1000) / 1000));
+    return { ratios: RATIOS.some((x) => Math.abs(x - r) < 1e-4) ? RATIOS : RATIOS.concat([r]) };
+  }
   // one run: waits for the first picture. syncHadRef: the run saw a reference.
   function alignRun() {
     if (!http || !syncSub) return;
@@ -1107,11 +1154,15 @@ export function createEngine(params, deps) {
         suffix: () => (source() && source().videoHash ? ' (after the file hash)' : ''),
         minChange: hashed ? { offset: 300, ratio: 0.0005 } : null, // a hash-matched file moves only for a clear difference
         state: (name) => { if (hashed) return; setTiming(name); if (name === 'noref') liveBegin(sub); },
-        compute: (ref, cands) => aligner.compute(ref, cands),
+        compute: (ref, cands, o) => aligner.compute(ref, cands, o),
+        opts: fpsOpts(sub),
+        release: () => releaseFor(),
         current: () => !shut && token === syncToken && chosenSub === sub,
-        apply: (r, target, switched) => {
+        apply: (r, target, switched, via) => {
           const t = { ratio: r.ratio, offset: r.offset, gain: r.gain };
-          if (memory && memory.aligns) memory.aligns.remember(sources && sources[at], target, t);
+          if (via) t.via = true;
+          if (memory && memory.aligns) memory.aligns.remember(sources && sources[at], target, t, via ? 'release' : undefined);
+          if (via && !switched) { alignApply(t, 'release'); decide(releaseLine(via, t)); setTiming('aligned-release', t); timedNote(sub); return; }
           if (switched) { decide('timing: switched to ' + String(target.label || target.addon).replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[link]').slice(0, 60) + ' (fits this file better)'); selectSubtitle({ kind: 'addon', sub: target }, true, t); }
           else { liveStop(); alignApply(t); decide(alignedLine(t)); setTiming('aligned', t); timedNote(sub); }
         },

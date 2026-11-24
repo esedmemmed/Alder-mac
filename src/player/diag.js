@@ -61,7 +61,9 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
       (Array.isArray(matchedLanguages) ? matchedLanguages : []).forEach((l) => { if (langs.indexOf(l) < 0) langs.push(l); });
       const matched = Array.isArray(matchedLanguages) ? matchedLanguages.length : 0;
       const text = typeof result === 'number' ? result + ' found' + (matched ? ', ' + matched + ' matched to this file (' + langs.join(', ') + ')' : '') : 'failed: ' + reason;
-      subtitleAddons.push({ name: String(name), text });
+      const row = { name: String(name), text };
+      const at = subtitleAddons.findIndex((x) => x.name === row.name); // asked again after a refresh: the line is replaced, not repeated
+      if (at >= 0) subtitleAddons[at] = row; else subtitleAddons.push(row);
     },
     /** The file's English track the Turkish timing listens to: { name, cues, fit: { offset, gain } | null }, or null when none. */
     fileEnglish(info) { fileEnglish = info || null; },
