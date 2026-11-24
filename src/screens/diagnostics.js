@@ -19,6 +19,8 @@ import { ENV, VERSION } from '../lib/env.js';
 import { describeDevice, deviceProfile } from '../core/device.js';
 import { diag as appDiag } from '../player/diag.js';
 import { pictureLines } from '../player/picture.js';
+import { playbackReport, reportLink } from '../core/report-text.js';
+import { qrSvg } from '../ui/qr.js';
 import { ICON_NAMES, iconEl, iconSvg, iconImg, INK_LIGHT, INK_DARK } from '../ui/icons.js';
 
 const LINE = 40; // px: one line of the report
@@ -41,6 +43,7 @@ export function buildReport({ log, diag, device = null, version = '', env = '', 
   const section = (title, lines, extra) => out.push(Object.assign({ title, lines: lines.map((l) => (typeof l === 'string' ? { text: l, level: '' } : l)) }, extra));
 
   section('APP', ['Alder ' + version + ' (' + env + ')', agent]);
+  if (diag.stream && diag.stream.title) section('TITLE', ['Title: ' + diag.stream.title + (diag.stream.videoId ? ' (' + diag.stream.videoId + ')' : '')]);
   // right under APP so the first photo has it: the icons are drawn by createDiagnosticsScreen (they need a DOM)
   section('ICONS', [ICON_NAMES.length + ' icons, light on dark (left) and dark on light (right); all three rows should show every icon'], { icons: true });
   section('DEVICE', device ? [describeDevice(device)].concat(device.notes || []) : ['No device profile yet']);
@@ -125,6 +128,19 @@ export function createIconsBlock() {
   return { el, update };
 }
 
+/** The "send to Claude" block: a QR code of the short report's link (error correction L: the most room) and what to do with it. */
+export function sendBlock(report, authKey = '') {
+  const box = h('div', { class: 'dg-send' });
+  try {
+    const link = reportLink(playbackReport(report, [authKey]));
+    box.appendChild(h('div', { class: 'dg-qr', html: qrSvg(link, { ecc: 'L' }) }));
+    box.appendChild(h('div', { class: 'dg-line' }, "Scan with your phone's camera and copy the text it opens."));
+  } catch (e) {
+    box.appendChild(h('div', { class: 'dg-line warn' }, "The report is too long for a code. Photograph this screen instead."));
+  }
+  return box;
+}
+
 export function createDiagnosticsScreen() {
   let viewport = null;
   let content = null;
@@ -147,6 +163,8 @@ export function createDiagnosticsScreen() {
       const report = buildReport({ log, diag: appDiag.snapshot(), device, version: VERSION, env: ENV, agent: navigator.userAgent });
 
       content = h('div', { class: 'dg-content' });
+      content.appendChild(h('div', { class: 'dg-heading' }, 'SEND TO CLAUDE'));
+      content.appendChild(sendBlock(report, svc.authKey));
       let icons = null;
       report.forEach((sec) => {
         content.appendChild(h('div', { class: 'dg-heading' }, sec.title));

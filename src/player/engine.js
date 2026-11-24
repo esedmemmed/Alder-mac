@@ -291,7 +291,7 @@ export function createEngine(params, deps) {
       return next('could not resolve the URL');
     }
     if (mine !== gen || shut) return;
-    if (diag) diag.setStream({ url, label: s.label, at: at + 1, total: sources.length, headers: Object.keys(s.headers), addon: s.addonName || null, service: debridService(s) });
+    if (diag) diag.setStream({ url, label: s.label, at: at + 1, total: sources.length, headers: Object.keys(s.headers), addon: s.addonName || null, service: debridService(s), title: params.name || '', videoId: videoId || '' });
     try {
       avplay.open(url, { headers: s.headers }, handlersFor(mine));
       await avplay.prepare();

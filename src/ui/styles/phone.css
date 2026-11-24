@@ -262,3 +262,5 @@ html.phone .pl-opt-scroll { overflow-x: hidden; overflow-y: auto; -webkit-overfl
 html.phone .pl-opt-scroll::-webkit-scrollbar { display: none; }
 html.phone .pl-opt-list { transition: none; padding-bottom: 40px; }
 html.phone .pl-row { min-height: 96px; height: auto; }
+html.phone .dg-qr { width: 100%; max-width: 640px; height: auto; }
+html.phone .dg-qr svg { height: auto; }

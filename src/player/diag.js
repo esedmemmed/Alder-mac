@@ -30,7 +30,7 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
     /** A source was opened: { url, label, at, total, height }. Clears the previous stream's tracks and decisions. */
     setStream(info) {
       const { host, file } = urlParts(info.url);
-      stream = { host, file, label: info.label || '', at: info.at, total: info.total, openedAt: now(), headers: info.headers || [], addon: info.addon || null, service: info.service || null };
+      stream = { host, file, label: info.label || '', at: info.at, total: info.total, openedAt: now(), headers: info.headers || [], addon: info.addon || null, service: info.service || null, title: info.title || '', videoId: info.videoId || '' };
       rawTracks = null;
       picture = null;
     },

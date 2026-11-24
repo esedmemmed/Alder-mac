@@ -147,6 +147,9 @@ html:not(.av-live) .av-object { visibility: hidden; }
 .dg-status { position: absolute; left: 96px; bottom: 36px; font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-2); }
 
 /* the Icons block of Diagnostics: every icon, light on dark and dark on light, three ways of drawing it */
+.dg-send { margin: 8px 0 14px 0; }
+.dg-qr { width: 640px; height: 640px; margin-bottom: 10px; }
+.dg-qr svg { display: block; width: 100%; height: 100%; }
 .dg-icons { margin-top: 6px; }
 .dg-strips { display: flex; margin: 4px 0 14px 0; }
 .dg-strip { display: flex; align-items: center; width: 844px; height: 60px; padding: 0 8px; border-radius: 10px; }

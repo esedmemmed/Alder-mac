@@ -23,8 +23,10 @@ import { screensB } from './screens/index.js';
 import { profilesScreens } from './screens/profiles.js';
 import { signinScreens } from './screens/signin.js';
 import { homeScreens } from './screens/home.js';
+import { isReportHash, showReport } from './app/report-viewer.js';
 
 export function boot() {
+  if (typeof __ALDER_WEB__ !== 'undefined' && __ALDER_WEB__ && isReportHash()) { showReport(); return null; } // a phone opened a report link: show the text, boot nothing
   installGlobalHandlers(window, log);
   log.info('boot', 'Alder ' + VERSION + ' (' + ENV + ') ' + navigator.userAgent);
   if (polyfilled.length) log.info('boot', 'polyfills: ' + polyfilled.join(', '));

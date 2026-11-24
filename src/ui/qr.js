@@ -5,9 +5,9 @@
  */
 import qrcode from 'qrcode-generator';
 
-/** The modules of [text] (error correction M, version picked to fit): rows of booleans, true = dark, without the quiet zone. */
-export function qrModules(text) {
-  const qr = qrcode(0, 'M');
+/** The modules of [text] (error correction [ecc], 'M' unless asked, version picked to fit): rows of booleans, true = dark, without the quiet zone. */
+export function qrModules(text, ecc = 'M') {
+  const qr = qrcode(0, ecc);
   qr.addData(text, 'Byte');
   qr.make();
   const n = qr.getModuleCount();
@@ -21,8 +21,8 @@ export function qrModules(text) {
 }
 
 /** SVG markup, [quiet] modules of white round the code. dark / light: colours. */
-export function qrSvg(text, { quiet = 4, dark = '#0e0c0a', light = '#f3eee6' } = {}) {
-  const m = qrModules(text);
+export function qrSvg(text, { quiet = 4, dark = '#0e0c0a', light = '#f3eee6', ecc = 'M' } = {}) {
+  const m = qrModules(text, ecc);
   const n = m.length + 2 * quiet;
   let d = '';
   m.forEach((row, r) => {

@@ -4,28 +4,9 @@
  * the auth key, e-mail addresses and every link (scheme://, magnet:, www.) go, and so does the source's host line.
  */
 import { macBridge } from './bridge.js';
+import { reportText, scrubReport } from '../../core/report-text.js';
 
-const LINK = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]*|\bmagnet:\?[^\s"'<>]*|\bwww\.[^\s"'<>]+/gi;
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
-const LABELLED_KEY = /\b(auth[\s_-]?key|authkey|token|password)(["']?\s*[=:]\s*["']?)[^\s"',;]+/gi;
-const QUERY = /\?[^\s"'<>]+/g;
-
-/** The sections of buildReport as plain text. */
-export function reportText(report) {
-  return report.map((sec) => sec.title + '\n' + sec.lines.map((l) => '  ' + l.text).join('\n')).join('\n\n') + '\n';
-}
-
-/** [authKeys]: the keys known to the page (the active profile's). Everything else is matched by shape. */
-export function scrubReport(text, authKeys = []) {
-  let out = String(text);
-  authKeys.filter((k) => typeof k === 'string' && k.length >= 4).forEach((k) => { out = out.split(k).join('[key]'); });
-  return out
-    .replace(LINK, '[link]')
-    .replace(QUERY, '?[query]')
-    .replace(EMAIL, '[email]')
-    .replace(LABELLED_KEY, '$1$2[key]')
-    .replace(/^(\s*host\s+).*$/gim, '$1[hidden]');
-}
+export { reportText, scrubReport };
 
 /** 'Alder-diagnostics-2026-11-03.txt', the local date. */
 export function exportName(now = new Date()) {
