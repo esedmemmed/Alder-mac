@@ -83,7 +83,7 @@ export function createOptions({ host, engine }) {
     }
 
     if (t.canShift) {
-      section(list, 'Subtitle timing', delayRows(t.subDelay), -1, (i, r) => { engine.setSubtitleDelay(r.ms); }, delayNotes(t.subDelay, t.delayKeys || ''));
+      section(list, 'Subtitle timing', delayRows(t.subDelay), -1, (i, r) => { engine.setSubtitleDelay(r.ms); }, (t.timing ? [t.timing] : []).concat(delayNotes(t.subDelay, t.delayKeys || '')));
     }
 
     list.appendChild(h('div', { class: 'pl-opt-rule' }));

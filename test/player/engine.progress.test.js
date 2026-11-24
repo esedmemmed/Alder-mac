@@ -8,7 +8,7 @@ const FILM = 5400000;
 
 test('constants are Alder\'s', () => {
   assert.deepEqual([PLAYER.TICK, PLAYER.RESUME_SLACK, PLAYER.SKIP, PLAYER.SEEK_SETTLE, PLAYER.SKIP_SHOWN, PLAYER.HIDE, PLAYER.START_WAIT, PLAYER.RETRIES, PLAYER.RETRY_WAIT, PLAYER.TRY],
-    [10000, 10000, 10000, 600, 10000, 5000, 12000, 2, 1500, 3]);
+    [10000, 10000, 10000, 600, 10000, 5000, 20000, 2, 1500, 3]);
 });
 
 both('progress: recorded every 10 s, pushed to Stremio every 60 s', async () => {

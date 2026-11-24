@@ -223,7 +223,7 @@
       },
       fileHash: function (args) {
         if (typeof args.url !== 'string' || !args.url) throw new Error('fileHash needs url');
-        if (mock.fileHash) return { value: { hash: mock.fileHash } };
+        if (mock.fileHash) return { value: { hash: mock.fileHash, size: mock.fileHashSize || 0 } };
         throw new Error('no network in the mock');
       },
       log: function (args) {

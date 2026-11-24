@@ -356,7 +356,7 @@ export class Stream {
   /** A dub in a language other than the original, with no sign that the original audio is in it too. */
   get foreignDub() {
     const w = this.words
-    return /\b(?:hindi|tamil|telugu|malayalam|kannada|bengali|latino|castellano|truefrench|vff|vf2|vfi|dublado|ita|rus|ukr)\b|\bdub(?:bed)?\b/.test(w) &&
+    return /\b(?:hindi|tamil|telugu|malayalam|kannada|bengali|latino|castellano|truefrench|vff|vf2|vfi|dublado|ita|rus|ukr|russian|ukrainian)\b|\bdub(?:bed)?\b/.test(w) &&
       !/\b(?:multi|dual)\b|\beng(?:lish)?\b|\boriginal\b|\bvo\b|\bvost/.test(w)
   }
 

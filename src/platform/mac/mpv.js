@@ -361,9 +361,9 @@ export function createAvplay({ bridge = null, log = null } = {}) {
       return true;
     },
 
-    /** The file's OpenSubtitles hash (Stremio's videoHash), read by the shell with two range requests (bridge fileHash); hex or null. */
+    /** The file's OpenSubtitles hash (Stremio's videoHash), read by the shell with two range requests (bridge fileHash); { hash, size } (size: the real total) or null. */
     fileHash(url, size) {
-      return bridgeOrThrow().fileHash(url, size).then((r) => (r && typeof r.hash === 'string' && r.hash ? r.hash : null));
+      return bridgeOrThrow().fileHash(url, size).then((r) => (r && typeof r.hash === 'string' && r.hash ? { hash: r.hash, size: Number(r.size) > 0 ? Number(r.size) : null } : null));
     },
 
     /** mpv's sub-speed: the subtitle event timestamps are multiplied by [factor] (1 = untouched); used with setSubDelay to map a subtitle onto this file. */

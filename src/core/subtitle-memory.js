@@ -65,9 +65,12 @@ export function subtitlePlan(choice, { textTracks, addonSubs, addonsDone, lang, 
     const best = rankByMatch(inLang, match)[0];
     if (scoreSubtitle(best, match) >= THRESHOLD) { pick = best; matched = true; }
   }
+  // a subtitle OpenSubtitles matched to this very file by its hash beats the name match and the remembered add-on
+  const hashed = inLang.find((s) => s.matchedBy === 'hash') || null;
+  if (hashed) { pick = hashed; matched = true; }
   if (!pick && choice.addon) pick = inLang.find((s) => s.addon === choice.addon) || null;
   if (!pick) pick = inLang[0] || null;
-  if (pick) return { kind: 'addon', sub: pick, index: addonSubs.indexOf(pick), matched, stats };
+  if (pick) return { kind: 'addon', sub: pick, index: addonSubs.indexOf(pick), matched, hashed: !!hashed, stats };
   return { kind: addonsDone ? 'none' : 'wait' };
 }
 

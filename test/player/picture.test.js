@@ -376,7 +376,7 @@ both('a failed source gives way to the next, and the picture follows the new fil
     fill: true, settings: { pictureSize: 'fill' },
   });
   await t.start();
-  await t.advance(16000);
+  await t.advance(24000);
   assert.equal(t.engine.state.at, 1);
   assert.equal(t.engine.pictureInfo().text, '1920×1080 · 1.78:1');
   assert.equal(t.engine.pictureInfo().showing, 'fill');

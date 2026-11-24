@@ -68,7 +68,7 @@ export async function fetchAddonSubtitles({ stremio, authKey, type, videoId, tvL
         const ms = now() - t0;
         say('subtitles from ' + a.name + ' (' + type + ' ' + videoId + '): ' + subs.length + ' in ' + ms + ' ms' + (cached ? ' (kept)' : ''));
         report('subs-addon: done name="' + name + '" ms=' + ms + ' count=' + subs.length + (cached ? ' cached=1' : ''));
-        if (diag) diag.subtitleAddon(a.name, subs.length);
+        if (diag) diag.subtitleAddon(a.name, subs.length, subs.filter((x) => x.matchedBy === 'hash').map((x) => x.language));
         entry.subs = subs; entry.done = true;
         publish();
       }, (e) => {

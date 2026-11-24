@@ -10,7 +10,7 @@
 //
 // Pure functions only; the player (Phase 3) feeds them AVPlay's data and logs the returned `reason` strings.
 
-import { toIso1 } from './lang.js'
+import { toIso1, languageName } from './lang.js'
 
 /** What the TU8000 plays, by codec id (the ids used throughout this file). core/device.js builds the device's Set from this. */
 export const TU8000_AUDIO = Object.freeze(['AAC', 'AC3', 'EAC3', 'MP3', 'FLAC', 'OPUS', 'VORBIS', 'PCM'])
@@ -237,4 +237,33 @@ export function afterAudioError(tracks, failedIndex, { language = '', failed = n
   now.add(failedIndex)
   const decision = decideAudio(tracks, { language, failed: now, currentIndex: failedIndex })
   return Object.assign(decision, { failed: now })
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Dub-only files
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Dub languages whose files so often carry no original audio: uk ru hi ta te ml kn bn pl (the three-letter tags normalise to these). */
+const DUB_ONLY = ['uk', 'ru', 'hi', 'ta', 'te', 'ml', 'kn', 'bn', 'pl']
+const COUNTRY_OF = { uk: 'ukraine', ru: 'russia', hi: 'india', ta: 'india', te: 'india', ml: 'india', kn: 'india', bn: 'india', pl: 'poland' }
+
+/**
+ * The languages (two-letter codes) when the file's sound is only dubs: every audio track is tagged with one of DUB_ONLY and none is the
+ * profile's audio language; null when any track is English, 'und', untagged or in the profile's language, or when there are no tracks.
+ * Not a dub when the title itself is from that country or in that language: [meta] is the add-on's Meta (its raw json's country / language
+ * fields; a meta that carries neither leaves the rule as it is).
+ */
+export function dubOnlyLanguages(tracks, { audioLanguage = '', meta = null } = {}) {
+  if (!tracks || !tracks.length) return null
+  const mine = audioLanguage ? toIso1(audioLanguage) : ''
+  const langs = []
+  for (const t of tracks) {
+    const l = t.language ? toIso1(t.language) : ''
+    if (DUB_ONLY.indexOf(l) < 0 || l === mine) return null
+    if (langs.indexOf(l) < 0) langs.push(l)
+  }
+  const json = meta ? (meta.json || meta) : null
+  const text = json ? [json.country, json.language, json.originalLanguage].filter(x => typeof x === 'string').join(',').toLowerCase() : ''
+  if (text && langs.some(l => text.indexOf(languageName(l).toLowerCase()) >= 0 || text.indexOf(COUNTRY_OF[l]) >= 0)) return null
+  return langs
 }

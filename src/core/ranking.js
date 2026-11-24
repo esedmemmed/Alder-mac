@@ -41,6 +41,11 @@ export function createSourceMemory(store) {
       if (stream.bingeGroup !== null) store.set(KEYS.sourceBinge(metaId), stream.bingeGroup)
       else store.remove(KEYS.sourceBinge(metaId))
     },
+    /** This release is not wanted again (a dub-only file the player skipped): it is no longer the remembered one. */
+    forget(videoId, metaId, stream) {
+      if (stream.filename !== null && read(KEYS.sourceFile(videoId)) === stream.filename) store.remove(KEYS.sourceFile(videoId))
+      if (stream.bingeGroup !== null && read(KEYS.sourceBinge(metaId)) === stream.bingeGroup) store.remove(KEYS.sourceBinge(metaId))
+    },
   }
 }
 

@@ -8,7 +8,10 @@ import { fakeHttp, fixtureAddons } from '../core/helpers.js';
 import { referenceFor, createAligner, analyse, mapCues, createAlignMemory } from '../../src/player/subtitle-sync.js';
 import { releaseKey } from '../../src/core/delay-memory.js';
 import { createSourceMemory } from '../../src/core/ranking.js';
-import { createSubtitleMemory, isNoticeSub, noticesLast, notASubtitle } from '../../src/core/subtitle-memory.js';
+import { createSubtitleMemory, isNoticeSub, noticesLast, notASubtitle, subtitlePlan } from '../../src/core/subtitle-memory.js';
+import { timingText } from '../../src/player/subtitle-sync.js';
+import { createDiag } from '../../src/player/diag.js';
+import { buildReport } from '../../src/screens/diagnostics.js';
 import { clearSubtitleCache } from '../../src/player/subtitle-fetch.js';
 import { createDelayMemory } from '../../src/core/delay-memory.js';
 
@@ -37,13 +40,15 @@ const TEXTS = {
 };
 const plainStore = () => { const m = new Map(); return { m, get: (k) => (m.has(k) ? m.get(k) : undefined), set: (k, v) => { m.set(k, v); }, remove: (k) => { m.delete(k); } }; };
 
-async function play({ subs, sources = null, answer = null, late = null, texts = TEXTS, store = plainStore(), adapter = 'avplay', subLang = 'tr', httpLog = [] }) {
+async function play({ subs, sources = null, answer = null, late = null, fileHash = null, remembered = null, texts = TEXTS, store = plainStore(), adapter = 'avplay', subLang = 'tr', httpLog = [] }) {
   clearSubtitleCache();
   const mem = createSourceMemory(store);
   mem.delays = createDelayMemory(store, { report: () => {} });
   mem.aligns = createAlignMemory(store);
   mem.subtitles = createSubtitleMemory(store, { report: () => {} });
   const t = makeEngine({ adapter, memory: mem, sources: sources || [stream(REL, { duration: 5400 })], http: { get: async (u) => { httpLog.push(u); if (!(u in texts)) throw new Error('404'); return texts[u]; } } });
+  if (fileHash) t.avplay.fileHash = fileHash;
+  if (remembered) store.set('subs/tt15239678', remembered);
   if (subLang) t.store.set('settings/subLang@p1', subLang);
   t.stremio.addons = async () => [{ name: 'Subs', serves: () => true, subtitles: async (ty, id, extra) => (answer ? answer(extra) : subs) }].concat(late ? [{ name: 'Late', serves: () => true, subtitles: () => new Promise((resolve) => t.clock.setTimeout(() => resolve([late.en]), late.ms)) }] : []);
   await t.start();
@@ -307,3 +312,76 @@ for (const adapter of ['avplay', 'mpv']) {
     else { await t.advance(OTHER[0].start * 0 + TR[4].start + 500 - t.position()); assert.equal(shownNow(t), 'tr 4', 'the cues are the unmapped file'); }
   });
 }
+
+// ---- the hash-matched subtitle, the timing line after a refresh, the diagnostics counts and the menu status ----
+const trSub = (id, extra = {}) => sub('https://s.test/' + id + '.srt', 'tur', 'Subs', Object.assign({ id }, extra));
+const HASH_TEXTS = Object.assign({}, TEXTS, { 'https://s.test/ta.srt': TEXTS['https://s.test/tr1.srt'], 'https://s.test/tb.srt': TEXTS['https://s.test/tr1.srt'], 'https://s.test/th.srt': TEXTS['https://s.test/tr1.srt'] });
+
+test('subtitlePlan: a hash-matched subtitle beats the remembered add-on and the name match', () => {
+  const named = sub('u1', 'tur', 'Named', { id: 'Movie.1080p.WEB-DL.x264-A', label: 'Movie 1080p WEB-DL x264-A' });
+  const rem = sub('u2', 'tur', 'Remembered', { id: 'r' });
+  const hashed = sub('u3', 'tur', 'Hashed', { id: 'h', matchedBy: 'hash' });
+  const ctx = { textTracks: [], addonsDone: true, lang: (l) => ({ tur: 'tr' }[l] || l), match: { filename: 'Movie.1080p.WEB-DL.x264-A.mkv', sig: null } };
+  const before = subtitlePlan({ kind: 'lang', language: 'tr', addon: 'Remembered' }, Object.assign({ addonSubs: [rem, named] }, ctx));
+  assert.notEqual(before.sub, hashed);
+  const plan = subtitlePlan({ kind: 'lang', language: 'tr', addon: 'Remembered' }, Object.assign({ addonSubs: [rem, named, hashed] }, ctx));
+  assert.equal(plan.sub, hashed);
+  assert.equal(plan.hashed, true);
+});
+
+for (const adapter of ['avplay', 'mpv']) {
+  test('after the file hash a hash-matched Turkish replaces the auto-started one, with the decide line and the note [' + adapter + ']', async () => {
+    const answer = (extra) => [trSub('ta'), trSub('tb')].concat(/videoHash/.test(extra || '') ? [trSub('th', { matchedBy: 'hash' })] : []);
+    const t = await play({ subs: [], answer, texts: HASH_TEXTS, adapter, fileHash: async () => '8e245d9679d31e12', remembered: { kind: 'lang', language: 'tr', addon: 'Subs' } });
+    assert.equal(t.engine.tracks().chosenSub.id, 'th');
+    assert.ok(t.decisions().includes('subtitles: Turkish matched to this file by its hash (Subs)'), t.decisions().join(' | '));
+    assert.ok(t.decisions().includes('timing: matched to this file by OpenSubtitles (no change needed)'));
+    assert.equal(t.engine.tracks().timing, 'Timed to this file');
+    assert.ok(t.events.notice.some((n) => n.message === 'Turkish timed to this file'));
+  });
+
+  test('after a refresh with no reference the timing line says so, once more after the file hash [' + adapter + ']', async () => {
+    const t = await play({ subs: [trSub('tr1')], adapter, fileHash: async () => '8e245d9679d31e12' });
+    const lines = t.decisions().filter((d) => /^timing:/.test(d));
+    assert.ok(lines.length >= 1, 'a timing line after the refresh');
+    assert.equal(lines[lines.length - 1], 'timing: no English reference matched to this file (after the file hash)');
+    assert.equal(t.engine.tracks().timing, 'Not checked: no English subtitle matched to this file');
+  });
+}
+
+test('Diagnostics: the add-on line counts the subtitles matched to this file and the languages of those', async () => {
+  const d = createDiag();
+  d.subtitleAddon('Duck Streams (AIOStreams)', 94, ['English', 'Turkish', 'English']);
+  d.subtitleAddon('Other', 5, []);
+  d.subtitleAddon('Third', 2);
+  const snap = d.snapshot();
+  assert.deepEqual(snap.subtitleAddons.map((a) => a.text), ['94 found, 3 matched to this file (English, Turkish)', '5 found', '2 found']);
+  const lines = buildReport({ log: { lines: () => [] }, diag: snap }).find((x) => x.title === 'SUBTITLE ADD-ONS').lines.map((l) => l.text);
+  assert.ok(lines.includes('Duck Streams (AIOStreams): 94 found, 3 matched to this file (English, Turkish)'), lines.join(' | '));
+});
+
+test('Diagnostics from the engine: the matched count follows the add-on answer', async () => {
+  const t = await play({ subs: [sub('https://s.test/en.srt', 'eng', 'Subs', { id: 'e', matchedBy: 'hash' }), trSub('tr1', { matchedBy: 'hash' }), trSub('x')] });
+  assert.deepEqual(t.diag.snapshot().subtitleAddons.map((a) => a.text), ['3 found, 2 matched to this file (English, Turkish)']);
+});
+
+test('the menu status text for each timing state', () => {
+  assert.equal(timingText('hash'), 'Timed to this file');
+  assert.equal(timingText('aligned', { ratio: 1, offset: 1600 }), 'Aligned to English: +1.6 s');
+  assert.equal(timingText('aligned', { ratio: 1 / K, offset: -2400 }), 'Aligned to English: -2.4 s, speed 0.959');
+  assert.equal(timingText('remembered', { ratio: 1, offset: 1600 }), 'Remembered alignment: +1.6 s');
+  assert.equal(timingText('noref'), 'Not checked: no English subtitle matched to this file');
+  assert.equal(timingText('nochange'), 'Not changed: no confident fit');
+  assert.equal(timingText(null), '');
+});
+
+test('the engine exposes the status: empty at first, aligned, remembered, not changed', async () => {
+  const store = plainStore();
+  const a = await play({ subs: standard(), store });
+  assert.equal(a.engine.tracks().timing.indexOf('Aligned to English: -2.4 s, speed 0.959'), 0);
+  assert.ok(a.events.notice.some((n) => n.message === 'Turkish timed to this file'));
+  const b = await play({ subs: standard(), store });
+  assert.match(b.engine.tracks().timing, /^Remembered alignment: -2\.4 s, speed 0\.959$/);
+  const c = await play({ subs: [sub('https://s.test/en.srt', 'eng', 'Subs', { id: 'en1', matchedBy: 'hash' }), sub('https://s.test/tr-other.srt', 'tur', 'Subs', { id: 'tr-other' })] });
+  assert.equal(c.engine.tracks().timing, 'Not changed: no confident fit');
+});

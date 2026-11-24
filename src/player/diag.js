@@ -48,7 +48,7 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
       if (errors.length > limit) errors = errors.slice(errors.length - limit);
     },
     /** What an add-on answered when asked for subtitles: a count, or the failure (an Error or text, URLs cut out). null starts a fresh list. */
-    subtitleAddon(name, result) {
+    subtitleAddon(name, result, matchedLanguages) {
       if (name === null) { subtitleAddons = []; return; }
       const e = result;
       const reason = e && e.kind === 'timeout' ? 'timed out'
@@ -56,7 +56,10 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
         : e && e.kind === 'http' ? 'HTTP ' + e.status
         : e && e.name === 'SyntaxError' ? 'bad answer (not JSON)'
         : String(e && e.message ? e.message : e).replace(/\S*:\/\/\S*/g, '').trim().slice(0, 60);
-      const text = typeof result === 'number' ? result + ' found' : 'failed: ' + reason;
+      const langs = [];
+      (Array.isArray(matchedLanguages) ? matchedLanguages : []).forEach((l) => { if (langs.indexOf(l) < 0) langs.push(l); });
+      const matched = Array.isArray(matchedLanguages) ? matchedLanguages.length : 0;
+      const text = typeof result === 'number' ? result + ' found' + (matched ? ', ' + matched + ' matched to this file (' + langs.join(', ') + ')' : '') : 'failed: ' + reason;
       subtitleAddons.push({ name: String(name), text });
     },
     /** The names of the file details the add-ons were asked with ([] for none). */

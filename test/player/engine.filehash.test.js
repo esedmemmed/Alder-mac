@@ -58,3 +58,17 @@ both('file hash: without the capability (a browser) the engine says so', async (
   assert.equal(requests.length, 1);
   assert.ok(decisions(t).some((d) => d === 'file hash: not available in a browser'));
 });
+
+both('file hash: the size hint was wrong, the real one is logged once and sent on to the add-ons', async () => {
+  const hinted = stream('Film', {}, { filename: 'Film.mkv', size: 5 });
+  const { t, requests } = await run(async () => ({ hash: '8e245d9679d31e12', size: 3000000 }), hinted);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1], 'videoHash=8e245d9679d31e12&videoSize=3000000&filename=Film.mkv');
+  assert.equal(decisions(t).filter((d) => d === 'file hash: size hint was wrong (5 vs 3000000)').length, 1);
+});
+
+both('file hash: a right hint says nothing about it', async () => {
+  const hinted = stream('Film', {}, { filename: 'Film.mkv', size: 3000000 });
+  const { t } = await run(async () => ({ hash: '8e245d9679d31e12', size: 3000000 }), hinted);
+  assert.ok(!decisions(t).some((d) => /size hint/.test(d)));
+});

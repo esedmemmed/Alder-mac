@@ -52,6 +52,16 @@ export function analyse(ref, cands) {
 }
 
 const secondsText = (ms) => (ms < 0 ? '-' : '+') + (Math.abs(ms) / 1000).toFixed(1) + ' s';
+/** The status line of the subtitle timing group for a state ('hash' | 'aligned' | 'remembered' | 'noref' | 'nochange'); t = { ratio, offset } where it applies. */
+export function timingText(state, t) {
+  const shift = () => secondsText(t.offset) + (Math.abs(t.ratio - 1) > 0.0005 ? ', speed ' + t.ratio.toFixed(3) : '');
+  if (state === 'hash') return 'Timed to this file';
+  if (state === 'aligned' && t) return 'Aligned to English: ' + shift();
+  if (state === 'remembered' && t) return 'Remembered alignment: ' + shift();
+  if (state === 'noref') return 'Not checked: no English subtitle matched to this file';
+  if (state === 'nochange') return 'Not changed: no confident fit';
+  return '';
+}
 /** The line for a fresh alignment. */
 export function alignedLine(t) { return 'timing: aligned to English (file match): ' + secondsText(t.offset) + ', speed ' + t.ratio.toFixed(4) + ', gain ' + t.gain.toFixed(2); }
 
@@ -104,15 +114,21 @@ export function createAlignMemory(store) {
 export async function syncSubtitle(c) {
   try {
     const ref = referenceFor(c.addonSubs);
-    if (!ref) { c.decide('timing: no English reference matched to this file'); return; }
+    const say = (line, state) => { c.decide(line); if (c.state) c.state(state); };
+    if (!ref) { say('timing: no English reference matched to this file' + (c.suffix ? c.suffix() : ''), 'noref'); return; }
     let refCues = null;
     try { refCues = c.parse(await c.http.get(ref.url), ref.format); } catch (e) { refCues = null; }
     if (!c.current()) return;
-    if (!refCues || !refCues.length) { c.decide('timing: the English reference did not load'); return; }
+    if (!refCues || !refCues.length) { say('timing: the English reference did not load', 'noref'); return; }
     const refTimes = timesOf(refCues);
     const mine = (await c.compute(refTimes, [{ id: 'self', cues: timesOf(c.cues) }]))[0];
     if (!c.current()) return;
-    if (mine.checked === 'high') { c.apply(mine, c.sub, false); return; }
+    if (mine.checked === 'high') {
+      const m = c.minChange; // a subtitle already timed to this file moves only for a clear difference
+      if (!m || Math.abs(mine.offset) > m.offset || Math.abs(mine.ratio - 1) > m.ratio) c.apply(mine, c.sub, false);
+      return;
+    }
+    if (c.noSwitch) return;
     let bestGain = mine.gain;
     const others = c.addonSubs.filter((s) => s !== c.sub && s.url !== c.sub.url && c.sameLanguage(s)).slice(0, MAX_OTHERS);
     if (others.length) {
@@ -128,9 +144,9 @@ export async function syncSubtitle(c) {
         if (top.checked === 'high') { c.apply(top, others[top.id], true); return; }
       }
     }
-    c.decide('timing: not changed (best gain ' + Math.max(0, bestGain).toFixed(2) + ' below ' + CHECKED.highGain.toFixed(2) + ')');
+    say('timing: not changed (best gain ' + Math.max(0, bestGain).toFixed(2) + ' below ' + CHECKED.highGain.toFixed(2) + ')', 'nochange');
   } catch (e) {
-    try { c.decide('timing: not changed (failed)'); } catch (e2) { /* nothing to say it to */ }
+    try { c.decide('timing: not changed (failed)'); if (c.state) c.state('nochange'); } catch (e2) { /* nothing to say it to */ }
   }
 }
 

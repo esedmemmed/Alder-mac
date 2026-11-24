@@ -259,3 +259,20 @@ test('describeTracks is a one-line-per-track summary for Diagnostics', () => {
   assert.match(text, /#1 EAC3 en 6ch default/)
   assert.match(text, /#2 DTS \(not playable\) fr 6ch/)
 })
+
+import { dubOnlyLanguages } from '../../src/core/audio.js'
+test('dubOnlyLanguages: only dub tags, none English / und / untagged / the profile language, no title from that country', () => {
+  const t = (...langs) => langs.map((language, index) => ({ index, language }))
+  assert.deepEqual(dubOnlyLanguages(t('uk'), {}), ['uk'])
+  assert.deepEqual(dubOnlyLanguages(t('uk', 'ru'), {}), ['uk', 'ru'])
+  assert.deepEqual(dubOnlyLanguages(t('uk', 'hi', 'ta', 'te', 'ml', 'kn', 'bn', 'pl', 'ru'), {}).length, 9)
+  assert.equal(dubOnlyLanguages(t('uk', 'en'), {}), null)
+  assert.equal(dubOnlyLanguages(t('uk', ''), {}), null) // untagged or und
+  assert.equal(dubOnlyLanguages(t('uk'), { audioLanguage: 'uk' }), null)
+  assert.equal(dubOnlyLanguages(t('fr'), {}), null) // not on the list
+  assert.equal(dubOnlyLanguages([], {}), null)
+  assert.equal(dubOnlyLanguages(t('uk'), { meta: { json: { country: 'Ukraine' } } }), null)
+  assert.equal(dubOnlyLanguages(t('hi'), { meta: { json: { language: 'Hindi, English' } } }), null)
+  assert.deepEqual(dubOnlyLanguages(t('uk'), { meta: { json: { country: 'United Kingdom' } } }), ['uk'])
+  assert.deepEqual(dubOnlyLanguages(t('uk'), { meta: { json: {} } }), ['uk']) // a meta with neither: the rule applies
+})

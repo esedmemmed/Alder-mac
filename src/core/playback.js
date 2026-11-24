@@ -12,8 +12,8 @@ export const PLAYER = Object.freeze({
   SEEK_SETTLE: 600, // after the last skip before seeking
   SKIP_SHOWN: 10000, // the Skip intro pill stays, as in NuvioTV
   HIDE: 5000, // the controls stay up while playing
-  START_WAIT: 12000, // for a source to show a picture before the next is tried (4K DV from debrid took 6 s)
-  START_WAIT_CACHED: 8000, // the same for a source its add-on says is cached: a TorBox-cached debrid file normally starts in under 3 s
+  START_WAIT: 20000, // for a source to show a picture before the next is tried (TorBox files take 7-8 s on the TV; the Android profile already waits this long)
+  START_WAIT_CACHED: 15000, // the same for a source its add-on says is cached (a cached TorBox file still took 7-8 s on the TV)
   RETRIES: 2,
   RETRY_WAIT: 1500,
   TRY: 3,

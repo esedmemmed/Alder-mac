@@ -236,7 +236,7 @@ export function createAvplay({ webapis = typeof window !== 'undefined' ? window.
       });
     },
 
-    /** The file's OpenSubtitles hash (Stremio's videoHash) read with two range requests; [size] null when unknown. Resolves hex or null (a small file). */
+    /** The file's OpenSubtitles hash (Stremio's videoHash) read with two range requests; [size] the hint, null when unknown. Resolves { hash, size } (size: the real total from Content-Range) or null (a small file). */
     fileHash(url, size) { return hashFromRanges(size, (a, b) => xhrRange(url, a, b)); },
 
     /** Current time in ms, or null while the state does not allow asking. */

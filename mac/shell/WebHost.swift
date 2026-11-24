@@ -187,13 +187,13 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             return sum
         }
         fetch(0, chunk - 1) { head, headTotal in
-            let total = size > 0 ? size : headTotal
+            let total = headTotal > 0 ? headTotal : size // the head's Content-Range wins: the stream's size hint can be wrong
             if total <= 0 { fail("size unknown"); return }
             if total < 2 * chunk { fail("file too small to hash"); return }
             fetch(total - chunk, total - 1) { tail, _ in
                 let sum = UInt64(total) &+ wordSum(head) &+ wordSum(tail)
                 let hash = String(format: "%016llx", sum)
-                DispatchQueue.main.async { self.reply(id, ok: true, value: ["hash": hash]) }
+                DispatchQueue.main.async { self.reply(id, ok: true, value: ["hash": hash, "size": total]) }
             }
         }
     }

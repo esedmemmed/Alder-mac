@@ -88,6 +88,14 @@ export function createReleaseMemory(store, base, { report = sinkReport } = {}) {
       if (sig !== null) { store.set(sigKey(videoId), sig); store.set(sigSeriesKey(metaId), sig); } else { store.remove(sigKey(videoId)); store.remove(sigSeriesKey(metaId)); }
     },
 
+    /** The release is not wanted again (the player skipped it): its file, group and signatures are no longer remembered, so it is not 'remembered' next time. */
+    forget(videoId, metaId, s) {
+      base.forget(videoId, metaId, s);
+      const sig = sigOf(s);
+      if (sig !== null && read(sigKey(videoId)) === sig) store.remove(sigKey(videoId));
+      if (sig !== null && read(sigSeriesKey(metaId)) === sig) store.remove(sigSeriesKey(metaId));
+    },
+
     /** The first source of a list is about to open (engine load()): was the remembered release offered? Nothing remembered, nothing said. */
     noteLoad({ videoId, metaId, sources, at, picked = false, decide }) {
       if (picked || at !== 0 || seen.has(sources)) return;

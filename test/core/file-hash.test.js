@@ -45,13 +45,30 @@ test('file hash: hashFromRanges asks the head and the tail, and takes the size f
   const file = (a) => bytes(a);
   const fetchRange = async (a, b) => { asked.push([a, b]); return a === 0 ? { bytes: file(7), total: size } : file(8); };
   const expected = reference(size, file(7), file(8));
-  assert.equal(await hashFromRanges(size, fetchRange), expected);
+  assert.deepEqual(await hashFromRanges(size, fetchRange), { hash: expected, size });
   assert.deepEqual(asked, [[0, 65535], [size - 65536, size - 1]]);
   asked.length = 0;
-  assert.equal(await hashFromRanges(null, fetchRange), expected);
+  assert.deepEqual(await hashFromRanges(null, fetchRange), { hash: expected, size });
   assert.deepEqual(asked, [[0, 65535], [size - 65536, size - 1]]);
   await assert.rejects(hashFromRanges(null, async () => file(7)), /size unknown/);
   await assert.rejects(hashFromRanges(size, async () => { throw new Error('boom'); }), /boom/);
+});
+
+test("file hash: the head's total beats a wrong size hint (no 416 from a tail range past the end)", async () => {
+  const real = 3000000, hint = 3500000;
+  const asked = [];
+  const fetchRange = async (a, b) => {
+    asked.push([a, b]);
+    if (b >= real) throw new Error('HTTP 416');
+    return a === 0 ? { bytes: bytes(7), total: real } : bytes(8);
+  };
+  const r = await hashFromRanges(hint, fetchRange);
+  assert.equal(r.size, real);
+  assert.equal(r.hash, reference(real, bytes(7), bytes(8)));
+  assert.deepEqual(asked[1], [real - 65536, real - 1]);
+  // no total in the head's answer: the hint is all there is
+  const r2 = await hashFromRanges(real, async (a) => (a === 0 ? bytes(7) : bytes(8)));
+  assert.equal(r2.size, real);
 });
 
 test('file hash: a small file is not read at its tail', async () => {

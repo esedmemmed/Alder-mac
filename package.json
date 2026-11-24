@@ -1,6 +1,6 @@
 {
   "name": "alder-tizen",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "Alder for Tizen: a Samsung Tizen 5.5 TV web app port of the Android TV Stremio client Alder",
   "license": "GPL-3.0-or-later",

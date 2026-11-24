@@ -108,13 +108,13 @@ test('Mac fail-over: a refused connection at load is retried twice, then the nex
 test('Mac fail-over: a load that never answers (no playbackRestart within START_WAIT) gives way to the next source', async () => {
   const t = makeEngine({ adapter: 'mpv', sources: [stream('Silent', { prepare: 'hang' }), stream('Good')], params: { resumeAt: 100000 } });
   await t.start();
-  await t.advance(11900);
-  assert.equal(t.loads().length, 1, 'still waiting on the first just before 12 s');
+  await t.advance(19900);
+  assert.equal(t.loads().length, 1, 'still waiting on the first just before 20 s');
   assert.equal(t.events.started.length, 0);
   await t.advance(200);
   assert.equal(t.loads().length, 2, 'the next opens right after START_WAIT');
   assert.ok(/Good/.test(t.loads()[1].url));
-  assert.equal(t.loads()[1].t, 12000, 'at the START_WAIT mark, not later');
+  assert.equal(t.loads()[1].t, 20000, 'at the START_WAIT mark, not later');
   await t.advance(3000);
   assert.equal(t.events.started.length, 1);
   assert.equal(t.events.started[0].source, 1);

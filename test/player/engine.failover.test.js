@@ -6,20 +6,20 @@ import { isRetryable, isDecodeError } from '../../src/player/engine.js';
 
 const FIRST = 'Dune.Part.Two.2160p.WEB-DL.DDP5.1';
 
-both('a source with no picture after START_WAIT (12 s) gives way to the next at the same second', async (adapter) => {
+both('a source with no picture after START_WAIT (20 s) gives way to the next at the same second', async (adapter) => {
   const t = makeEngine({
     sources: [stream('A 2160p DDP5.1', { start: 'never' }), stream('B 1080p DDP5.1')],
     params: { resumeAt: 100000 },
   });
   await t.start();
-  await t.advance(11900);
-  assert.equal(t.loads().length, 1, 'still on the first source just before 12 s');
+  await t.advance(19900);
+  assert.equal(t.loads().length, 1, 'still on the first source just before 20 s');
   assert.ok(/A\.2160p/.test(t.loads()[0].url));
   assert.equal(t.events.started.length, 0);
   await t.advance(200);
-  assert.equal(t.loads().length, 2, 'the second source opens right after 12 s');
+  assert.equal(t.loads().length, 2, 'the second source opens right after 20 s');
   assert.ok(/B\.1080p/.test(t.loads()[1].url));
-  assert.equal(t.loads()[1].t, 12000, 'at the START_WAIT mark, not later');
+  assert.equal(t.loads()[1].t, 20000, 'at the START_WAIT mark, not later');
   const messages = t.events.loading.filter((e) => e.visible).map((e) => e.message);
   assert.ok(messages.includes('That source failed · trying the next one'), messages.join(' | '));
   await t.advance(3000);
@@ -33,10 +33,10 @@ both('a source with no picture after START_WAIT (12 s) gives way to the next at 
 both('the order is kept and the list is walked once: three sources, the third plays', async () => {
   const t = makeEngine({ sources: [stream('A', { start: 'never' }), stream('B', { start: 'never' }), stream('C')] });
   await t.start();
-  await t.advance(12100);
-  await t.advance(12100);
+  await t.advance(20100);
+  await t.advance(20100);
   assert.deepEqual(t.loads().map((o) => /media\.fixture\.test\/([A-Z])\./.exec(o.url)[1]), ['A', 'B', 'C']);
-  assert.deepEqual(t.loads().map((o) => o.t), [0, 12000, 24000]);
+  assert.deepEqual(t.loads().map((o) => o.t), [0, 20000, 40000]);
   await t.advance(2000);
   assert.equal(t.events.started.length, 1);
   assert.equal(t.events.navigate.length, 0);
@@ -45,7 +45,7 @@ both('the order is kept and the list is walked once: three sources, the third pl
 both('every source fails: the sources page is asked for (navigate), once', async () => {
   const t = makeEngine({ sources: [stream('A', { start: 'never' }), stream('B', { prepare: 'fail:PLAYER_ERROR_NOT_SUPPORTED_FILE' })], params: { resumeAt: 5000 } });
   await t.start();
-  await t.advance(13000);
+  await t.advance(21000);
   assert.equal(t.events.navigate.length, 1);
   const nav = t.events.navigate[0];
   assert.equal(nav.kind, 'sources');
@@ -59,7 +59,7 @@ both('every source fails: the sources page is asked for (navigate), once', async
 both('when the viewer picked the source, running out shows "Source failed" instead of leaving', async () => {
   const t = makeEngine({ sources: [stream('Only', { start: 'never' })], params: { picked: true } });
   await t.start();
-  await t.advance(12100);
+  await t.advance(20100);
   assert.equal(t.events.navigate.length, 0);
   assert.equal(t.events.sourceError.length, 1);
   const last = t.events.loading[t.events.loading.length - 1];
@@ -249,7 +249,7 @@ both('the source memory is written once a picture shows', async () => {
   await t.start();
   await t.advance(1000);
   assert.equal(t.store.get('sources/file:tt15239678'), null, 'nothing remembered for a source that never showed a picture');
-  await t.advance(14000);
+  await t.advance(22000);
   assert.equal(t.store.get('sources/file:tt15239678'), 'Dune.2160p.mkv');
   assert.equal(t.store.get('sources/binge:tt15239678'), 'grp|2160p');
 });
@@ -265,7 +265,7 @@ test('buffering completes but the time never advances: no picture, so the next s
   await t.advance(3000);
   assert.equal(t.events.started.length, 0, 'not a picture');
   assert.equal(t.loads().length, 1, 'still on the first source');
-  await t.advance(8000); // START_WAIT (12 s) from the start
+  await t.advance(16000); // START_WAIT (20 s) from the start
   assert.equal(t.loads().length, 2, 'START_WAIT failover still ran');
   assert.ok(/Good/.test(t.loads()[1].url));
   assert.equal(t.puts.length, 0);
@@ -323,24 +323,24 @@ test('time reports before play() (a seek landing) are not a picture', async () =
   assert.equal(t.events.started.length, 0);
 });
 
-both('a cached source gets 8 s to show a picture, an unknown one 12 s; the decision shows the real seconds', async () => {
+both('a cached source gets 15 s to show a picture, an unknown one 20 s; the decision shows the real seconds', async () => {
   const cached = makeEngine({ sources: [stream('A 1080p DDP5.1', { start: 'never' }, { title: '[TB+] 1080p' }), stream('B 1080p DDP5.1')] });
   await cached.start();
-  await cached.advance(7900);
-  assert.equal(cached.loads().length, 1, 'still waiting just before 8 s');
+  await cached.advance(14900);
+  assert.equal(cached.loads().length, 1, 'still waiting just before 15 s');
   await cached.advance(200);
-  assert.equal(cached.loads().length, 2, 'the next opens right after 8 s');
-  assert.equal(cached.loads()[1].t, 8000);
+  assert.equal(cached.loads().length, 2, 'the next opens right after 15 s');
+  assert.equal(cached.loads()[1].t, 15000);
   const lines = cached.diag.snapshot().decisions.map((d) => d.text);
-  assert.ok(lines.some((l) => /source failed \(no picture after 8 s\)/.test(l)), lines.join(' | '));
+  assert.ok(lines.some((l) => /source failed \(no picture after 15 s\)/.test(l)), lines.join(' | '));
   assert.ok(lines.some((l) => l === 'source: cached, 1080p, sound unknown' || /^source: cached, 1080p/.test(l)), lines.join(' | '));
   const plain = makeEngine({ sources: [stream('A 1080p DDP5.1', { start: 'never' }), stream('B 1080p DDP5.1')] });
   await plain.start();
-  await plain.advance(11900);
+  await plain.advance(19900);
   assert.equal(plain.loads().length, 1);
   await plain.advance(200);
-  assert.equal(plain.loads()[1].t, 12000);
-  assert.ok(plain.diag.snapshot().decisions.some((d) => /no picture after 12 s/.test(d.text)));
+  assert.equal(plain.loads()[1].t, 20000);
+  assert.ok(plain.diag.snapshot().decisions.some((d) => /no picture after 20 s/.test(d.text)));
 });
 
 both('the find report from the sources page reaches Diagnostics', async () => {

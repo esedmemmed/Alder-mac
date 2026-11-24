@@ -36,16 +36,17 @@ export function openSubtitlesHash(size, headBytes, tailBytes) {
 
 /**
  * Reads the two ends through [fetchRange](start, endInclusive) -> Promise of the bytes (or of { bytes, total }, where total is the
- * whole file's size from a Content-Range header) and hashes them. [size] unknown (falsy): the head's answer must carry the total.
- * Null for a file under 131072 bytes; rejects when the ends cannot be read.
+ * whole file's size from a Content-Range header) and hashes them. The head's total wins over [size], the stream's hint, which can be
+ * wrong (a tail range from a wrong size answers 416); [size] is only used when the head's answer carries no total.
+ * Resolves { hash, size } (size: the one used), null for a file under 131072 bytes; rejects when the ends cannot be read.
  */
 export async function hashFromRanges(size, fetchRange) {
   const split = (r) => (r && r.bytes ? r : { bytes: r, total: null });
-  let total = Number(size) > 0 ? Number(size) : 0;
   const head = split(await fetchRange(0, CHUNK - 1));
-  if (!total) total = Number(head.total) > 0 ? Number(head.total) : 0;
+  const real = Number(head.total) > 0 ? Number(head.total) : 0;
+  const total = real || (Number(size) > 0 ? Number(size) : 0);
   if (!total) throw new Error('size unknown');
   if (total < MIN_SIZE) return null;
   const tail = split(await fetchRange(total - CHUNK, total - 1));
-  return openSubtitlesHash(total, head.bytes, tail.bytes);
+  return { hash: openSubtitlesHash(total, head.bytes, tail.bytes), size: total };
 }
