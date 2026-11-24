@@ -3,6 +3,6 @@
 import { analyse } from './subtitle-sync.js';
 
 self.onmessage = (e) => {
-  try { self.postMessage({ results: analyse(e.data.ref, e.data.cands) }); }
+  try { self.postMessage({ results: analyse(e.data.ref, e.data.cands, e.data.opts || undefined) }); }
   catch (err) { self.postMessage({ error: String(err && err.message ? err.message : err) }); }
 };

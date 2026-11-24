@@ -215,6 +215,9 @@ function metasOf(answer) {
   return objects(arr(answer, 'metas')).filter(m => text(m, 'id')).map(m => new Meta(m))
 }
 
+/** Release tags that are Latin letters in every language's file names: left out when counting a name's script. */
+const TAGS = /\b(?:s\d+\s?e\d+|\d{3,4}p|web[-. ]?(?:dl|rip)?|hdr\d*|dv|hevc|x26[45]|h[. ]?26[45]|av1|blu-?ray|remux|bdrip|brrip|hdtv|dvdrip|aac|ac3|eac3|dts(?:-?hd)?|ddp?\d*|atmos|uhd|4k|nf|amzn|dl)\b/gi
+
 export class Meta {
   constructor(json) {
     this.json = json
@@ -365,7 +368,28 @@ export class Stream {
    * Full language names count when "eng"/"english" comes after them (not "english subs"); the short tags (hin, tam, tel, mal, kan, ben)
    * only inside a "+ & / , -" chain that ends in eng. A language word alone, with no English named after it, is not it.
    */
-  get dubFirst() {
+  get dubFirst() { return this.nameDubFirst || this.scriptDub !== null }
+
+  /**
+   * "cyrillic" or "devanagari" when the file name (else the title's first line) is mainly in that script: more letters in it than Latin
+   * ones once the extension and the release tags (S01E01, 1080p, WEB-DL, HDR, codecs ...) are left out. Such a release is almost always a
+   * dubbed local one ("Чёрное зеркало.S01E01.WEB-DL.1080p.HDR.mkv"); null otherwise.
+   */
+  get scriptDub() {
+    if (this._script === undefined) {
+      const raw = this.filename || String(this.title || '').split('\n')[0]
+      const text = raw.replace(/\.(mkv|mp4|avi|m4v|ts)$/i, '').replace(TAGS, ' ')
+      const count = re => (text.match(re) || []).length
+      const latin = count(/[A-Za-z]/g)
+      const cyrillic = count(/[Ѐ-ӿ]/g)
+      const devanagari = count(/[ऀ-ॿ]/g)
+      this._script = cyrillic > latin && cyrillic >= devanagari ? 'cyrillic' : devanagari > latin ? 'devanagari' : null
+    }
+    return this._script
+  }
+
+  /** The name-word rule alone: a dub language listed before English (not the script rule). */
+  get nameDubFirst() {
     const w = this.words
     const lang = /\b(?:hindi|tamil|telugu|malayalam|kannada|bengali|latino|castellano)\b/.exec(w)
     const eng = /\beng(?:lish)?\b(?!\s?sub)/.exec(w)

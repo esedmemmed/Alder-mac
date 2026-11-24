@@ -398,3 +398,34 @@ test('whyChosen: names the best resolution offered and a dub listed first', () =
   assert.ok(why.includes('dual audio with a dub listed first') && why.includes('best resolution offered was 1080p'), why)
   assert.ok(!whyChosen(p1080, 0, { device, sources: [dubbed720, p1080] }).includes('best resolution'))
 })
+
+// ---- releases named in another script ----
+const CYR = 'Чёрное зеркало.S01E01.WEB-DL.1080p.HDR.mkv'
+test('scriptDub / dubFirst: a name mainly in Cyrillic or Devanagari is a local dub; one Cyrillic word in a Latin name is not', () => {
+  const s = (name, o) => stream(name, o)
+  assert.equal(s(CYR).scriptDub, 'cyrillic')
+  assert.equal(s(CYR).dubFirst, true)
+  assert.equal(s('ब्लैक मिरर S01E01 1080p WEB-DL.mkv').scriptDub, 'devanagari')
+  assert.equal(s('ब्लैक मिरर S01E01 1080p WEB-DL.mkv').dubFirst, true)
+  assert.equal(s('The Black Mirror Зеркало S01E01 1080p.mkv').scriptDub, null)
+  assert.equal(s('The Black Mirror Зеркало S01E01 1080p.mkv').dubFirst, false)
+  assert.equal(s('Black.Mirror.S01E01.1080p.WEB-DL.mkv').dubFirst, false)
+  assert.equal(new Stream('Чёрное зеркало 1080p', '', 'https://h/x', {}, 0, null, null).scriptDub, 'cyrillic') // no file name: the title's first line
+  assert.equal(s(HIND).scriptDub, null)
+  assert.equal(s(HIND).dubFirst, true) // the name-word rule is untouched
+})
+
+test('rank: a Cyrillic or Devanagari release loses a tie at the same resolution, unless the profile speaks that language', () => {
+  const ru = stream(CYR)
+  const dev = stream('ब्लैक मिरर S01E01 1080p WEB-DL.mkv')
+  const en = stream('Black.Mirror.S01E01.1080p.WEB-DL.mkv')
+  const p = lang => ranker({ settings: settingsStub({ audioLanguage: () => lang }) })
+  assert.deepEqual(names(p('en').rank([ru, dev, en])), names([en, ru, dev]))
+  assert.deepEqual(names(p('ru').rank([ru, en])), names([ru, en]), 'a Russian profile keeps the add-on order')
+  assert.deepEqual(names(p('uk').rank([ru, en])), names([ru, en]))
+  assert.deepEqual(names(p('hi').rank([dev, en])), names([dev, en]))
+  assert.deepEqual(names(p('ru').rank([dev, en])), names([en, dev]), 'Russian does not excuse a Devanagari name')
+  const higher = stream('Чёрное зеркало.S01E01.WEB-DL.2160p.mkv')
+  assert.equal(p('en').rank([en, higher])[0], higher, 'resolution still comes first')
+  assert.ok(whyChosen(ru).includes('cyrillic'))
+})

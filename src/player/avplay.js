@@ -272,6 +272,16 @@ export function createAvplay({ webapis = typeof window !== 'undefined' ? window.
       return safe('setSilentSubtitle', () => { av().setSilentSubtitle(!on); return true; }, false);
     },
 
+    /**
+     * Listen to a file text track without showing it: AVPlay selects it and keeps its subtitle events on; the engine's onSubtitle hands them to the
+     * collector (start = the time of the event, end = start + durationMs) and never to the overlay while an add-on subtitle is shown.
+     */
+    captureViaEvents: true,
+    captureTrack(index) {
+      return api.selectTrack('TEXT', index) && api.subtitlesOn(true);
+    },
+    stopCapture() { return api.subtitlesOn(false); },
+
     suspend() { return safe('suspend', () => { av().suspend(); return true; }, false); },
     restore() { return safe('restore', () => { av().restore(); return true; }, false); },
   };

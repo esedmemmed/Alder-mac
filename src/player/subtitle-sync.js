@@ -47,8 +47,8 @@ export function mapCues(cues, t) {
 }
 
 /** Pure: [cands] = [{ id, cues }] against [ref] -> [{ id, ratio, offset, gain, checked }], best gain first. Runs in the worker or the page. */
-export function analyse(ref, cands) {
-  return pickBest(ref, cands).map((x) => ({ id: x.id, ratio: x.result.ratio, offset: x.result.offset, gain: x.result.gain, checked: x.result.checked }));
+export function analyse(ref, cands, opts) {
+  return pickBest(ref, cands, opts).map((x) => ({ id: x.id, ratio: x.result.ratio, offset: x.result.offset, gain: x.result.gain, checked: x.result.checked }));
 }
 
 const secondsText = (ms) => (ms < 0 ? '-' : '+') + (Math.abs(ms) / 1000).toFixed(1) + ' s';
@@ -58,6 +58,8 @@ export function timingText(state, t) {
   if (state === 'hash') return 'Timed to this file';
   if (state === 'aligned' && t) return 'Aligned to English: ' + shift();
   if (state === 'remembered' && t) return 'Remembered alignment: ' + shift();
+  if (state === 'listening') return "Checking against the file's English subtitles…";
+  if (state === 'aligned-file' && t) return "Aligned to the file's English track: " + shift();
   if (state === 'noref') return 'Not checked: no English subtitle matched to this file';
   if (state === 'nochange') return 'Not changed: no confident fit';
   return '';
@@ -70,10 +72,10 @@ export function alignedLine(t) { return 'timing: aligned to English (file match)
  * defer(fn) (a timer). Any worker trouble falls back to the page.
  */
 export function createAligner({ workerSource = (typeof __ALDER_ALIGN_WORKER__ !== 'undefined' ? __ALDER_ALIGN_WORKER__ : null), defer = (fn) => setTimeout(fn, 0) } = {}) {
-  const inPage = (ref, cands) => new Promise((resolve, reject) => { defer(() => { try { resolve(analyse(ref, cands)); } catch (e) { reject(e); } }); });
+  const inPage = (ref, cands, opts) => new Promise((resolve, reject) => { defer(() => { try { resolve(analyse(ref, cands, opts)); } catch (e) { reject(e); } }); });
   return {
-    compute(ref, cands) {
-      if (!workerSource || typeof Worker === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) return inPage(ref, cands);
+    compute(ref, cands, opts) {
+      if (!workerSource || typeof Worker === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) return inPage(ref, cands, opts);
       return new Promise((resolve, reject) => {
         let worker = null;
         let url = null;
@@ -83,9 +85,9 @@ export function createAligner({ workerSource = (typeof __ALDER_ALIGN_WORKER__ !=
           worker = new Worker(url);
           worker.onmessage = (e) => { if (e.data && e.data.results) done(resolve, e.data.results); else done(reject, new Error((e.data && e.data.error) || 'worker failed')); };
           worker.onerror = () => done(reject, new Error('worker failed'));
-          worker.postMessage({ ref, cands });
+          worker.postMessage({ ref, cands, opts: opts || null });
         } catch (e) { done(reject, e); }
-      }).catch(() => inPage(ref, cands));
+      }).catch(() => inPage(ref, cands, opts));
     },
   };
 }
@@ -98,11 +100,13 @@ export function createAlignMemory(store) {
       const k = keyOf(stream, sub);
       const v = k ? store.get(k) : null;
       if (!v || typeof v !== 'object' || !isFinite(v.ratio) || !isFinite(v.offset) || v.ratio < 0.5 || v.ratio > 2) return null;
-      return { ratio: Number(v.ratio), offset: Number(v.offset), gain: Number(v.gain) || 0 };
+      return { ratio: Number(v.ratio), offset: Number(v.offset), gain: Number(v.gain) || 0, source: typeof v.source === 'string' ? v.source : null };
     },
-    remember(stream, sub, t) {
+    remember(stream, sub, t, source) {
       const k = keyOf(stream, sub);
-      if (k) store.set(k, { ratio: t.ratio, offset: Math.round(t.offset), gain: Math.round(t.gain * 100) / 100 });
+      const v = { ratio: t.ratio, offset: Math.round(t.offset), gain: Math.round(t.gain * 100) / 100 };
+      if (source) v.source = source; // 'file track': timed against the file's own English subtitles
+      if (k) store.set(k, v);
     },
   };
 }
@@ -151,3 +155,85 @@ export async function syncSubtitle(c) {
 }
 
 export { alignChecked };
+
+// ---- the file's own English track, collected while playing (0.7.0) ----
+
+/** The English text track to listen to, or null: not forced (flag or name), Signs / Songs only when nothing else, then the first in track order. */
+export function pickEnglishTrack(textTracks) {
+  const english = (textTracks || []).filter((t) => t && t.language === 'en' && !t.forced && !/forced/i.test(String(t.label || '')));
+  const full = english.filter((t) => !/sign|song/i.test(String(t.label || '')));
+  return (full.length ? full : english)[0] || null;
+}
+
+/** The English cues heard so far, as sorted { start, end } in media milliseconds; the same cue twice (same start within 100 ms) counts once. */
+export function createCollector() {
+  const cues = [];
+  return {
+    add(start, end) {
+      if (!isFinite(start) || !isFinite(end) || end <= start || start < 0) return false;
+      let i = cues.length;
+      while (i > 0 && cues[i - 1].start > start) i--;
+      if ((i > 0 && Math.abs(cues[i - 1].start - start) < 100) || (i < cues.length && Math.abs(cues[i].start - start) < 100)) return false;
+      cues.splice(i, 0, { start: Math.round(start), end: Math.round(end) });
+      return true;
+    },
+    list() { return cues.slice(); },
+    count() { return cues.length; },
+    span() { return cues.length ? cues[cues.length - 1].end - cues[0].start : 0; },
+    clear() { cues.length = 0; },
+  };
+}
+
+/** The measured rules of the live fit (GENERATION_PLAN 1.12): all milliseconds of media time except the counts and the ratio. */
+export const LIVE = { minSpan: 120000, minCues: 20, offsetOnlyBelow: 600000, firstEvery: 60000, laterEvery: 120000, agreeOffset: 300, agreeRatio: 0.0003, stopAfterApply: 900000, giveUp: 1800000 };
+
+/**
+ * The fitting of the collected English against the Turkish cues. tick(position) is called every few seconds; a fit runs every 60 s of playback
+ * (120 s once applied) from 120 s / 20 cues of English on; offset only (ratio 1) while the collected span is under 600 s. A fit applies only when it and
+ * the one before are both 'high' and agree (300 ms, ratio 0.0003); once applied, a later agreeing pair that differs from the applied one by more than 300 ms
+ * applies again (a cut). It stops 15 minutes after the first apply, or 30 minutes after the start with nothing applied.
+ * deps: collector, target() -> Turkish cues, compute(ref, cands, opts), apply(fit, again), finish(reason, { applied, count, last }).
+ */
+export function createLiveFit({ collector, target, compute, apply, finish }) {
+  let token = 0;
+  let prev = null;
+  let applied = null;
+  let firstApplyAt = null;
+  let startedAt = null;
+  let lastAt = null;
+  let busy = false;
+  let stopped = false;
+  let last = null;
+  const near = (a, b) => Math.abs(a.offset - b.offset) <= LIVE.agreeOffset && Math.abs(a.ratio - b.ratio) <= LIVE.agreeRatio;
+  const stop = (reason) => { if (stopped) return; stopped = true; token++; if (finish) finish(reason, { applied, count: collector.count(), last }); };
+  return {
+    /** Forget the fits (a new Turkish file, a new run); the collected English stays with the collector. */
+    reset() { token++; prev = null; applied = null; firstApplyAt = null; startedAt = null; lastAt = null; busy = false; stopped = false; last = null; },
+    stop,
+    get last() { return last; },
+    get applied() { return applied; },
+    get stopped() { return stopped; },
+    async tick(pos) {
+      if (stopped || busy) return;
+      if (startedAt === null) startedAt = pos;
+      if (applied && Math.abs(pos - firstApplyAt) >= LIVE.stopAfterApply) { stop('done'); return; }
+      if (!applied && Math.abs(pos - startedAt) >= LIVE.giveUp) { stop('giveup'); return; }
+      if (collector.span() < LIVE.minSpan || collector.count() < LIVE.minCues) return;
+      if (lastAt !== null && Math.abs(pos - lastAt) < (applied ? LIVE.laterEvery : LIVE.firstEvery)) return;
+      lastAt = pos;
+      busy = true;
+      const mine = token;
+      let res = null;
+      try { res = (await compute(collector.list(), [{ id: 'live', cues: target() }], collector.span() < LIVE.offsetOnlyBelow ? { ratios: [1] } : undefined))[0]; } catch (e) { res = null; }
+      if (mine !== token) return;
+      busy = false;
+      if (!res) return;
+      last = res;
+      const agree = prev && prev.checked === 'high' && res.checked === 'high' && near(prev, res);
+      prev = res;
+      if (!agree) return;
+      if (!applied) { applied = res; firstApplyAt = pos; apply(res, false); }
+      else if (!near(applied, res)) { applied = res; apply(res, true); }
+    },
+  };
+}

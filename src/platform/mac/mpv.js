@@ -89,6 +89,10 @@ export function mapError(message) {
 const OBSERVED = ['time-pos', 'duration', 'pause', 'paused-for-cache', 'cache-buffering-state', 'track-list', 'aid', 'sid', 'video-params'];
 const observedBridges = new WeakSet(); // observe once per bridge: a second observe could double every event
 
+const SECONDARY = ['secondary-sub-start', 'secondary-sub-end', 'secondary-sub-text']; // observed when a capture starts (start and end first: the text arrives last)
+const ANDROID_CAPTURE = ['sub-start', 'sub-end'];
+const IS_ANDROID = typeof __ALDER_ANDROID__ !== 'undefined' && __ALDER_ANDROID__;
+
 const TYPES = { video: 'VIDEO', audio: 'AUDIO', sub: 'TEXT' };
 
 /**
@@ -126,6 +130,7 @@ export function createAvplay({ bridge = null, log = null } = {}) {
   let paused = true;
   let panscan = 0;
   let wasPlaying = false;
+  let capturing = false;
   let resolveReady = null;
   let rejectReady = null;
   let readyPromise = null;
@@ -175,10 +180,31 @@ export function createAvplay({ bridge = null, log = null } = {}) {
     call('onError', code, text);
   }
 
+  // capture of a file text track that is not shown: mpv's secondary subtitle (Mac), the native cue start / end (Android). A cue is recorded when its text arrives (Mac)
+  // or when it ends (Android); times in ms of media time.
+  function onCaptureProp(e) {
+    if (!capturing) return false;
+    if (e.name === 'secondary-sub-text') {
+      const text = String(e.value === undefined || e.value === null ? '' : e.value);
+      const start = Number(cache['secondary-sub-start']);
+      const end = Number(cache['secondary-sub-end']);
+      if (text.trim() !== '' && isFinite(start) && isFinite(end) && end > start) call('onCapture', { startMs: Math.round(start * 1000), endMs: Math.round(end * 1000) });
+      return true;
+    }
+    if (e.name === 'sub-end') {
+      const start = Number(cache['sub-start']);
+      const end = Number(e.value);
+      if (isFinite(start) && isFinite(end) && end > start) call('onCapture', { startMs: Math.round(start * 1000), endMs: Math.round(end * 1000) });
+      return true;
+    }
+    return e.name === 'secondary-sub-start' || e.name === 'secondary-sub-end' || e.name === 'sub-start';
+  }
+
   function onProp(e, mine) {
     if (mine !== session) return;
     const was = cache[e.name];
     cache[e.name] = e.value;
+    if (onCaptureProp(e)) return;
     if ((typeof __ALDER_ANDROID__ !== 'undefined' && __ALDER_ANDROID__) && e.name === 'sub-text') { // Android: the cue text, for the page's own subtitle overlay (an empty text is no line)
       const text = String(e.value === undefined || e.value === null ? '' : e.value);
       call('onSubtitle', { durationMs: text ? 60000 : 0, text, type: undefined }); // native sends '' when a cue ends: the line stays until then
@@ -234,6 +260,7 @@ export function createAvplay({ bridge = null, log = null } = {}) {
       handlers = h;
       lastOpen = { url, headers: headers && Object.keys(headers).length ? headers : undefined };
       cache = {};
+      capturing = false;
       ready = false;
       opened = true;
       paused = true;
@@ -369,6 +396,35 @@ export function createAvplay({ bridge = null, log = null } = {}) {
     /** mpv's sub-speed: the subtitle event timestamps are multiplied by [factor] (1 = untouched); used with setSubDelay to map a subtitle onto this file. */
     setSubSpeed(factor) {
       send('sub-speed', bridgeOrThrow().setProp('sub-speed', Number(factor)));
+      return true;
+    },
+
+    /**
+     * Listen to the file text track [index] without showing it. Mac: mpv's secondary subtitle, hidden (secondary-sub-visibility no), observed through
+     * secondary-sub-start / -end / -text. Android: the native capture (sub-capture) of the selected track. Cues arrive through the handler onCapture({ startMs, endMs }).
+     */
+    captureTrack(index) {
+      const id = (tracks().ids.TEXT || [])[index];
+      if (id === undefined) return false;
+      const br = bridgeOrThrow();
+      capturing = true;
+      if (IS_ANDROID) {
+        send('observe', br.observe(ANDROID_CAPTURE));
+        send('sub-capture', br.setProp('sub-capture', true));
+        send('sid', br.setProp('sid', id));
+      } else {
+        send('observe', br.observe(SECONDARY));
+        send('secondary-sub-visibility', br.setProp('secondary-sub-visibility', false));
+        send('secondary-sid', br.setProp('secondary-sid', id));
+      }
+      return true;
+    },
+    stopCapture() {
+      if (!capturing) return true;
+      capturing = false;
+      const br = bridgeOrThrow();
+      if (IS_ANDROID) { send('sub-capture', br.setProp('sub-capture', false)); send('sid', br.setProp('sid', 'no')); }
+      else send('secondary-sid', br.setProp('secondary-sid', 'no'));
       return true;
     },
 

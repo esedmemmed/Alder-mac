@@ -64,7 +64,7 @@ import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';
 import { fetchAddonSubtitles } from './subtitle-fetch.js';
 import { resolvePlayableUrl } from './sources.js';
 import { createSubtitleDelay } from './subtitle-delay.js';
-import { syncSubtitle, createAligner, mapCues, alignedLine, referenceFor, timingText } from './subtitle-sync.js';
+import { syncSubtitle, createAligner, mapCues, alignedLine, referenceFor, timingText, timesOf, pickEnglishTrack, createCollector, createLiveFit } from './subtitle-sync.js';
 import { PICTURE, PICTURE_NAMES, normalisePicture, parseVideoShape, shapeText, shapeNote, hasBars, cropPercent } from './picture.js';
 
 const { TICK, PUSH_EVERY, RESUME_SLACK, SKIP_SHOWN, START_WAIT, START_WAIT_CACHED, RETRIES, RETRY_WAIT, SEEK_SETTLE, STALL_WINDOW, STALLS_FOR_LOWER } = PLAYER;
@@ -98,6 +98,7 @@ export function createEngine(params, deps) {
   const resolveUrl = deps.resolveUrl || resolvePlayableUrl;
   const tvLanguage = deps.tvLanguage || (() => 'en');
   const audioLanguage = () => toIso1(deps.audioLanguage ? deps.audioLanguage() : settings.audioLanguage());
+  const originalSound = () => (settings.dub() === 'mine' ? '' : 'en'); // no track in the audio language: English before a dub's default flag, unless the profile wants the dub
 
   const type = params.type || 'movie';
   const metaId = params.metaId;
@@ -179,6 +180,12 @@ export function createEngine(params, deps) {
   let speedSet = false;
   let syncToken = 0;
   let syncSub = null; let syncCues = null; let syncHadRef = false;
+  // The file's own English track, heard while playing and never shown: the reference when OpenSubtitles has no file match (player/subtitle-sync.js createLiveFit).
+  const liveCollector = createCollector();
+  let liveOn = false;
+  let liveTrack = null;
+  let liveTimer = null;
+  const liveFit = createLiveFit({ collector: liveCollector, target: () => timesOf(subCues || []), compute: (ref, cands, opts) => aligner.compute(ref, cands, opts), apply: (fit, again) => liveApply(fit, again), finish: (reason, info) => liveFinish(reason, info) });
   let syncRunning = false; // a run is waiting for the picture or computing
   let syncHashed = false; // the subtitle was timed to this file by OpenSubtitles (matchedBy hash): only a clear difference moves it
   let timingState = null; // { state, t } for the status line in the subtitle timing group
@@ -362,7 +369,7 @@ export function createEngine(params, deps) {
       avplay.selectTrack('AUDIO', forcedAudio);
       audioIndex = forcedAudio;
     } else if (!audioPicked) {
-      const decision = decideAudio(audioTracks, { language: audioLanguage(), failed: failedAudio, currentIndex: current });
+      const decision = decideAudio(audioTracks, { language: audioLanguage(), fallback: originalSound(), failed: failedAudio, currentIndex: current });
       decide('audio: ' + decision.reason);
       if (!decision.ok) return next('no playable audio');
       audioPicked = true;
@@ -459,6 +466,7 @@ export function createEngine(params, deps) {
     } else {
       avplay.subtitlesOn(false);
     }
+    if (liveOn && avplay.captureViaEvents && liveTrack && subMode !== 'file') avplay.captureTrack(liveTrack.index); // AVPlay: the English track is still listened to
   }
 
   // ---- what AVPlay tells us ----
@@ -501,7 +509,12 @@ export function createEngine(params, deps) {
           warn('HTTP status ' + lastHttpStatus + ' reported by AVPlay');
         }
       }),
+      onCapture: live_(({ startMs, endMs }) => { if (liveOn) liveCollector.add(startMs, endMs); }),
       onSubtitle: live_(({ durationMs, text }) => {
+        if (liveOn && avplay.captureViaEvents && subMode !== 'file') { // the file's English track is only listened to: a cue is the time of the event and its length
+          if (String(text).trim() !== '') { const at0 = position(); liveCollector.add(at0, at0 + (durationMs > 0 ? durationMs : 4000)); }
+          return;
+        }
         if (subMode !== 'file') return;
         const lines = cueLines(text);
         emit('subtitle', { lines: lines.length ? lines : null });
@@ -531,6 +544,7 @@ export function createEngine(params, deps) {
   /** The stream ran out. At the real end the next episode starts, unless the viewer chose to watch the credits. */
   function onEnded() {
     ended = true;
+    if (liveOn) liveFit.stop('ended');
     lastTime = duration;
     // shortcut: sub-two-minute series streams are treated as add-on placeholders; revisit for short-form shows.
     if (isPlaceholder()) {
@@ -553,7 +567,7 @@ export function createEngine(params, deps) {
     // A bad audio track (a decoder rejecting a packet) should not end the movie: drop that track and carry on from the
     // same second on the next best one.
     if (isDecodeError(code) && audioIndex !== null && !failedAudio.has(audioIndex)) {
-      const outcome = afterAudioError(audioTracks, audioIndex, { language: audioLanguage(), failed: failedAudio });
+      const outcome = afterAudioError(audioTracks, audioIndex, { language: audioLanguage(), fallback: originalSound(), failed: failedAudio });
       failedAudio = outcome.failed;
       if (outcome.ok && outcome.index !== null) {
         decide('audio: track #' + audioIndex + ' failed, ' + outcome.reason);
@@ -997,17 +1011,64 @@ export function createEngine(params, deps) {
   const timedNote = (sub) => emit('notice', { message: String(sub.language || 'Subtitle') + ' timed to this file' });
   function alignClear() {
     syncToken++; syncWait = null; syncSub = null; syncRunning = false; alignT = null; alignedCues = null; timingState = null;
+    liveFit.reset(); // a new Turkish file is fitted again from what was heard; the capture itself goes on
     if (speedSet) { speedSet = false; try { avplay.setSubSpeed(1); avplay.setSubDelay(subDelay / 1000); } catch (e) { /* no bridge */ } } // the viewer's own delay only
   }
   // The alignment belongs to one release: another source (failover) drops it, the sync counts as not run, and it runs again after the new source's first picture.
   function alignSourceChanged() {
     const had = alignT !== null;
     const again = syncSub !== null || had;
+    liveDrop(); // this release is gone: what was heard of it with it
     alignClear();
     if (had && !hasSubSpeed && subMode === 'addon' && subCues) applyCueShift();
     syncRestart = again;
     emit('tracks');
   }
+  // ---- the file's English track as the reference ----
+  const liveDiag = () => { if (diag && diag.fileEnglish) diag.fileEnglish(liveTrack ? { name: liveTrack.label && !/^english$/i.test(liveTrack.label) ? 'English ' + liveTrack.label : 'English', cues: liveCollector.count(), fit: liveFit.last } : null); };
+  function liveBegin(sub) {
+    if (shut || chosenSub !== sub || alignT) return;
+    if (liveOn) { setTiming('listening'); return; } // the Turkish file changed: the fit starts over on what was heard
+    const track = pickEnglishTrack(textTracks);
+    if (typeof avplay.captureTrack !== 'function') { decide(textTracks.length ? 'timing: file subtitles cannot be read in a browser' : 'timing: no English reference (none in the file either)'); return; }
+    if (!track) { decide('timing: no English reference (none in the file either)'); return; }
+    let ok = false;
+    try { ok = avplay.captureTrack(track.index); } catch (e) { ok = false; }
+    if (!ok) { decide('timing: file subtitles cannot be read here'); return; }
+    liveTrack = track; liveOn = true;
+    decide("timing: listening to the file's English subtitles");
+    setTiming('listening');
+    liveDiag();
+    liveSchedule();
+  }
+  function liveSchedule() {
+    cancel(liveTimer);
+    liveTimer = after(() => { liveTimer = null; if (!liveOn) return; liveFit.tick(position()); liveDiag(); liveSchedule(); }, 5000);
+  }
+  function liveStopCapture() {
+    if (!liveOn) return;
+    liveOn = false;
+    cancel(liveTimer); liveTimer = null;
+    try { if (avplay.stopCapture) avplay.stopCapture(); } catch (e) { /* no bridge */ }
+  }
+  function liveStop() { if (!liveOn) return; liveStopCapture(); liveFit.reset(); liveDiag(); }
+  function liveDrop() { liveStopCapture(); liveCollector.clear(); liveFit.reset(); liveTrack = null; liveDiag(); }
+  function liveApply(fit, again) {
+    if (!chosenSub || !subCues) return;
+    const t = { ratio: fit.ratio, offset: fit.offset, gain: fit.gain };
+    alignApply(t);
+    if (memory && memory.aligns) memory.aligns.remember(sources && sources[at], chosenSub, t, 'file track');
+    decide("timing: aligned to the file's English track: " + secondsLine(t) + ', gain ' + t.gain.toFixed(2) + (again ? ' (again)' : ''));
+    setTiming('aligned-file', t);
+    timedNote(chosenSub);
+    liveDiag();
+  }
+  function liveFinish(reason, info) {
+    liveStopCapture();
+    if (info && !info.applied && (reason === 'giveup' || reason === 'ended')) { decide("timing: no confident fit from the file's English track (" + info.count + ' cues)'); setTiming('nochange'); }
+    liveDiag();
+  }
+  function secondsLine(t) { return (t.offset < 0 ? '-' : '+') + (Math.abs(t.offset) / 1000).toFixed(1) + ' s' + (Math.abs(t.ratio - 1) > 0.0005 ? ', speed ' + t.ratio.toFixed(4) : ''); }
   function alignApply(t) {
     alignT = { ratio: t.ratio, offset: t.offset };
     if (hasSubSpeed) {
@@ -1029,7 +1090,7 @@ export function createEngine(params, deps) {
     }
     syncHashed = false;
     const kept = memory && memory.aligns ? memory.aligns.get(sources && sources[at], sub) : null;
-    if (kept) { alignApply(kept); decide('timing: remembered alignment'); setTiming('remembered', kept); timedNote(sub); return; }
+    if (kept) { liveStop(); alignApply(kept); decide('timing: remembered alignment'); setTiming('remembered', kept); timedNote(sub); return; }
     syncSub = sub; syncCues = cues; syncHadRef = false;
     alignRun();
   }
@@ -1045,14 +1106,14 @@ export function createEngine(params, deps) {
         sub, cues, addonSubs: refSubs(), sameLanguage: (x) => x.isLocal(subtitleLanguage()), http, parse: parseSubtitles, decide, noSwitch: hashed,
         suffix: () => (source() && source().videoHash ? ' (after the file hash)' : ''),
         minChange: hashed ? { offset: 300, ratio: 0.0005 } : null, // a hash-matched file moves only for a clear difference
-        state: (name) => { if (!hashed) setTiming(name); },
+        state: (name) => { if (hashed) return; setTiming(name); if (name === 'noref') liveBegin(sub); },
         compute: (ref, cands) => aligner.compute(ref, cands),
         current: () => !shut && token === syncToken && chosenSub === sub,
         apply: (r, target, switched) => {
           const t = { ratio: r.ratio, offset: r.offset, gain: r.gain };
           if (memory && memory.aligns) memory.aligns.remember(sources && sources[at], target, t);
           if (switched) { decide('timing: switched to ' + String(target.label || target.addon).replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[link]').slice(0, 60) + ' (fits this file better)'); selectSubtitle({ kind: 'addon', sub: target }, true, t); }
-          else { alignApply(t); decide(alignedLine(t)); setTiming('aligned', t); timedNote(sub); }
+          else { liveStop(); alignApply(t); decide(alignedLine(t)); setTiming('aligned', t); timedNote(sub); }
         },
       }).then(() => { if (token === syncToken) syncRunning = false; });
     };
@@ -1107,6 +1168,7 @@ export function createEngine(params, deps) {
       alignStart(choice.sub, cues, aligned);
       if (!fromMemory && !notReal && !isNoticeSub(choice.sub)) macSubRemember({ kind: 'lang', language: toIso1(choice.sub.lang), addon: choice.sub.addon });
     } else {
+      liveStop(); // subtitles off, or a track of the file: nothing is listened to any more
       chosenSub = null; subCues = null; shifted = null; subDelay = 0; macDelayFor = null; subShown = null; alignClear();
       cancel(subsTimer); subsTimer = null;
       if (choice.kind === 'file') { subMode = 'file'; textIndex = choice.index; decide('subtitles: the file\'s track #' + choice.index); if (!fromMemory) macSubRememberFile(choice.index); }

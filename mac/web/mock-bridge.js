@@ -15,9 +15,10 @@
   var DEFAULT_REPLY_DELAY_MS = 5;
   var TICK_MS = 250;
   var LOAD_ERROR = -13; // MPV_ERROR_LOADING_FAILED, general knowledge: confirm against client.h in T6
-  var SETTABLE = ['aid', 'sid', 'sub-visibility', 'panscan', 'video-aspect-override', 'volume', 'sub-delay', 'sub-speed'];
+  var SETTABLE = ['aid', 'sid', 'sub-visibility', 'panscan', 'video-aspect-override', 'volume', 'sub-delay', 'sub-speed',
+    'secondary-sid', 'secondary-sub-visibility'];
   var OBSERVABLE = ['time-pos', 'duration', 'pause', 'paused-for-cache', 'cache-buffering-state', 'track-list', 'aid',
-    'sid', 'hwdec-current', 'video-params', 'audio-params', 'eof-reached'];
+    'sid', 'hwdec-current', 'video-params', 'audio-params', 'eof-reached', 'secondary-sub-start', 'secondary-sub-end', 'secondary-sub-text'];
   var DEFAULT_OBSERVED = ['time-pos', 'duration', 'pause'];
 
   // The one strip function (same rule as Swift stripURLs): scheme://... and ?query never leave the shell.
@@ -44,7 +45,7 @@
       'time-pos': null, pause: false, duration: null, 'hwdec-current': 'mock', 'paused-for-cache': false,
       'cache-buffering-state': null, 'eof-reached': null, 'track-list': [], aid: null, sid: null,
       'video-params': null, 'audio-params': null, 'sub-visibility': true, panscan: 0, 'video-aspect-override': -1,
-      volume: 100, 'sub-delay': 0, 'sub-speed': 1, 'frame-drop-count': 0, 'decoder-frame-drop-count': 0, 'vo-delayed-frame-count': 0,
+      volume: 100, 'sub-delay': 0, 'sub-speed': 1, 'secondary-sid': null, 'secondary-sub-visibility': true, 'secondary-sub-start': null, 'secondary-sub-end': null, 'secondary-sub-text': null, 'frame-drop-count': 0, 'decoder-frame-drop-count': 0, 'vo-delayed-frame-count': 0,
       'mistimed-frame-count': 0
     };
     var observed = DEFAULT_OBSERVED.slice();
@@ -285,6 +286,8 @@
     mock.wake = function () { emit({ type: 'wake' }); };
     mock.audioDeviceChanged = function () { emit({ type: 'audioDevice' }); };
     mock.requestQuit = function () { emit({ type: 'willQuit' }); }; // Cmd-Q or window close
+    // test hook: the secondary subtitle shows a cue (seconds of media time), then is empty again
+    mock.secondaryCue = function (start, end, text) { setProp('secondary-sub-start', start); setProp('secondary-sub-end', end); setProp('secondary-sub-text', text); };
     mock.emitRaw = emit; // test hook: what a buggy native could send
     return mock;
   }

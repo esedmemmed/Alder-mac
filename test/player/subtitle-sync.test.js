@@ -342,7 +342,7 @@ for (const adapter of ['avplay', 'mpv']) {
 
   test('after a refresh with no reference the timing line says so, once more after the file hash [' + adapter + ']', async () => {
     const t = await play({ subs: [trSub('tr1')], adapter, fileHash: async () => '8e245d9679d31e12' });
-    const lines = t.decisions().filter((d) => /^timing:/.test(d));
+    const lines = t.decisions().filter((d) => /^timing: no English reference matched/.test(d));
     assert.ok(lines.length >= 1, 'a timing line after the refresh');
     assert.equal(lines[lines.length - 1], 'timing: no English reference matched to this file (after the file hash)');
     assert.equal(t.engine.tracks().timing, 'Not checked: no English subtitle matched to this file');

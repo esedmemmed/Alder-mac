@@ -24,6 +24,7 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
   let errors = [];
   let subtitleAddons = [];
   let subtitleExtra = null;
+  let fileEnglish = null;
   let find = null;
 
   return {
@@ -62,12 +63,14 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
       const text = typeof result === 'number' ? result + ' found' + (matched ? ', ' + matched + ' matched to this file (' + langs.join(', ') + ')' : '') : 'failed: ' + reason;
       subtitleAddons.push({ name: String(name), text });
     },
+    /** The file's English track the Turkish timing listens to: { name, cues, fit: { offset, gain } | null }, or null when none. */
+    fileEnglish(info) { fileEnglish = info || null; },
     /** The names of the file details the add-ons were asked with ([] for none). */
     subtitleExtraKeys(keys) { subtitleExtra = Array.isArray(keys) ? keys.slice() : null; },
     /** What the finder saw: { addons: [{ name, ms, count, error }], start } (core/finder.js report). */
     setFind(report) { find = report || null; },
-    snapshot() { return { find, stream, rawTracks, picture, decisions: decisions.slice(), errors: errors.slice(), subtitleAddons: subtitleAddons.slice(), subtitleExtra: subtitleExtra === null ? null : subtitleExtra.slice() }; },
-    clear() { stream = null; rawTracks = null; picture = null; decisions = []; errors = []; subtitleAddons = []; find = null; },
+    snapshot() { return { find, stream, rawTracks, picture, decisions: decisions.slice(), errors: errors.slice(), subtitleAddons: subtitleAddons.slice(), fileEnglish: fileEnglish ? Object.assign({}, fileEnglish) : null, subtitleExtra: subtitleExtra === null ? null : subtitleExtra.slice() }; },
+    clear() { stream = null; rawTracks = null; picture = null; decisions = []; errors = []; subtitleAddons = []; fileEnglish = null; find = null; },
   };
 }
 

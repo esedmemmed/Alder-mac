@@ -154,7 +154,12 @@ export function parseAudioTracks(totalTrackInfo, options = {}) {
         const named = audioCodecsIn(typeof t.extra_info === 'string' ? t.extra_info : JSON.stringify(info))
         if (named.length) verdict = classifyCodecId(named[0], playable)
       }
-      const language = firstOf(info, LANG_KEYS)
+      let language = firstOf(info, LANG_KEYS)
+      // An untagged track that names its language in its title ("English", "Eng 5.1") still counts as that language.
+      if (!language || language.toLowerCase() === 'und') {
+        const named = /\b(english|eng)\b/i.test(firstOf(info, LABEL_KEYS)) ? 'en' : ''
+        if (named) language = named
+      }
       const channels = parseInt(firstOf(info, ['channels', 'channel', 'channel_count', 'Channels']), 10)
       const index = Number(t.index)
       return {
@@ -179,7 +184,7 @@ const RANK_PLAYABLE = { yes: 2, maybe: 1, no: 0 }
  * a codec we have no verdict on ("maybe") only beats nothing.
  * Returns the track, or null when no track can be played.
  */
-export function bestAudio(tracks, { language = '', failed = new Set() } = {}) {
+export function bestAudio(tracks, { language = '', fallback = '', failed = new Set() } = {}) {
   const usable = tracks.filter(t => t.playable !== 'no' && !failed.has(t.index))
   // Alder drops commentaries outright. Here a file whose only playable track is a "commentary" still beats no sound.
   const clean = usable.filter(t => !/commentary/i.test(t.label || ''))
@@ -190,6 +195,7 @@ export function bestAudio(tracks, { language = '', failed = new Set() } = {}) {
     const key = [
       RANK_PLAYABLE[t.playable],
       language && t.language && t.language.startsWith(language) ? 1 : 0,
+      fallback && t.language && t.language.startsWith(fallback) ? 1 : 0, // no track in the audio language: the original sound ([fallback], English) before a dub's default flag
       t.isDefault ? 1 : 0,
       t.channels,
     ]
@@ -216,26 +222,28 @@ export function describeTracks(tracks) {
  *  { ok: true,  index: null, change: false, reason }   AVPlay listed no audio tracks: nothing to judge, play as is
  *  { ok: false, reason }                  nothing playable: the source failed ("no playable audio"), go to the next one
  */
-export function decideAudio(tracks, { language = '', failed = new Set(), currentIndex = null } = {}) {
+export function decideAudio(tracks, { language = '', fallback = '', failed = new Set(), currentIndex = null } = {}) {
   if (!tracks.length) return { ok: true, index: null, change: false, reason: 'no audio tracks reported; playing as is', tracks }
-  const best = bestAudio(tracks, { language, failed })
+  const best = bestAudio(tracks, { language, fallback, failed })
   const listing = describeTracks(tracks)
   if (!best) return { ok: false, reason: 'no playable audio: ' + listing, tracks }
   const current = currentIndex === null || currentIndex === undefined ? null : Number(currentIndex)
   const change = best.index !== current
   const currentTrack = tracks.find(t => t.index === current)
   let why
-  if (!change) why = 'kept #' + best.index + ' ' + best.codec
+  const original = fallback && best.language && best.language.startsWith(fallback) && !(language && best.language.startsWith(language))
+  if (!change) why = 'kept #' + best.index + ' ' + best.codec + (original ? ' (language ' + fallback + ', original sound)' : '')
   else if (currentTrack && currentTrack.playable === 'no') why = 'default #' + currentTrack.index + ' ' + currentTrack.codec + ' cannot play here; chose #' + best.index + ' ' + best.codec
+  else if (original) why = 'chose #' + best.index + ' ' + best.codec + ' (language ' + fallback + ', original sound)'
   else why = 'chose #' + best.index + ' ' + best.codec + ' (' + (language ? 'language ' + language + ', ' : '') + 'default flag, channels)'
   return { ok: true, index: best.index, change, reason: why + ' of [' + listing + ']', track: best, tracks }
 }
 
 /** A track failed mid-film (decoder error): the next best at the same second, or { ok: false } when none is left. */
-export function afterAudioError(tracks, failedIndex, { language = '', failed = new Set() } = {}) {
+export function afterAudioError(tracks, failedIndex, { language = '', fallback = '', failed = new Set() } = {}) {
   const now = new Set(failed)
   now.add(failedIndex)
-  const decision = decideAudio(tracks, { language, failed: now, currentIndex: failedIndex })
+  const decision = decideAudio(tracks, { language, fallback, failed: now, currentIndex: failedIndex })
   return Object.assign(decision, { failed: now })
 }
 

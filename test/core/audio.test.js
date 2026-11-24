@@ -276,3 +276,31 @@ test('dubOnlyLanguages: only dub tags, none English / und / untagged / the profi
   assert.deepEqual(dubOnlyLanguages(t('uk'), { meta: { json: { country: 'United Kingdom' } } }), ['uk'])
   assert.deepEqual(dubOnlyLanguages(t('uk'), { meta: { json: {} } }), ['uk']) // a meta with neither: the rule applies
 })
+
+import { parseAudioTracks as parseTracks, decideAudio as decide } from '../../src/core/audio.js'
+const avTrack = (index, lang, extra = {}) => ({ index, type: 'AUDIO', extra_info: JSON.stringify(Object.assign({ language: lang, fourCC: 'ec-3', channels: '6' }, extra)) })
+
+test('AVPlay language forms: en, eng, English, en-US, ENG, an empty tag and a title that says English', () => {
+  for (const form of ['en', 'eng', 'English', 'en-US', 'ENG', 'en_GB']) assert.equal(parseTracks([avTrack(0, form)])[0].language, 'en', form)
+  assert.equal(parseTracks([avTrack(0, '')])[0].language, '')
+  assert.equal(parseTracks([avTrack(0, 'und')])[0].language, '')
+  assert.equal(parseTracks([avTrack(0, '', { name: 'English 5.1' })])[0].language, 'en', 'untagged, but the track is named')
+  assert.equal(parseTracks([avTrack(0, 'und', { title: 'Eng' })])[0].language, 'en')
+  assert.equal(parseTracks([avTrack(0, 'rus', { title: 'English' })])[0].language, 'ru', 'a tag wins over a title')
+})
+
+test('audio: no track in the profile language, a dub is the default: English wins unless the profile wants the dub', () => {
+  for (const form of ['en', 'eng', 'English', 'en-US']) {
+    const tracks = parseTracks([avTrack(0, 'rus'), avTrack(1, form)], { currentIndex: 0 })
+    const d = decide(tracks, { language: 'tr', fallback: 'en', currentIndex: 0 })
+    assert.equal(d.index, 1, form)
+    assert.equal(d.change, true)
+    assert.match(d.reason, /^chose #1 EAC3 \(language en, original sound\)/)
+  }
+  const tracks = parseTracks([avTrack(0, 'rus'), avTrack(1, 'eng')], { currentIndex: 0 })
+  assert.equal(decide(tracks, { language: 'tr', fallback: '', currentIndex: 0 }).index, 0, 'dub setting mine: the default stays')
+  assert.equal(decide(tracks, { language: 'ru', fallback: 'en', currentIndex: 0 }).index, 0, 'the profile language comes first')
+  assert.equal(bestAudio(tracks, { language: 'en', fallback: 'en' }).index, 1)
+  const kept = decide(parseTracks([avTrack(0, 'eng', {}), avTrack(1, 'rus')], { currentIndex: 0 }), { language: 'tr', fallback: 'en', currentIndex: 0 })
+  assert.match(kept.reason, /^kept #0 EAC3 \(language en, original sound\)/)
+})

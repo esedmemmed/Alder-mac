@@ -29,8 +29,10 @@ final class Player {
     static let observable: Set<String> = [
         "time-pos", "duration", "pause", "paused-for-cache", "cache-buffering-state", "track-list", "aid", "sid",
         "hwdec-current", "video-params", "audio-params", "eof-reached",
+        "secondary-sub-start", "secondary-sub-end", "secondary-sub-text",
     ]
-    static let settable: Set<String> = ["aid", "sid", "sub-visibility", "panscan", "video-aspect-override", "volume", "sub-delay", "sub-speed"]
+    static let settable: Set<String> = ["aid", "sid", "sub-visibility", "panscan", "video-aspect-override", "volume", "sub-delay", "sub-speed",
+        "secondary-sid", "secondary-sub-visibility"]
     static let health: Set<String> = [
         "frame-drop-count", "decoder-frame-drop-count", "vo-delayed-frame-count", "mistimed-frame-count",
     ]

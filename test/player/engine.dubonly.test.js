@@ -112,3 +112,39 @@ test("dub-only: the Dubbed releases setting 'mine' keeps it", async () => {
   assert.equal(t.loads().length, 1);
   assert.ok(!decisions(t).some((d) => /sound only/.test(d)));
 });
+
+// ---- the audio track: English before a dub's default flag ----
+const TRK = (lang, def, codec = 'EAC3') => ({ type: 'AUDIO', codec, lang, channels: 6, default: !!def });
+
+async function pickFor(langs, { tvLanguage = 'tr', dub = null } = {}) {
+  const t = makeEngine({ sources: [stream('Film', { tracks: JSON.stringify(langs) })], tvLanguage });
+  if (dub) t.store.set('settings/dub@p1', dub);
+  await t.start();
+  await t.advance(3000);
+  return { t, line: decisions(t).find((d) => /^audio:/.test(d)) };
+}
+
+test('TV audio: a Russian default and an English track, the profile language absent: English is chosen, whatever form the tag has', async () => {
+  for (const form of ['en', 'eng', 'English', 'en-US', 'ENG']) {
+    const { t, line } = await pickFor([TRK('rus', true), TRK(form, false)]);
+    assert.ok(/^audio: chose #1 EAC3 \(language en, original sound\) of \[/.test(line), form + ': ' + line);
+    assert.equal(t.callsOf('setSelectTrack').some((c) => c.args[0] === 'AUDIO' && c.args[1] === 1), true);
+  }
+});
+
+test('TV audio: Ukrainian and Hindi defaults likewise', async () => {
+  const a = await pickFor([TRK('ukr', true), TRK('eng', false)]);
+  assert.match(a.line, /^audio: chose #1 EAC3 \(language en, original sound\)/);
+  const b = await pickFor([TRK('hin', true), TRK('eng', false)]);
+  assert.match(b.line, /^audio: chose #1 EAC3 \(language en, original sound\)/);
+});
+
+test("TV audio: the Dubbed releases setting 'mine' keeps the dub's default", async () => {
+  const { line } = await pickFor([TRK('rus', true), TRK('eng', false)], { dub: 'mine' });
+  assert.match(line, /^audio: kept #0 EAC3 of \[/);
+});
+
+test('TV audio: the profile language still comes first when the file has it', async () => {
+  const { line } = await pickFor([TRK('eng', true), TRK('tur', false)], { tvLanguage: 'tr' });
+  assert.match(line, /^audio: chose #1 EAC3 \(language tr, default flag, channels\)/);
+});

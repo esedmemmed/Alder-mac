@@ -125,7 +125,10 @@ export function createRanker({ settings, device, memory, videoId, metaId = '', m
   }
 
   const dubMine = () => settings.dub() === 'mine' && settings.audioLanguage() !== 'en' ? settings.audioLanguage() : ''
-  const dubDemoted = s => s.dubFirst && !(dubMine() && s.mentions(dubMine(), names))
+  // A release named in Cyrillic or Devanagari is a local dub, unless the profile's audio language is that script's own.
+  const SCRIPT_LANGUAGES = { cyrillic: ['ru', 'uk'], devanagari: ['hi'] }
+  const ownScript = s => s.scriptDub !== null && SCRIPT_LANGUAGES[s.scriptDub].indexOf(settings.audioLanguage()) >= 0
+  const dubDemoted = s => (s.nameDubFirst || (s.scriptDub !== null && !ownScript(s))) && !(dubMine() && s.mentions(dubMine(), names))
 
   /** The resolution key: preferred height 3, above it up to the screen 2, below it 1 (taller first), unknown 0. */
   const resolutionScore = s => resolutionRank(s.height, tv)
@@ -218,7 +221,8 @@ export function whyChosen(s, remembered = 0, context = null) {
   else if (s.cached === -1) parts.push('not cached')
   if (s.height > 0) parts.push(s.height + 'p')
   if (isAnonymous(s)) parts.push('no quality or file named')
-  if (s.dubFirst) parts.push('dual audio with a dub listed first')
+  if (s.nameDubFirst) parts.push('dual audio with a dub listed first')
+  else if (s.scriptDub !== null) parts.push('named in ' + s.scriptDub + ' (a local dub)')
   if (context && context.device && Array.isArray(context.sources) && s.height !== (context.device.preferHeight || context.device.height)) {
     const best = context.sources.reduce((b, o) => (resolutionRank(o.height, context.device) > resolutionRank(b.height, context.device) ? o : b), s)
     if (best.height > 0) parts.push('best resolution offered was ' + best.height + 'p')

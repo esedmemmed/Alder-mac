@@ -76,6 +76,11 @@ export function buildReport({ log, diag, device = null, version = '', env = '', 
 
   section('AUDIO AND SOURCE DECISIONS', diag.decisions.length ? diag.decisions.map((d) => clockOf(d.t) + '  ' + d.text) : ['None yet']);
   if (diag.subtitleAddons && diag.subtitleAddons.length) section('SUBTITLE ADD-ONS', (Array.isArray(diag.subtitleExtra) ? ['File details sent: ' + (diag.subtitleExtra.length ? diag.subtitleExtra.join(', ') : 'none')] : []).concat(diag.subtitleAddons.map((a) => ({ text: a.name + ': ' + a.text, level: /failed/.test(a.text) ? 'error' : undefined }))));
+  if (diag.fileEnglish) {
+    const fe = diag.fileEnglish;
+    const fit = fe.fit ? ', last fit ' + (fe.fit.offset < 0 ? '-' : '+') + (Math.abs(fe.fit.offset) / 1000).toFixed(1) + ' s gain ' + fe.fit.gain.toFixed(2) : '';
+    section('TIMING', ['File English track: ' + fe.name + ', ' + fe.cues + ' cues collected' + fit]);
+  }
   if (diag.errors.length) section('PLAYER ERRORS', diag.errors.map((e) => ({ text: clockOf(e.t) + '  ' + e.text, level: 'error' })));
 
   const entries = log.lines();
