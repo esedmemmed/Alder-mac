@@ -1,7 +1,7 @@
-// Mac add-on subtitle loading (src/platform/mac/subtitle-fetch.js): parallel, incremental, kept per video id, timed.
+// Mac add-on subtitle loading (src/player/subtitle-fetch.js): parallel, incremental, kept per video id, timed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { macLoadAddonSubtitles, clearSubtitleCache } from '../../src/platform/mac/subtitle-fetch.js';
+import { fetchAddonSubtitles, clearSubtitleCache } from '../../src/player/subtitle-fetch.js';
 
 const sub = (addon, lang, n) => ({ addon, language: lang, url: 'x' + n });
 function addon(name, run) {
@@ -12,7 +12,7 @@ function rig(list, { refreshed = list } = {}) {
   const sets = [], reports = [];
   let t = 0;
   const stremio = { addons: async (k, refresh) => (refresh ? refreshed : list) };
-  const run = () => macLoadAddonSubtitles({
+  const run = () => fetchAddonSubtitles({
     stremio, authKey: 'K', type: 'movie', videoId: 'tt1', tvLanguage: () => 'en',
     choose: (groups) => groups.reduce((all, g) => all.concat(g.subs), []),
     set: (v) => sets.push(v.map((s) => s.addon + ':' + s.url)), changed() {}, say() {}, warn() {},
@@ -71,7 +71,7 @@ test('the refresh failing falls back to the list in memory', async () => {
   const a = addon('A', async () => [sub('A', 'en', 1)]);
   const stremio = { addons: async (k, refresh) => { if (refresh) throw new Error('offline'); return [a]; } };
   const sets = [];
-  await macLoadAddonSubtitles({ stremio, authKey: 'K', type: 'movie', videoId: 'tt9', tvLanguage: () => 'en', choose: (g) => g.reduce((x, y) => x.concat(y.subs), []),
+  await fetchAddonSubtitles({ stremio, authKey: 'K', type: 'movie', videoId: 'tt9', tvLanguage: () => 'en', choose: (g) => g.reduce((x, y) => x.concat(y.subs), []),
     set: (v) => sets.push(v.length), changed() {}, report() {} });
   assert.deepEqual(sets, [1]);
 });
@@ -80,7 +80,7 @@ test('nothing is published once the player is shut', async () => {
   clearSubtitleCache();
   const a = addon('A', async () => [sub('A', 'en', 1)]);
   const sets = [];
-  await macLoadAddonSubtitles({ stremio: { addons: async () => [a] }, authKey: 'K', type: 'movie', videoId: 'tt8', tvLanguage: () => 'en', choose: (g) => g,
+  await fetchAddonSubtitles({ stremio: { addons: async () => [a] }, authKey: 'K', type: 'movie', videoId: 'tt8', tvLanguage: () => 'en', choose: (g) => g,
     set: (v) => sets.push(v), changed() {}, report() {}, isShut: () => true });
   assert.deepEqual(sets, []);
 });
@@ -89,7 +89,7 @@ test('the same video with a different extra is asked again; the same extra is ke
   clearSubtitleCache();
   const a = addon('A', async () => [sub('A', 'en', 1)]);
   const stremio = { addons: async () => [a] };
-  const go = (extra) => macLoadAddonSubtitles({ stremio, authKey: 'K', type: 'movie', videoId: 'tt7', extra, tvLanguage: () => 'en', choose: (g) => g.reduce((x, y) => x.concat(y.subs), []),
+  const go = (extra) => fetchAddonSubtitles({ stremio, authKey: 'K', type: 'movie', videoId: 'tt7', extra, tvLanguage: () => 'en', choose: (g) => g.reduce((x, y) => x.concat(y.subs), []),
     set() {}, changed() {}, report() {} });
   await go('filename=a.mkv');
   await go('filename=a.mkv');

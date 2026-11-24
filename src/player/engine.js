@@ -58,8 +58,11 @@ import { Stream, runtime, subtitleExtra, debridService } from '../core/addon.js'
 import { toIso1, languageName } from '../core/lang.js';
 import { errorCode } from './avplay.js';
 import { parseTextTracks, startSubtitle } from './tracks.js';
+import { subtitlePlan, matchContext } from '../core/subtitle-memory.js';
 import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';
+import { fetchAddonSubtitles } from './subtitle-fetch.js';
 import { resolvePlayableUrl } from './sources.js';
+import { createSubtitleDelay } from './subtitle-delay.js';
 import { PICTURE, PICTURE_NAMES, normalisePicture, parseVideoShape, shapeText, shapeNote, hasBars, cropPercent } from './picture.js';
 
 const { TICK, PUSH_EVERY, RESUME_SLACK, SKIP_SHOWN, START_WAIT, RETRIES, RETRY_WAIT, SEEK_SETTLE, STALL_WINDOW, STALLS_FOR_LOWER } = PLAYER;
@@ -124,10 +127,7 @@ export function createEngine(params, deps) {
   let seekedAt = -1e9;
   let audioPicked = false;
   let subsPicked = false;
-  let autoAddonStart = true;
-  let autoStarted = false;
-  let viewerChoseSub = false;
-  let autoCall = false;
+  const macSub = { started: false, final: false, choice: null, addonsDone: false, hand: false, watch: false, t0: 0, auto: null, upgraded: false }; // the remembered subtitle choice, resolved once
   let failedAudio = new Set(); // indexes of audio tracks that failed to decode
   let scrubTo = -1;
   let segments = [];
@@ -167,6 +167,13 @@ export function createEngine(params, deps) {
   let subCues = null; // the add-on subtitle's cues, as fetched
   let shifted = null; // ... moved by subDelay
   let subDelay = 0;
+  // The delay: where the adapter can delay any track (the Mac's mpv) it does; where it cannot (AVPlay) only an add-on subtitle is shifted, by its cues.
+  const hasSubDelay = typeof avplay.setSubDelay === 'function';
+  let macDelayFor = null; // the file track whose remembered delay was applied
+  const macDelaySel = (kind) => (kind === 'addon' ? { kind, sub: chosenSub } : { kind, track: textTracks.find((x) => x.index === textIndex) });
+  const macDelaySay = (line) => { if (line) { decide(line); if (memory && memory.delays) memory.delays.report(line); } };
+  const macDelay = createSubtitleDelay({ avplay: hasSubDelay ? { setSubDelay: (s) => avplay.setSubDelay(s) } : {}, decide: (l) => decide(l),
+    remembered: (kind) => { if (!memory || !memory.delays) return 0; const r = memory.delays.apply(sources && sources[at], macDelaySel(kind)); macDelaySay(r.line); return r.ms; } });
   let subHint = 0;
   let subShown = null;
   let subChoiceToken = 0;
@@ -191,6 +198,7 @@ export function createEngine(params, deps) {
   };
   const cancel = (id) => { if (id !== null && id !== undefined) { clock.clearTimeout(id); timers.delete(id); } };
   const emit = (name, data = {}) => {
+    if (name === 'tracks') macSubTick();
     (listeners[name] || []).slice().forEach((fn) => { try { fn(data); } catch (e) { warn('listener for ' + name + ' threw: ' + (e && e.message ? e.message : e)); } });
   };
   const decide = (text) => { say(text); if (diag) diag.decision(text); };
@@ -231,6 +239,7 @@ export function createEngine(params, deps) {
 
   /** Plays the current source from [position] with its own request headers (debrid proxies need them). */
   function load(position, message = null) {
+    if (memory && memory.noteLoad) memory.noteLoad({ videoId, metaId, sources, at, picked: params.picked, decide });
     const s = source();
     startAt = position;
     started = false;
@@ -313,6 +322,7 @@ export function createEngine(params, deps) {
       avplay.selectTrack('AUDIO', audioIndex);
     }
 
+    macSubStart();
     // Releases flag foreign subtitles as forced or default: start with subtitles only in the TV's language, else none.
     if (!subsPicked && textTracks.length) {
       subsPicked = true;
@@ -321,7 +331,6 @@ export function createEngine(params, deps) {
       else decide('subtitles: none start (' + (settings.subtitles() ? 'no track in the subtitle language' : 'off in Settings') + ')');
     }
     applySubtitleMode();
-    maybeAutoStartAddon();
     emit('tracks');
     applyPicture();
 
@@ -396,6 +405,7 @@ export function createEngine(params, deps) {
     if (subMode === 'file' && textIndex !== null) {
       avplay.subtitlesOn(true);
       avplay.selectTrack('TEXT', textIndex);
+      if (macDelayFor !== textIndex) { macDelayFor = textIndex; if (hasSubDelay) subDelay = macDelay.pick('file'); } // a file track cannot be shifted where the adapter has no sub-delay
     } else {
       avplay.subtitlesOn(false);
     }
@@ -524,6 +534,7 @@ export function createEngine(params, deps) {
 
   /** This source failed: the next one from the same second or, with none left, the list to choose from. */
   function next(reason = "didn't start") {
+    if (memory && memory.noteFailed) memory.noteFailed({ videoId, metaId, sources, at, reason, picked: params.picked, decide });
     cancel(startTimer);
     startTimer = null;
     const here = position();
@@ -814,48 +825,85 @@ export function createEngine(params, deps) {
     void loadAddonSubtitles();
   }
 
-  function maybeAutoStartAddon() {
-    if (!autoAddonStart || autoStarted || shut) return;
-    if (!settings.subtitles() || !(settings.subtitleLanguagePicked && settings.subtitleLanguagePicked())) return;
-    if (!subsPicked || subMode !== 'off' || viewerChoseSub) return;
-    const want = subtitleLanguage();
-    const sub = addonSubs.find((s) => s.isLocal(want));
-    if (!sub) return;
-    autoStarted = true;
-    decide('subtitles: no file track in ' + languageName(want) + ', starting the add-on one from ' + sub.addon);
-    autoCall = true;
-    try { selectSubtitle({ kind: 'addon', sub }, true); } finally { autoCall = false; }
+  // Mac subtitle memory: Off -> none; a language -> the file's track, else the first add-on subtitle in it as the answers arrive; else the normal rule
+  function macSubStart() {
+    if (macSub.started || !memory || !memory.subtitles || !settings.subtitles()) return;
+    macSub.started = true;
+    macSub.t0 = clock.now();
+    macSub.choice = memory.subtitles.get(metaId) || (settings.subtitleLanguagePicked && settings.subtitleLanguagePicked() ? { kind: 'lang', language: settings.subtitleLanguage() } : null);
+    macSubTry();
   }
+  function macMatch() { return matchContext(sources && sources[at]); }
+  function macSubTick() {
+    if (macSub.started && !macSub.final) macSubTry();
+    else if (macSub.watch) macSubLate();
+    macSubUpgrade();
+  }
+  // the name match: one decide() line and one report line (no links) per start; the best match so far, how many subtitles are name-like
+  function macMatchSaid(plan, what) {
+    const st = plan.stats;
+    decide('subtitles: ' + what + ' (name match: best score ' + st.best + ', ' + st.named + ' of ' + st.n + ' named)');
+    memory.subtitles.report('match: ' + (what === 'started' ? '' : 'replaced ') + 'best=' + st.best + ' named=' + st.named + '/' + st.n);
+  }
+  // an add-on answer that arrives after an unmatched add-on subtitle started: a match replaces it, within the first 15 s, never over a menu pick
+  function macSubLate() {
+    if (shut || macSub.hand || clock.now() - macSub.t0 >= 15000) { macSub.watch = false; return; }
+    const plan = subtitlePlan(macSub.choice, { textTracks, addonSubs, addonsDone: macSub.addonsDone, lang: toIso1, match: macMatch() });
+    if (macSub.addonsDone) macSub.watch = false;
+    if (plan.kind !== 'addon' || !plan.matched || plan.sub === chosenSub) return;
+    macSub.watch = false;
+    macSub.upgraded = true; // the name match replaced it: no further switch
+    macMatchSaid(plan, 'the matching add-on subtitle from ' + plan.sub.addon + ' replaces the one started');
+    selectSubtitle({ kind: 'addon', sub: plan.sub }, true);
+  }
+  // an add-on subtitle the memory started before the remembered add-on (or one earlier in the account's order) answered: the better one replaces it, once, within 15 s
+  function macSubUpgrade() {
+    const auto = macSub.auto;
+    if (shut || !auto || auto.matched || macSub.upgraded || macSub.hand || clock.now() - auto.at >= 15000) return;
+    if (!chosenSub || chosenSub.addon !== auto.addon) return;
+    const run = addonSubs.filter((s) => toIso1(s.lang) === auto.language);
+    const rank = (name) => run.findIndex((s) => s.addon === name);
+    const remembered = macSub.choice && macSub.choice.addon;
+    let target = null;
+    if (remembered && remembered !== auto.addon && rank(remembered) >= 0) target = remembered;
+    else { const first = run.length ? run[0].addon : null; if (first && first !== auto.addon && rank(first) < rank(auto.addon)) target = first; }
+    if (!target) return;
+    const better = run[rank(target)];
+    macSub.upgraded = true;
+    decide('subtitles: switched to ' + better.addon + (target === remembered ? ' (the one picked before)' : ' (earlier in your add-ons)'));
+    memory.subtitles.report('memory: upgraded to=' + String(better.addon).replace(/\S*:\/\/\S*/g, '').trim());
+    selectSubtitle({ kind: 'addon', sub: better }, true);
+  }
+  function macSubTry() {
+    if (!macSub.choice || macSub.final || shut) return;
+    const plan = subtitlePlan(macSub.choice, { textTracks, addonSubs, addonsDone: macSub.addonsDone, lang: toIso1, match: macMatch() });
+    if (plan.kind === 'wait') return;
+    macSub.final = true;
+    const language = languageName(macSub.choice.language || '');
+    const said = (line, how) => { decide('memory: ' + line); memory.subtitles.report('memory: ' + how); };
+    if (plan.kind === 'off') { subsPicked = true; subMode = 'off'; textIndex = null; said('subtitles off, as picked before', 'found by=sub_off'); applySubtitleMode(); }
+    else if (plan.kind === 'file') { subsPicked = true; subMode = 'file'; textIndex = plan.track.index; said('subtitles ' + language + ' from the file (track #' + plan.track.index + ')', 'found by=sub_file source=' + (plan.track.index + 1)); applySubtitleMode(); }
+    else if (plan.kind === 'addon') { said('subtitles ' + language + ' from ' + plan.sub.addon, 'found by=sub_addon source=' + (plan.index + 1)); macMatchSaid(plan, 'started'); if (!plan.matched && !macSub.addonsDone) macSub.watch = true; macSub.auto = { addon: plan.sub.addon, language: toIso1(plan.sub.lang), matched: !!plan.matched, at: clock.now() }; selectSubtitle({ kind: 'addon', sub: plan.sub }, true); }
+    else said('no ' + language + ' subtitles in the file or from the add-ons, normal rule', 'not offered by=sub');
+  }
+  function macSubRemember(choice) { if (memory && memory.subtitles) memory.subtitles.remember(metaId, choice); }
+  function macSubRememberFile(index) { const t = textTracks.find((x) => x.index === index); if (t && t.language) macSubRemember({ kind: 'lang', language: t.language }); }
 
   async function loadAddonSubtitles() {
     if (!stremio || !authKey) return;
-    try {
-      const s = source(); subExtra = s ? subtitleExtra(s) : '';
-      if (diag) diag.subtitleExtraKeys(subExtra ? subExtra.split('&').map((p) => p.split('=')[0]) : []);
-      // the list is refreshed (an add-on installed since the app started is asked too; it also updates the shared cache); the cached one if offline
-      let all;
-      try { all = await stremio.addons(authKey, true); } catch (e) { warn('add-on list refresh failed, using the cached one: ' + (e && e.message ? e.message : e)); all = await stremio.addons(authKey); }
-      const addons = all.filter((a) => a.serves('subtitles', type, videoId));
-      if (diag) diag.subtitleAddon(null);
-      decide('subtitles: asked add-ons ' + (subExtra ? 'with the file\'s ' + subExtra.split('&').map((p) => p.split('=')[0]).join(', ') : 'without file details'));
-      const lists = await Promise.all(addons.map((a) => Promise.resolve().then(() => a.subtitles(type, videoId, subExtra)).then((subs) => { say('subtitles from ' + a.name + ' (' + type + ' ' + videoId + '): ' + subs.length); if (diag) diag.subtitleAddon(a.name, subs.length); return subs; }).catch((e) => { warn('subtitles from ' + a.name + ' (' + type + ' ' + videoId + ') failed: ' + (e && e.message ? e.message : e)); if (diag) diag.subtitleAddon(a.name, e); return []; })));
-      // every language from every add-on: the device language first, then English, then the rest by name; the add-ons take turns
-      addonSubs = chooseAddonSubtitles(addons.map((a, i) => ({ addon: a.name, subs: lists[i] })), subtitleLanguage());
-      maybeAutoStartAddon();
-      say('add-on subtitles: ' + addonSubs.length);
-      emit('tracks');
-    } catch (e) {
-      warn('add-on subtitles unavailable: ' + (e && e.message ? e.message : e));
-    }
+    const s = source(); subExtra = s ? subtitleExtra(s) : '';
+    if (diag) diag.subtitleExtraKeys(subExtra ? subExtra.split('&').map((p) => p.split('=')[0]) : []);
+    decide('subtitles: asked add-ons ' + (subExtra ? 'with the file\'s ' + subExtra.split('&').map((p) => p.split('=')[0]).join(', ') : 'without file details'));
+    return fetchAddonSubtitles({ stremio, authKey, type, videoId, extra: subExtra, tvLanguage: subtitleLanguage, choose: chooseAddonSubtitles, set: (v) => { addonSubs = v; }, changed: () => emit('tracks'), say, warn, diag, isShut: () => shut, match: macMatch });
   }
 
   /**
    * The viewer's subtitle choice: { kind: 'off' } | { kind: 'file', index } | { kind: 'addon', sub }. An add-on file is
    * fetched, parsed and drawn by us from the same second: no reload, as the clock does the syncing.
    */
-  async function selectSubtitle(choice) {
-    if (!autoCall) viewerChoseSub = true;
+  async function selectSubtitle(choice, fromMemory = false) {
     if (shut) return false;
+    if (!fromMemory) { macSub.final = true; macSub.hand = true; macSub.auto = null; } // a menu pick ends the remembered start and any later replacement
     const token = ++subChoiceToken;
     if (choice.kind === 'addon') {
       if (!http) return false;
@@ -865,21 +913,24 @@ export function createEngine(params, deps) {
       if (!cues || !cues.length) { emit('notice', { message: "Couldn't load that subtitle" }); return false; }
       chosenSub = choice.sub;
       subCues = cues;
-      subDelay = 0;
+      macDelayFor = null;
+      subDelay = macDelay.pick('addon');
       shifted = cues;
       subHint = 0;
       subShown = null;
       subMode = 'addon';
       textIndex = null;
       applySubtitleMode();
+      if (subDelay) applyCueShift(); // the remembered delay, where the adapter cannot delay it
       cancel(subsTimer);
       subtitleTask();
       decide('subtitles: add-on file from ' + choice.sub.addon + ' (' + choice.sub.language + ', ' + cues.length + ' cues)');
+      if (!fromMemory) macSubRemember({ kind: 'lang', language: toIso1(choice.sub.lang), addon: choice.sub.addon });
     } else {
-      chosenSub = null; subCues = null; shifted = null; subDelay = 0; subShown = null;
+      chosenSub = null; subCues = null; shifted = null; subDelay = 0; macDelayFor = null; subShown = null;
       cancel(subsTimer); subsTimer = null;
-      if (choice.kind === 'file') { subMode = 'file'; textIndex = choice.index; decide('subtitles: the file\'s track #' + choice.index); }
-      else { subMode = 'off'; textIndex = null; decide('subtitles: off'); }
+      if (choice.kind === 'file') { subMode = 'file'; textIndex = choice.index; decide('subtitles: the file\'s track #' + choice.index); if (!fromMemory) macSubRememberFile(choice.index); }
+      else { subMode = 'off'; textIndex = null; decide('subtitles: off'); if (!fromMemory) macSubRemember({ kind: 'off' }); }
       applySubtitleMode();
       emit('subtitle', { lines: null });
     }
@@ -889,14 +940,21 @@ export function createEngine(params, deps) {
 
   /** Alder's "Subtitle timing": the add-on file's times moved by [ms] (later when positive). */
   function setSubtitleDelay(ms) {
-    if (subMode !== 'addon' || !subCues) return;
-    subDelay = ms;
-    shifted = shiftCues(subCues, ms);
+    if (subMode === 'off' || (!hasSubDelay && !(subMode === 'addon' && subCues))) return; // a TV file track cannot be shifted
+    subDelay = macDelay.set(ms, subMode);
+    if (memory && memory.delays) macDelaySay(memory.delays.store(sources && sources[at], macDelaySel(subMode), subDelay));
+    applyCueShift();
+    emit('tracks');
+  }
+
+  /** Where the adapter has no sub-delay: an add-on subtitle's cues are moved by subDelay (the only subtitle that can be shifted there). */
+  function applyCueShift() {
+    if (hasSubDelay || subMode !== 'addon' || !subCues) return;
+    shifted = shiftCues(subCues, subDelay);
     subHint = 0;
     subShown = null;
     cancel(subsTimer);
     subtitleTask();
-    emit('tracks');
   }
 
   /** The viewer picked an audio track in the options panel. A track this TV cannot decode is refused. */
@@ -941,7 +999,7 @@ export function createEngine(params, deps) {
     if (!sources.length) { exit(); return; }
     fetchSegments();
     Promise.resolve().then(loadMeta).then((m) => { meta = m; emit('meta'); }).catch((e) => warn('episode list unavailable: ' + (e && e.message ? e.message : e)));
-    loadAddonSubtitles();
+    loadAddonSubtitles().then(() => { macSub.addonsDone = true; macSubTick(); });
 
     // "Start Over" plays from the beginning; a switch to a lower quality carries its own second.
     const known = params.startOver ? 0 : (typeof params.resumeAt === 'number' && params.resumeAt >= 0 ? params.resumeAt : null);
@@ -1041,7 +1099,7 @@ export function createEngine(params, deps) {
     },
     /** What the options panel lists. */
     tracks() {
-      return { audio: audioTracks, audioIndex, text: textTracks, textIndex, subMode, addonSubs, deviceLanguage: languageName(subtitleLanguage()), chosenSub, subDelay, canShift: subMode === 'addon' && !!subCues };
+      return { audio: audioTracks, audioIndex, text: textTracks, textIndex, subMode, addonSubs, deviceLanguage: languageName(subtitleLanguage()), chosenSub, subDelay, canShift: hasSubDelay ? subMode !== 'off' : (subMode === 'addon' && !!subCues), delayKeys: avplay.delayKeysHint || null };
     },
     /** The source playing, for the "Change stream" row of the options panel. */
     currentSource() { return source() || null; },

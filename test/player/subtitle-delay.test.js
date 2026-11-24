@@ -2,34 +2,19 @@
 // add-on subtitles alike (the JS cue shift stays unused); a stepper in the panel, a key pair, clamp -10..+10 s, reset on a new pick.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { withMacBuildLock } from './mac-build-lock.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { Subtitle } from '../../src/core/addon.js';
-import { SUBTITLE_DELAY_PATCHES, SUBTITLE_DELAY_OPTIONS_PATCHES } from '../../scripts/build.mjs';
-import { createSubtitleDelay, clampDelay, delayRows, delayNotes, DELAY_MIN, DELAY_MAX } from '../../src/platform/mac/subtitle-delay.js';
+import { createSubtitleDelay, clampDelay, delayRows, delayNotes, DELAY_MIN, DELAY_MAX } from '../../src/player/subtitle-delay.js';
 import { actionFor } from '../../src/platform/mac/keys.js';
 import { createPlayerInput } from '../../src/platform/mac/player-input.js';
-import { makeEngine, stream } from '../player/helpers.js';
+import { makeEngine, stream } from './helpers.js';
+import { createOptions } from '../../src/player/options.js';
+import { installFakeDom, texts } from './fake-dom.js';
 
 const require = createRequire(import.meta.url);
 
-async function patchedEngine() {
-  const src = fileURLToPath(new URL('../../src/player/engine.js', import.meta.url));
-  const copy = fileURLToPath(new URL('../../src/player/engine.mac-delay-test.js', import.meta.url));
-  let text = readFileSync(src, 'utf8');
-  for (const [from, to] of SUBTITLE_DELAY_PATCHES) {
-    assert.ok(text.includes(from), 'anchor present: ' + from);
-    text = text.split(from).join(to);
-  }
-  text = text.split('#platform/subtitle-delay').join('../platform/mac/subtitle-delay.js');
-  return withMacBuildLock(async () => {
-    writeFileSync(copy, text);
-    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
-  });
-}
-const { createEngine } = await patchedEngine();
 
 const video = { type: 'video', id: 1, codec: 'h264', selected: true, 'demux-w': 1920, 'demux-h': 1080 };
 const audio = { type: 'audio', id: 1, lang: 'eng', title: 'English', codec: 'aac', 'audio-channels': 2, selected: true };
@@ -39,7 +24,7 @@ const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n';
 
 async function play({ tracks = TRACKS, addons = [] } = {}) {
   const src = stream('Movie 1080p WEB-DL x264-A', { tracks: JSON.stringify(tracks) });
-  const t = makeEngine({ adapter: 'mpv', createEngine, sources: [src], http: { get: async () => SRT } });
+  const t = makeEngine({ adapter: 'mpv', sources: [src], http: { get: async () => SRT } });
   t.stremio.addons = async () => addons.map((a) => ({ name: a, serves: () => true, subtitles: async () => [new Subtitle('https://x.example/a.srt', 'swe', a)] }));
   await t.start();
   await t.advance(40000);
@@ -140,20 +125,86 @@ test('the Z / X keys step the delay by 0.1 s while playing, only with subtitles 
   assert.equal(input.key({ type: 'press', action: 'sublater' }), false);
 });
 
-test('options panel patch: anchors present, the timing list becomes the stepper', () => {
-  const text = readFileSync(fileURLToPath(new URL('../../src/player/options.js', import.meta.url)), 'utf8');
-  let out = text;
-  for (const [from, to] of SUBTITLE_DELAY_OPTIONS_PATCHES) {
-    assert.ok(text.includes(from), 'anchor present: ' + from);
-    out = out.split(from).join(to);
-  }
-  assert.ok(!out.includes('TIMING_STEPS.map'));
-  assert.ok(out.includes('delayRows(t.subDelay)'));
-});
-
 test('the mock bridge and the shell allow sub-delay', () => {
   const swift = readFileSync(fileURLToPath(new URL('../../mac/shell/Player.swift', import.meta.url)), 'utf8');
   assert.match(swift, /static let settable: Set<String> = \[[^\]]*"sub-delay"/);
   const { installMock } = require('../../mac/web/mock-bridge.js');
   assert.ok(installMock);
+});
+
+// ---- the same engine on the TV adapter (AVPlay has no sub-delay): an add-on subtitle's cues move, a file track cannot be shifted ----
+const TV_TRACKS = JSON.stringify([{ type: 'AUDIO', codec: 'AAC', lang: 'eng', channels: 2 }, { type: 'TEXT', codec: 'SRT', lang: 'eng' }]);
+const stamp = (ms) => { const p = (n, w) => String(n).padStart(w, '0'); const s = Math.floor(ms / 1000); return p(Math.floor(s / 3600), 2) + ':' + p(Math.floor(s / 60) % 60, 2) + ':' + p(s % 60, 2) + ',' + p(ms % 1000, 3); };
+// srtAt(position ms) -> the subtitle text, asked when the add-on file is fetched
+async function playTv({ addons = [], srtAt = null } = {}) {
+  const src = stream('Movie 1080p WEB-DL x264-A', { tracks: TV_TRACKS });
+  const t = makeEngine({ adapter: 'avplay', sources: [src], http: { get: async () => (srtAt ? srtAt(t.position()) : SRT) } });
+  t.stremio.addons = async () => addons.map((a) => ({ name: a, serves: () => true, subtitles: async () => [new Subtitle('https://x.example/a.srt', 'swe', a)] }));
+  await t.start();
+  await t.advance(40000);
+  return t;
+}
+const lastShown = (t) => { const e = t.events.subtitle; return e.length ? (e[e.length - 1].lines ? e[e.length - 1].lines.map((l) => l.map((s) => s.text).join('')).join('/') : null) : undefined; };
+
+test('TV: an add-on subtitle delay of +300 ms moves the drawn cue; the adapter is not asked', async () => {
+  let p0 = 0;
+  const t = await playTv({ addons: ['Subs'], srtAt: (pos) => { p0 = pos; return '1\n' + stamp(pos + 1000) + ' --> ' + stamp(pos + 5000) + '\nhi\n'; } });
+  assert.equal(t.engine.tracks().delayKeys, null);
+  await t.engine.selectSubtitle({ kind: 'addon', sub: t.engine.tracks().addonSubs[0] });
+  assert.equal(t.engine.tracks().canShift, true);
+  t.engine.setSubtitleDelay(300);
+  assert.equal(t.engine.tracks().subDelay, 300);
+  assert.equal(t.callsOf('setSubDelay').length, 0);
+  assert.match(delayLines(t).at(-1), /delay: 0\.3 s addon$/);
+  // the cue starts at p0 + 1.0 s; moved by 0.3 s it shows from p0 + 1.3 s
+  await t.advance(p0 + 1100 - t.position());
+  assert.ok(!lastShown(t), 'not yet at +1.1 s');
+  await t.advance(p0 + 1500 - t.position());
+  assert.equal(lastShown(t), 'hi', 'shown at +1.5 s');
+});
+
+test('TV: the cue lookup is at the shifted time', async () => {
+  const { shiftCues, cueAt, parseSubtitles } = await import('../../src/player/subtitles.js');
+  const cues = parseSubtitles(SRT);
+  const moved = shiftCues(cues, 300);
+  assert.equal(cueAt(moved, 1100, 0), null);
+  assert.equal(cueAt(moved, 1500, 0).cue.lines[0][0].text, 'hi');
+  assert.equal(cueAt(moved, 2200, 0).cue.lines[0][0].text, 'hi');
+  assert.equal(cueAt(cues, 2200, 0), null);
+});
+
+test('TV: a file track cannot be shifted: canShift false, setSubtitleDelay changes nothing', async () => {
+  const t = await playTv();
+  assert.equal(t.engine.tracks().subMode, 'file');
+  assert.equal(t.engine.tracks().canShift, false);
+  t.engine.setSubtitleDelay(300);
+  assert.equal(t.engine.tracks().subDelay, 0);
+  assert.deepEqual(delayLines(t), []);
+});
+
+async function panelTexts(t) {
+  const dom = installFakeDom();
+  try {
+    const options = createOptions({ host: dom.host, engine: t.engine });
+    options.open();
+    const all = texts(dom.host);
+    options.close();
+    return all;
+  } finally { dom.remove(); }
+}
+
+test('options panel: the stepper and "Now x" on both, the Keys line only on the Mac', async () => {
+  const mac = await play({ addons: ['Subs'] });
+  const tv = await playTv({ addons: ['Subs'] });
+  for (const t of [mac, tv]) await t.engine.selectSubtitle({ kind: 'addon', sub: t.engine.tracks().addonSubs[0] });
+  assert.equal(mac.engine.tracks().delayKeys, 'Z earlier, X later');
+  const m = await panelTexts(mac);
+  const v = await panelTexts(tv);
+  for (const all of [m, v]) {
+    assert.ok(all.includes('Subtitle timing'));
+    assert.ok(all.includes('Reset to 0'));
+    assert.ok(all.includes('Now 0.0 s'));
+  }
+  assert.ok(m.includes('Keys: Z earlier, X later'));
+  assert.ok(!v.some((x) => /^Keys:/.test(x)), 'no Keys line on the TV');
 });

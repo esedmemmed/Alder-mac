@@ -15,7 +15,7 @@
  *   memory: waiting for add-ons                            the sources page held the start for the other add-ons: the first answers had none of it (T8)
  * Safari 14: no lookbehind, no class fields. The sort stays stable (core/util.js); nothing here sorts.
  */
-import { macBridge } from './bridge.js';
+import { report as sinkReport } from '../lib/report.js';
 
 const sigKey = (videoId) => 'sources/sig:' + videoId;
 const sigSeriesKey = (metaId) => 'sources/bsig:' + metaId;
@@ -45,17 +45,11 @@ export function signature(s) {
 
 const cleanReason = (r) => String(r).replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[link]').replace(/[\r\n]+/g, ' ').slice(0, 80);
 
-function bridgeLog(line) {
-  const b = macBridge();
-  if (!b || !b.log) return;
-  try { const p = b.log(line); if (p && p.catch) p.catch(() => {}); } catch (e) { /* no shell */ }
-}
-
 /**
  * store: the app's store (get / set / remove); base: the shared createSourceMemory(store); report(line): the shell's log (default: the bridge).
  * Returns the shared memory's surface (file, binge, remember) plus level / match for the ranker and noteLoad / noteFailed for the engine.
  */
-export function createReleaseMemory(store, base, { report = bridgeLog } = {}) {
+export function createReleaseMemory(store, base, { report = sinkReport } = {}) {
   const read = (key) => { const v = store.get(key); return typeof v === 'string' ? v : null };
   const sigs = new WeakMap(); // stream -> signature, worked out once per stream (a sort asks many times)
   const sigOf = (s) => { if (!sigs.has(s)) sigs.set(s, signature(s)); return sigs.get(s); };

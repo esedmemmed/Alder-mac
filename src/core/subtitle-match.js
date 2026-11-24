@@ -1,7 +1,7 @@
 /*
  * Subtitle name match (T3): how well an add-on subtitle's own words (its Stremio `id` and `label`) describe the release that is playing.
- * Pure: strings in, numbers out. Imported only by the Mac build (platform/mac/subtitle-memory.js, subtitle-fetch.js); the Tizen bundle never
- * pulls it in. A subtitle whose id and label are numbers only (an OpenSubtitles id "1954712345") says nothing about a release: score 0.
+ * Pure: strings in, numbers out. Shared by every build (core/subtitle-memory.js, player/subtitle-fetch.js); the Tizen bundle carries it too.
+ * A subtitle whose id and label are numbers only (an OpenSubtitles id "1954712345") says nothing about a release: score 0.
  *
  * ctx = { filename, sig }: the playing file's name (or null) and the 1.4 release signature ("1080p|web|avc|grp", release-memory.js signature()).
  * Score: group +6, resolution +2, source +2, codec +1, HDR +1, same SxxEyy +1, one more shared name token +1. A different SxxEyy on both: 0.

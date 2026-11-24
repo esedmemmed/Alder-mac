@@ -1,26 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { withMacBuildLock } from './mac-build-lock.js';
 import { macProfile } from '../../src/platform/mac/device.js';
+import { tu8000Profile } from '../../src/core/device.js';
 import { Stream } from '../../src/core/addon.js';
-import { RANKING_PATCHES } from '../../scripts/build.mjs';
-import { settingsStub, stream } from '../core/helpers.js';
-
-// The Mac bundle ranks with src/core/ranking.js plus RANKING_PATCHES; load exactly that text (a copy beside the original, for its imports).
-const src = fileURLToPath(new URL('../../src/core/ranking.js', import.meta.url));
-const copy = fileURLToPath(new URL('../../src/core/ranking.mac-test.js', import.meta.url));
-let text = readFileSync(src, 'utf8');
-for (const [from, to] of RANKING_PATCHES) {
-  assert.ok(text.includes(from), 'anchor present: ' + from);
-  text = text.split(from).join(to);
-}
-let createRanker;
-await withMacBuildLock(async () => {
-  writeFileSync(copy, text);
-  try { ({ createRanker } = await import(pathToFileURL(copy).href)); } finally { rmSync(copy, { force: true }); }
-});
+import { createRanker } from '../../src/core/ranking.js';
+import { settingsStub, stream } from './helpers.js';
 
 const names = {
   k4: 'Movie.2160p.WEB-DL.DDP5.1.HEVC-A.mkv',
@@ -54,4 +38,11 @@ test('Mac: unknown codec and frame rate stay auto-eligible', () => {
   const plain = stream('Movie.1080p.mkv');
   assert.equal(macProfile().autoOk(plain), true);
   assert.equal(macProfile().autoOk(stream('Movie.mkv')), true);
+});
+
+test('TV: the same five releases: every one with sound is an auto candidate (the TV profile has no autoOk), the ranking is the shared one', () => {
+  const r = createRanker({ settings: settingsStub(), device: tu8000Profile(), memory: null, videoId: 'v', metaId: 'm' });
+  assert.equal(tu8000Profile().autoOk, undefined);
+  assert.equal(r.autoCandidates(streams).length, streams.filter(s => r.playable(s) && r.wanted(s) && !r.noSound(s)).length);
+  assert.ok(r.autoCandidates(streams).map(s => s.filename).includes(names.k4), 'the 4K HEVC release is not filtered out on the TV (the Mac keeps it out of auto-play)');
 });

@@ -170,7 +170,7 @@ export class Addon {
     const out = []
     for (const s of objects(arr(answer, 'subtitles'))) {
       const url = text(s, 'url')
-      if (url) out.push(new Subtitle(url, text(s, 'lang') || 'und', this.name))
+      if (url) { const sb = new Subtitle(url, text(s, 'lang') || 'und', this.name); sb.id = text(s, 'id'); sb.label = text(s, 'label'); out.push(sb) }
     }
     return out
   }

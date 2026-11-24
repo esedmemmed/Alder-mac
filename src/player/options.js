@@ -10,7 +10,8 @@
 import { h } from '../lib/dom.js';
 import { iconEl } from '../ui/icons.js';
 import { createBar, formatClock } from './bar.js';
-import { audioRows, subtitleRows, TIMING_STEPS, timingLabel } from './tracks.js';
+import { audioRows, subtitleRows } from './tracks.js';
+import { delayRows, delayNotes } from './subtitle-delay.js';
 import { PICTURE, pictureHints } from './picture.js';
 
 const DOT = '  ·  ';
@@ -82,8 +83,7 @@ export function createOptions({ host, engine }) {
     }
 
     if (t.canShift) {
-      const steps = TIMING_STEPS.map((ms) => ({ name: timingLabel(ms), tag: '', id: ms, ms }));
-      section(list, 'Subtitle timing', steps, TIMING_STEPS.indexOf(t.subDelay), (i, r) => { engine.setSubtitleDelay(r.ms); });
+      section(list, 'Subtitle timing', delayRows(t.subDelay), -1, (i, r) => { engine.setSubtitleDelay(r.ms); }, delayNotes(t.subDelay, t.delayKeys || ''));
     }
 
     list.appendChild(h('div', { class: 'pl-opt-rule' }));

@@ -129,8 +129,8 @@ export function subtitleRows(textTracks, addonSubs) {
   return rows;
 }
 
-/** The steps of the Subtitle timing section: Alder's list, and the words for each. */
-export const TIMING_STEPS = Object.freeze([-2000, -1000, -500, 0, 500, 1000, 2000]);
+/** The steps of the Subtitle timing section: 0.1 s steps from -2 s to +2 s, and the words for each. */
+export const TIMING_STEPS = Object.freeze(Array.from({ length: 41 }, (_, i) => (i - 20) * 100));
 
 export function timingLabel(ms) {
   if (ms === 0) return 'On time';

@@ -9,18 +9,12 @@
  * shell's report (the Air's ui-report prints it):   delay: <seconds, one decimal> s <file|addon>
  * Safari 14: no lookbehind, no class fields. Nothing here sorts.
  */
-import { macBridge } from './bridge.js';
+import { report as sinkReport } from '../lib/report.js';
 
 export const DELAY_MIN = -10000;
 export const DELAY_MAX = 10000;
 export const DELAY_STEP = 100;
 export const DELAY_KEYS = 'Z earlier, X later';
-
-function bridgeLog(line) {
-  const b = macBridge();
-  if (!b || !b.log) return;
-  try { const p = b.log(line); if (p && p.catch) p.catch(() => {}); } catch (e) { /* no shell */ }
-}
 
 export function clampDelay(ms) {
   const n = Math.round(Number(ms));
@@ -42,17 +36,17 @@ export function delayRows(ms) {
   ];
 }
 
-/** The lines under the heading: the live value and the keys. */
-export function delayNotes(ms) { return ['Now ' + delayText(ms), 'Keys: ' + DELAY_KEYS]; }
+/** The lines under the heading: the live value and the keys (none when the adapter has no keys: pass an empty string). */
+export function delayNotes(ms, keys = DELAY_KEYS) { return keys ? ['Now ' + delayText(ms), 'Keys: ' + keys] : ['Now ' + delayText(ms)]; }
 
 /**
- * avplay: the adapter (setSubDelay(seconds)); decide(line): the engine's decision line; report(line): the shell's log (default: the bridge);
+ * avplay: the adapter (setSubDelay(seconds)); decide(line): the engine's decision line; report(line): the shell's log (default: lib/report.js);
  * remembered(kind) -> ms: what a new pick starts with (T4's remembered value goes here; 0 until then).
  */
-export function createSubtitleDelay({ avplay, decide, report = bridgeLog, remembered = () => 0 }) {
+export function createSubtitleDelay({ avplay, decide, report = sinkReport, remembered = () => 0 }) {
   function set(ms, kind) {
     const v = clampDelay(ms);
-    try { avplay.setSubDelay(v / 1000); } catch (e) { /* no bridge: nothing to drive */ }
+    if (typeof avplay.setSubDelay === 'function') { try { avplay.setSubDelay(v / 1000); } catch (e) { /* no bridge: nothing to drive */ } }
     const line = 'delay: ' + seconds(v) + ' s ' + kind;
     if (decide) decide(line);
     report(line);

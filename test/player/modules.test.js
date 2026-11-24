@@ -126,7 +126,7 @@ test('subtitle rows: Off first, then the file\'s, then the add-on\'s', () => {
 });
 
 test('subtitle timing steps and words', () => {
-  assert.deepEqual(TIMING_STEPS, [-2000, -1000, -500, 0, 500, 1000, 2000]);
+  assert.deepEqual(TIMING_STEPS, Array.from({ length: 41 }, (_, i) => (i - 20) * 100)); // 0.1 s steps, -2 s to +2 s, on the TV and the Mac
   assert.equal(timingLabel(0), 'On time');
   assert.equal(timingLabel(-500), '-0.5 s  earlier');
   assert.equal(timingLabel(2000), '+2.0 s  later');

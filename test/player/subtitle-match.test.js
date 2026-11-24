@@ -3,34 +3,14 @@
 // lists the match first, and each start logs one decide() line and one `match:` line (no links).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { withMacBuildLock } from './mac-build-lock.js';
 import { Addon, Subtitle } from '../../src/core/addon.js';
 import { chooseAddonSubtitles } from '../../src/core/playback.js';
 import { createSourceMemory } from '../../src/core/ranking.js';
-import { createReleaseMemory } from '../../src/platform/mac/release-memory.js';
-import { createSubtitleMemory, subtitlePlan, matchContext } from '../../src/platform/mac/subtitle-memory.js';
-import { macLoadAddonSubtitles, clearSubtitleCache } from '../../src/platform/mac/subtitle-fetch.js';
-import { SUBTITLE_MEMORY_PATCHES, SUBTITLE_FETCH_PATCHES, SUBTITLE_ID_PATCHES } from '../../scripts/build.mjs';
-import { makeEngine, stream } from '../player/helpers.js';
-
-async function patched(file, copyName, patches, swaps = []) {
-  const src = fileURLToPath(new URL('../../src/' + file, import.meta.url));
-  const copy = fileURLToPath(new URL('../../src/' + file.replace(/\.js$/, '') + '.' + copyName + '.js', import.meta.url));
-  let text = readFileSync(src, 'utf8');
-  for (const [from, to] of patches) {
-    assert.ok(text.includes(from), 'anchor present: ' + from);
-    text = text.split(from).join(to);
-  }
-  for (const [a, b] of swaps) text = text.split(a).join(b);
-  return withMacBuildLock(async () => {
-    writeFileSync(copy, text);
-    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
-  });
-}
-const { createEngine } = await patched('player/engine.js', 'mac-match-test', [...SUBTITLE_MEMORY_PATCHES, ...SUBTITLE_FETCH_PATCHES], [['#platform/subtitle-memory', '../platform/mac/subtitle-memory.js'], ['#platform/subtitle-fetch', '../platform/mac/subtitle-fetch.js']]);
-const { Addon: MacAddon } = await patched('core/addon.js', 'mac-match-test', SUBTITLE_ID_PATCHES);
+import { createReleaseMemory } from '../../src/core/release-memory.js';
+import { createSubtitleMemory, subtitlePlan, matchContext } from '../../src/core/subtitle-memory.js';
+import { fetchAddonSubtitles, clearSubtitleCache } from '../../src/player/subtitle-fetch.js';
+import { createEngine } from '../../src/player/engine.js';
+import { makeEngine, stream } from './helpers.js';
 
 const plainStore = () => {
   const m = new Map();
@@ -69,15 +49,13 @@ async function play({ addons, tracks = NONE, hand = null, ms = 40000, remembered
 }
 const en = (id, label) => ({ lang: 'eng', id, label });
 
-test('Mac patch: a Subtitle record keeps id and label; a record without them has null; the shared text is unpatched', async () => {
+test('a Subtitle record keeps id and label; a record without them has null', async () => {
   const json = { subtitles: [{ id: NUMERIC, url: 'https://os.example/a.srt', lang: 'eng', label: OWN }, { id: 'x', url: 'https://os.example/b.srt', lang: 'tur' }, { url: 'https://os.example/c.srt', lang: 'fra' }] };
   const desc = { transportUrl: 'https://os.example/manifest.json', manifest: { id: 'os', name: 'OpenSubtitles', resources: ['subtitles'], types: ['series'] } };
   const http = { get: async () => JSON.stringify(json) };
-  const mac = await new MacAddon(desc, { http }).subtitles('series', 'tt9:1:2');
+  const mac = await new Addon(desc, { http }).subtitles('series', 'tt9:1:2');
   assert.deepEqual(mac.map(s => [s.id, s.label]), [[NUMERIC, OWN], ['x', null], [null, null]]);
   assert.equal(mac[0].addon, 'OpenSubtitles');
-  const shared = await new Addon(desc, { http }).subtitles('series', 'tt9:1:2');
-  assert.equal(shared[0].id, undefined, 'src/core/addon.js is unchanged');
 });
 
 test('plan: file track first; then the best match; then the remembered add-on; then the add-on order', () => {
@@ -148,7 +126,7 @@ test('a matched start is not replaced when another match arrives later', async (
   assert.equal(r.matchLines.length, 1);
 });
 
-test('menu: macLoadAddonSubtitles lists the match first within its language, other languages keep their place', async () => {
+test('menu: fetchAddonSubtitles lists the match first within its language, other languages keep their place', async () => {
   clearSubtitleCache();
   const clock = { setTimeout: (fn) => { fn(); return 0; } };
   const list = [
@@ -156,15 +134,10 @@ test('menu: macLoadAddonSubtitles lists the match first within its language, oth
     addon(clock, 'B', [{ lang: 'eng', id: '3', label: OWN }]),
   ];
   let got = [];
-  const run = (match) => macLoadAddonSubtitles({ stremio: { addons: async () => list }, authKey: 'k', type: 'series', videoId: 'tt9:1:2', tvLanguage: () => 'en-US', choose: chooseAddonSubtitles, set: v => { got = v; }, changed: () => {}, report: () => {}, match });
+  const run = (match) => fetchAddonSubtitles({ stremio: { addons: async () => list }, authKey: 'k', type: 'series', videoId: 'tt9:1:2', tvLanguage: () => 'en-US', choose: chooseAddonSubtitles, set: v => { got = v; }, changed: () => {}, report: () => {}, match });
   await run(() => matchContext({ filename: OWN + '.mkv' }));
   assert.deepEqual(got.map(s => s.id), ['3', NUMERIC, '8']);
   clearSubtitleCache();
   await run(undefined);
   assert.deepEqual(got.map(s => s.id), [NUMERIC, '3', '8'], 'without a release: the add-ons take turns as before');
-});
-
-test('Mac build: the anchors of the id patch are in addon.js', () => {
-  const text = readFileSync(fileURLToPath(new URL('../../src/core/addon.js', import.meta.url)), 'utf8');
-  for (const [from] of SUBTITLE_ID_PATCHES) assert.ok(text.includes(from), 'anchor present: ' + from);
 });

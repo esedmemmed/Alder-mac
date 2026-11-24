@@ -91,7 +91,7 @@ export function createRanker({ settings, device, memory, videoId, metaId = '', m
     const info = new Map(streams.map(s => [s, { fit: s.fit(tv), audio: AUDIO_SCORE[s.audioKind(tv)], pref: prefer(s) }]))
     return sortBy(streams, [
       [s => (lower ? s.height : 0), 'desc'],
-      [s => file !== null && s.filename === file, 'desc'],
+      [s => (memory && memory.level ? memory.level(videoId, metaId, s, file) : (file !== null && s.filename === file ? 4 : 0)), 'desc'],
       [s => binge !== null && s.bingeGroup === binge, 'desc'],
       [s => s.awkward, 'asc'],
       [s => s.mayNotPlay, 'asc'],
@@ -118,6 +118,9 @@ export function createRanker({ settings, device, memory, videoId, metaId = '', m
     wanted,
     noSound,
 
+    /** Something is remembered for this video and none of [streams] is it (core/release-memory.js pending). */
+    memoryPending: (streams) => !!(memory && memory.pending && memory.pending(videoId, metaId, streams)),
+    memoryHeld: () => { if (memory && memory.noteHeld) memory.noteHeld() },
     /** The streams worth listing: real videos this TV can decode. */
     playable,
 
@@ -126,7 +129,7 @@ export function createRanker({ settings, device, memory, videoId, metaId = '', m
      * (PLAN.md section 5 Stage A). The player gets the first TRY of them.
      */
     autoCandidates(streams) {
-      return rank(streams.filter(s => playable(s) && wanted(s))).filter(s => !noSound(s))
+      return rank(streams.filter(s => playable(s) && wanted(s) && (!tv.autoOk || tv.autoOk(s) || (memory && memory.level && memory.level(videoId, metaId, s) > 0)))).filter(s => !noSound(s))
     },
 
     /**
@@ -142,7 +145,7 @@ export function createRanker({ settings, device, memory, videoId, metaId = '', m
       const others = ranked.filter(s => !wanted(s))
       const quiet = s => !noSound(s)
       const ordered = eligible.filter(quiet).concat(others.filter(quiet), eligible.filter(noSound), others.filter(noSound))
-      const best = eligible.find(quiet) || null
+      const best = eligible.find(s => quiet(s) && (!tv.autoOk || tv.autoOk(s))) || null
       return {
         count: ordered.length,
         best,

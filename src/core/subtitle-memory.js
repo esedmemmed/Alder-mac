@@ -15,20 +15,14 @@
  * playing release (score >= THRESHOLD), then the remembered add-on, then the add-on order. `match: best=<score> named=<k>/<N>` is the report line.
  * Safari 14: no lookbehind, no class fields. Nothing here sorts (the match ranking is stableSort).
  */
-import { macBridge } from './bridge.js';
+import { report as sinkReport } from '../lib/report.js';
 import { signature } from './release-memory.js';
-import { THRESHOLD, rankByMatch, matchStats, scoreSubtitle } from '../../core/subtitle-match.js';
+import { THRESHOLD, rankByMatch, matchStats, scoreSubtitle } from './subtitle-match.js';
 
 const keyOf = (metaId) => 'subs/' + metaId;
 
-function bridgeLog(line) {
-  const b = macBridge();
-  if (!b || !b.log) return;
-  try { const p = b.log(line); if (p && p.catch) p.catch(() => {}); } catch (e) { /* no shell */ }
-}
-
-/** store: the app's store (get / set / remove); report(line): the shell's log (default: the bridge). */
-export function createSubtitleMemory(store, { report = bridgeLog } = {}) {
+/** store: the app's store (get / set / remove); report(line): the shell's log (default: the report sink). */
+export function createSubtitleMemory(store, { report = sinkReport } = {}) {
   return {
     get(metaId) {
       const v = store.get(keyOf(metaId));

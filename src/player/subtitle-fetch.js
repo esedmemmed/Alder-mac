@@ -10,8 +10,8 @@
  *   the menu lists a subtitle whose id/label matches the playing release first within its language (core/subtitle-match.js; match() gives the release)
  * The subtitle text itself is still fetched by the page (src/lib/http.js) when a file is chosen; this module only asks for the lists.
  */
-import { macBridge } from './bridge.js';
-import { rankRuns } from '../../core/subtitle-match.js';
+import { report as sinkReport } from '../lib/report.js';
+import { rankRuns } from '../core/subtitle-match.js';
 
 export const CACHE_MS = 10 * 60 * 1000;
 const CACHE_MAX = 200;
@@ -22,18 +22,12 @@ export function clearSubtitleCache() { cache.clear(); }
 
 const cleanName = (name) => String(name).replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[link]').replace(/["\r\n]/g, ' ').slice(0, 40);
 
-function bridgeLog(line) {
-  const b = macBridge();
-  if (!b || !b.log) return;
-  try { const p = b.log(line); if (p && p.catch) p.catch(() => {}); } catch (e) { /* no shell */ }
-}
-
 /**
  * Asks every subtitle add-on for [videoId]; returns a promise that settles when all have answered (the caller does not wait for it).
  * set(list): the chosen rows so far (engine's addonSubs); changed(): the options menu rebuilds; choose(entries, language): core chooseAddonSubtitles.
  */
-export async function macLoadAddonSubtitles({ stremio, authKey, type, videoId, tvLanguage, choose, set, changed, say = () => {}, warn = () => {}, diag = null,
-  isShut = () => false, now = Date.now, report = bridgeLog, match = null, extra = '' }) {
+export async function fetchAddonSubtitles({ stremio, authKey, type, videoId, tvLanguage, choose, set, changed, say = () => {}, warn = () => {}, diag = null,
+  isShut = () => false, now = Date.now, report = sinkReport, match = null, extra = '' }) {
   const asked = new Map(); // add-on identity -> slot
   const entries = [];      // { addon, subs, done } in the order the add-ons were first seen (stable rows)
   const runs = [];

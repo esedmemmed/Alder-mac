@@ -20,7 +20,7 @@
  */
 import { macBridge } from './bridge.js';
 import { wheelStep, setWheelHook } from './pointer.js';
-import { clampDelay, delayText, DELAY_STEP } from './subtitle-delay.js';
+import { clampDelay, delayText, DELAY_STEP } from '../../player/subtitle-delay.js';
 
 export const CLICK_DELAY = 250; // ms a single click waits for a second one
 export const IDLE_MS = 3000;    // ms without pointer activity after which the controls and the cursor go

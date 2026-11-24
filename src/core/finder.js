@@ -99,6 +99,10 @@ export class SourceFinder {
     const ready = readyStreams(this.answers, allowGaps)
     const best = this.ranker.autoCandidates(ready)
     if (best.length === 0 && this.answers.some(a => a === null)) return
+    if (best.length > 0 && !allowGaps && this.answers.some(a => a === null) && this.ranker.memoryPending && this.ranker.memoryPending(ready)) {
+      if (!this.macHeld) { this.macHeld = true; this.ranker.memoryHeld() }
+      return
+    }
     if (best.length === 0) { this.showList(); return }
     this.started = true
     this.onPlay(best.slice(0, TRY))

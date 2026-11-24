@@ -3,33 +3,14 @@
 // (HEVC, 4K, > 30 fps). Not offered, or failing, the normal ranking and the failover are unchanged. No link, host or token is stored.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { withMacBuildLock } from './mac-build-lock.js';
 import { macProfile } from '../../src/platform/mac/device.js';
+import { tu8000Profile } from '../../src/core/device.js';
 import { Stream } from '../../src/core/addon.js';
-import { createSourceMemory } from '../../src/core/ranking.js';
-import { createReleaseMemory, signature } from '../../src/platform/mac/release-memory.js';
-import { RANKING_PATCHES, ENGINE_MEMORY_PATCHES, SESSION_PATCHES } from '../../scripts/build.mjs';
-import { settingsStub, stream } from '../core/helpers.js';
+import { createRanker, createSourceMemory } from '../../src/core/ranking.js';
+import { createReleaseMemory, signature } from '../../src/core/release-memory.js';
+import { createEngine } from '../../src/player/engine.js';
+import { settingsStub, stream } from './helpers.js';
 import { makeEngine, stream as playable } from '../player/helpers.js';
-
-// The Mac bundle's own text of ranking.js and engine.js (the memory patches), loaded from a copy beside each original, for its imports.
-async function patched(rel, copyName, patches) {
-  const src = fileURLToPath(new URL('../../' + rel, import.meta.url));
-  const copy = fileURLToPath(new URL('../../' + rel.replace(/[^/]+$/, copyName), import.meta.url));
-  let text = readFileSync(src, 'utf8');
-  for (const [from, to] of patches) {
-    assert.ok(text.includes(from), 'anchor present: ' + from);
-    text = text.split(from).join(to);
-  }
-  return withMacBuildLock(async () => {
-    writeFileSync(copy, text);
-    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
-  });
-}
-const { createRanker } = await patched('src/core/ranking.js', 'ranking.mac-memory-test.js', RANKING_PATCHES);
-const { createEngine } = await patched('src/player/engine.js', 'engine.mac-memory-test.js', ENGINE_MEMORY_PATCHES);
 
 const plainStore = () => {
   const m = new Map();
@@ -41,6 +22,7 @@ const memoryOf = (store = plainStore(), reports = []) => {
 };
 const noName = (title, bingeGroup) => new Stream(title, '', 'https://media.fixture.test/x.mkv', {}, 0, undefined, bingeGroup);
 const ranker = (memory, videoId = 'tt1', metaId = 'tt1') => createRanker({ settings: settingsStub(), device: macProfile(), memory, videoId, metaId });
+const tvRanker = (memory, videoId = 'tt1', metaId = 'tt1') => createRanker({ settings: settingsStub(), device: tu8000Profile(), memory, videoId, metaId });
 
 const K4 = 'Movie.2160p.WEB-DL.DDP5.1.HEVC-A.mkv'; // outside the Mac's auto filter
 const DTS = 'Movie.1080p.BluRay.DTS.x264-D.mkv';
@@ -65,6 +47,28 @@ test('Mac memory: a movie rewatch leads with the file watched before, outside th
   mem.remember('tt1', 'tt1', stream(K4));
   assert.deepEqual(ranker(mem).autoCandidates(list(DTS, P720, K4)).map(s => s.filename), [K4, DTS, P720]);
   assert.deepEqual(ranker(mem).listModel(list(DTS, K4, P720).map(s => ({ stream: s, addon: 'A' }))).streams[0].filename, K4);
+});
+
+test('TV memory: a movie rewatch leads with the file watched before; the TV profile has no autoOk, so nothing is filtered out', () => {
+  assert.equal(tu8000Profile().autoOk, undefined);
+  const { mem } = memoryOf();
+  const tv = tvRanker(null);
+  const plain = tv.autoCandidates(list(DTS, P720, K4)).map(s => s.filename);
+  assert.deepEqual(plain.slice().sort(), [P720, K4].sort(), 'no autoOk filter on the TV: the 4K is a candidate (the DTS release is not playable there)');
+  mem.remember('tt1', 'tt1', stream(K4));
+  const got = tvRanker(mem).autoCandidates(list(DTS, P720, K4)).map(s => s.filename);
+  assert.equal(got.length, 2);
+  assert.equal(got[0], K4);
+  assert.equal(tvRanker(mem).listModel(list(DTS, K4, P720).map(s => ({ stream: s, addon: 'A' }))).streams[0].filename, K4);
+});
+
+test('TV memory: the next episode leads with the same bingeGroup, else the same signature', () => {
+  const { mem } = memoryOf();
+  mem.remember('tt2:1:1', 'tt2', stream('Show.S01E01.2160p.WEB-DL.HEVC-A.mkv', { bingeGroup: 'aio|4k|A' }));
+  const byGroup = [stream('Show.S01E02.1080p.WEB-DL.x264-Z.mkv'), stream('Show.S01E02.Other.mkv', { bingeGroup: 'aio|4k|A' })];
+  assert.equal(tvRanker(mem, 'tt2:1:2', 'tt2').autoCandidates(byGroup)[0], byGroup[1]);
+  const bySig = [stream('Show.S01E02.1080p.WEB-DL.x264-Z.mkv'), stream('Show.S01E02.2160p.WEB-DL.HEVC-A.mkv')];
+  assert.equal(tvRanker(mem, 'tt2:1:2', 'tt2').autoCandidates(bySig)[0], bySig[1]);
 });
 
 test('Mac memory: a rewatch finds the release by signature when the add-on gives no file name; 60 fps too', () => {
@@ -169,9 +173,4 @@ test('Mac memory: a manual pick is not commented on, and a Tizen-style memory (n
   await plain.start(); await plain.advance(10000);
   assert.ok(plain.log.some(l => /picture on, source 1\/1/.test(l)));
   assert.ok(!plain.log.some(l => /memory:/.test(l)));
-});
-
-test('Mac build: the session builds the release memory over the shared one', () => {
-  const text = readFileSync(fileURLToPath(new URL('../../src/app/session.js', import.meta.url)), 'utf8');
-  for (const [from] of SESSION_PATCHES) assert.ok(text.includes(from), 'anchor present: ' + from);
 });

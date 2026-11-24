@@ -17,6 +17,7 @@
  */
 
 import { macBridge } from './bridge.js';
+import { DELAY_KEYS } from '../../player/subtitle-delay.js';
 
 /** The page is always laid out 1920 x 1080 (the shell scales it); kept for the shared name. */
 export const SCREEN = Object.freeze({ width: 1920, height: 1080 });
@@ -206,6 +207,7 @@ export function createAvplay({ bridge = null, log = null } = {}) {
   }
 
   const api = {
+    delayKeysHint: DELAY_KEYS, // the keys line of the options panel's Subtitle timing (shown only where the adapter has keys)
     get available() { return !!(b || macBridge()); },
 
     /** 'NONE' (no session), 'IDLE' (loading), 'PLAYING', 'PAUSED'. */

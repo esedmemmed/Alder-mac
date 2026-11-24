@@ -3,32 +3,13 @@
 // order). Nothing in that language: the normal start rule and the reason. Written by a menu pick only, never by the start rule.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { withMacBuildLock } from './mac-build-lock.js';
 import { Subtitle } from '../../src/core/addon.js';
 import { createSourceMemory } from '../../src/core/ranking.js';
-import { createReleaseMemory } from '../../src/platform/mac/release-memory.js';
-import { createSubtitleMemory } from '../../src/platform/mac/subtitle-memory.js';
-import { SUBTITLE_MEMORY_PATCHES, SUBTITLE_SESSION_PATCHES } from '../../scripts/build.mjs';
-import { makeEngine, stream } from '../player/helpers.js';
-
-// The Mac bundle's own text of engine.js (the subtitle memory patches), loaded from a copy beside the original, for its imports.
-async function patchedEngine() {
-  const src = fileURLToPath(new URL('../../src/player/engine.js', import.meta.url));
-  const copy = fileURLToPath(new URL('../../src/player/engine.mac-submem-test.js', import.meta.url));
-  let text = readFileSync(src, 'utf8');
-  for (const [from, to] of SUBTITLE_MEMORY_PATCHES) {
-    assert.ok(text.includes(from), 'anchor present: ' + from);
-    text = text.split(from).join(to);
-  }
-  text = text.split('#platform/subtitle-memory').join('../platform/mac/subtitle-memory.js');
-  return withMacBuildLock(async () => {
-    writeFileSync(copy, text);
-    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
-  });
-}
-const { createEngine } = await patchedEngine();
+import { createReleaseMemory } from '../../src/core/release-memory.js';
+import { createSubtitleMemory } from '../../src/core/subtitle-memory.js';
+import { createEngine } from '../../src/player/engine.js';
+import { clearSubtitleCache } from '../../src/player/subtitle-fetch.js';
+import { makeEngine, stream } from './helpers.js';
 
 const plainStore = () => {
   const m = new Map();
@@ -51,6 +32,7 @@ const addon = (clock, name, langs, delay = 0) => ({
 
 /** One playback of an episode on the shared store; returns the engine's harness plus what the memory said. */
 async function play({ store, videoId = 'tt9:1:1', tracks = TR_EN, addons = [], menu = null, ms = 40000, subLang = '' }) {
+  clearSubtitleCache(); // the fetch keeps answers per add-on name and video id
   const reports = [];
   const mem = createReleaseMemory(store, createSourceMemory(store), { report: () => {} });
   mem.subtitles = createSubtitleMemory(store, { report: l => { if (!/^match:/.test(l)) reports.push(l); } }); // the T3 match: line is tested in mac.subtitle-match.test.js
@@ -109,12 +91,13 @@ test('Turkish pick of an add-on subtitle: a late add-on track is started, the re
   const addons = [{ name: 'A', langs: ['tur', 'eng'] }, { name: 'B', langs: ['tur'], delay: 500 }];
   await play({ store, tracks: EN_ONLY, addons, menu: t => choose(t, 'addon', { lang: 'tur', addon: 'B' }) });
   assert.deepEqual(store.m.get('subs/tt9'), { kind: 'lang', language: 'tr', addon: 'B' });
+  // A answers first and starts; B (the remembered add-on) answers 500 ms later and replaces it
   const next = await play({ store, videoId: 'tt9:1:2', tracks: EN_ONLY, addons });
   assert.equal(next.info().subMode, 'addon');
   assert.equal(next.info().chosenSub.addon, 'B');
   assert.equal(next.info().chosenSub.lang, 'tur');
   assert.equal(next.memLines().length, 1);
-  assert.deepEqual(next.reports, ['memory: found by=sub_addon source=3']);
+  assert.deepEqual(next.reports, ['memory: found by=sub_addon source=2', 'memory: upgraded to=B']);
   // the remembered add-on is gone: the first Turkish one in the add-on order
   const other = await play({ store, videoId: 'tt9:1:3', tracks: NONE, addons: [{ name: 'A', langs: ['eng', 'tur'] }, { name: 'C', langs: ['tur'] }] });
   assert.equal(other.info().chosenSub.addon, 'A');
@@ -202,11 +185,4 @@ test('subtitle language set: a remembered Off stays off, a remembered English wi
   const e = await play({ store: en, subLang: 'tr' });
   assert.equal(e.info().subMode, 'file');
   assert.equal(e.info().textIndex, 0);
-});
-
-test('Mac build: the session builds the subtitle memory; the engine anchors are in engine.js and session.js', () => {
-  const eng = readFileSync(fileURLToPath(new URL('../../src/player/engine.js', import.meta.url)), 'utf8');
-  for (const [from] of SUBTITLE_MEMORY_PATCHES) assert.ok(eng.includes(from), 'anchor present: ' + from);
-  const ses = readFileSync(fileURLToPath(new URL('../../src/app/session.js', import.meta.url)), 'utf8');
-  for (const [from] of SUBTITLE_SESSION_PATCHES) assert.ok(ses.includes(from), 'anchor present: ' + from);
 });

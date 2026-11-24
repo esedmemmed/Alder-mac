@@ -13,8 +13,8 @@
  *   delay: not remembered (add-on subtitle without id)   delay: none (no release identity)
  * Safari 14: no lookbehind, no class fields. Nothing here sorts.
  */
-import { macBridge } from './bridge.js';
 import { signature } from './release-memory.js';
+import { report as sinkReport } from '../lib/report.js';
 
 const LIMIT = 10000;
 const URLISH = /:\/\/|\?|@|(?:^|[^a-z0-9])(?:www\.|[a-z0-9-]+\.(?:com|net|org|io|tv|me|cc|xyz|info|to)(?![a-z0-9]))/i;
@@ -22,12 +22,6 @@ const URLISH = /:\/\/|\?|@|(?:^|[^a-z0-9])(?:www\.|[a-z0-9-]+\.(?:com|net|org|io
 const safe = (v) => (v === null || v === undefined ? '' : String(v).trim());
 const part = (v) => { const s = safe(v); return s && !URLISH.test(s) ? s.replace(/\//g, '_') : null; };
 const seconds = (ms) => (ms / 1000).toFixed(1);
-
-function bridgeLog(line) {
-  const b = macBridge();
-  if (!b || !b.log) return;
-  try { const p = b.log(line); if (p && p.catch) p.catch(() => {}); } catch (e) { /* no shell */ }
-}
 
 /** The release's key part: its file name, else the 1.4 signature, else null. */
 export function releaseKey(stream) {
@@ -58,8 +52,8 @@ export function subtitleKey(sel) {
   return null;
 }
 
-/** store: the app's store (get / set / remove); report(line): the shell's log (default: the bridge). */
-export function createDelayMemory(store, { report = bridgeLog } = {}) {
+/** store: the app's store (get / set / remove); report(line): the shell's log (default: lib/report.js). */
+export function createDelayMemory(store, { report = sinkReport } = {}) {
   const keyOf = (rel, sub) => 'delay/' + rel + '/' + sub;
   const mem = {
     get(rel, sub) {

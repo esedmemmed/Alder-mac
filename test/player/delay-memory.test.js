@@ -2,30 +2,11 @@
 // add-on subtitle with an id); another release or subtitle starts at 0; an add-on subtitle without an id is not kept, and says so; 0 removes it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { withMacBuildLock } from './mac-build-lock.js';
 import { Subtitle } from '../../src/core/addon.js';
 import { createSourceMemory } from '../../src/core/ranking.js';
-import { createDelayMemory, releaseKey, subtitleKey } from '../../src/platform/mac/delay-memory.js';
-import { SUBTITLE_DELAY_PATCHES, SUBTITLE_SESSION_PATCHES } from '../../scripts/build.mjs';
+import { createDelayMemory, releaseKey, subtitleKey } from '../../src/core/delay-memory.js';
+import { clearSubtitleCache } from '../../src/player/subtitle-fetch.js';
 import { makeEngine, stream } from '../player/helpers.js';
-
-async function patchedEngine() {
-  const src = fileURLToPath(new URL('../../src/player/engine.js', import.meta.url));
-  const copy = fileURLToPath(new URL('../../src/player/engine.mac-delaymem-test.js', import.meta.url));
-  let text = readFileSync(src, 'utf8');
-  for (const [from, to] of SUBTITLE_DELAY_PATCHES) {
-    assert.ok(text.includes(from), 'anchor present: ' + from);
-    text = text.split(from).join(to);
-  }
-  text = text.split('#platform/subtitle-delay').join('../platform/mac/subtitle-delay.js');
-  return withMacBuildLock(async () => {
-    writeFileSync(copy, text);
-    try { return await import(pathToFileURL(copy).href); } finally { rmSync(copy, { force: true }); }
-  });
-}
-const { createEngine } = await patchedEngine();
 
 const plainStore = () => {
   const m = new Map();
@@ -36,16 +17,18 @@ const video = { type: 'video', id: 1, codec: 'h264', selected: true, 'demux-w': 
 const audio = { type: 'audio', id: 1, lang: 'eng', title: 'English', codec: 'aac', 'audio-channels': 2, selected: true };
 const sub = (id, lang, title) => ({ type: 'sub', id, lang, title, codec: 'subrip', selected: false });
 const TRACKS = [video, audio, sub(1, 'eng', 'English'), sub(2, 'fra', 'Francais')];
+const TV_TRACKS = JSON.stringify([{ type: 'AUDIO', codec: 'AAC', lang: 'eng', channels: 2 }, { type: 'TEXT', codec: 'SRT', lang: 'eng' }, { type: 'TEXT', codec: 'SRT', lang: 'fra' }]);
 const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n';
 const REL_A = 'Movie 1080p WEB-DL x264-A';
 const REL_B = 'Movie 2160p BluRay x265-B';
 
-/** One playback on the shared store: the engine on the Mac build's delay patches, memory.delays over the store. */
-async function play({ store, rel = REL_A, addonIds = [], reports = [], file = null }) {
+/** One playback on the shared store: the shared engine on the mpv adapter, memory.delays over the store. */
+async function play({ store, rel = REL_A, addonIds = [], reports = [], file = null, adapter = 'mpv', srtAt = null }) {
+  clearSubtitleCache(); // the fetch keeps answers per add-on name and video id
   const mem = createSourceMemory(store);
   mem.delays = createDelayMemory(store, { report: l => reports.push(l) });
-  const src = stream(rel, { tracks: JSON.stringify(TRACKS) });
-  const t = makeEngine({ adapter: 'mpv', createEngine, memory: mem, sources: [src], http: { get: async () => SRT } });
+  const src = stream(rel, { tracks: adapter === 'mpv' ? JSON.stringify(TRACKS) : TV_TRACKS });
+  const t = makeEngine({ adapter, memory: mem, sources: [src], http: { get: async () => (srtAt ? srtAt(t.position()) : SRT) } });
   t.stremio.addons = async () => [{ name: 'Subs', serves: () => true, subtitles: async () => addonIds.map((id, i) => Object.assign(new Subtitle('https://subs.example/' + i + '.srt?token=SECRET', 'swe', 'Subs'), id ? { id } : {})) }];
   await t.start();
   await t.advance(40000);
@@ -80,14 +63,6 @@ test('module: keys, get / remember, 0 removes, nothing URL-like', () => {
   assert.equal(dk(store).length, 0);
   assert.equal(mem.apply(null, { kind: 'file', track: { index: 0 } }).line, 'delay: none (no release identity)');
   assert.match(mem.store({ filename: 'a.mkv' }, { kind: 'addon', sub: { addon: 'S' } }, 100), /^delay: not remembered/);
-});
-
-test('session patch: the session hangs memory.delays', () => {
-  const src = readFileSync(fileURLToPath(new URL('../../src/app/session.js', import.meta.url)), 'utf8');
-  let text = src;
-  for (const [from, to] of SUBTITLE_SESSION_PATCHES) { assert.ok(text.includes(from), 'anchor present: ' + from); text = text.split(from).join(to); }
-  assert.ok(text.includes('memory.delays = createDelayMemory(store)'));
-  assert.ok(text.includes("from '#platform/delay-memory'"));
 });
 
 test('same release and same file track: mpv starts with the remembered delay; other track or release: 0', async () => {
@@ -158,7 +133,7 @@ test('no release identity: nothing kept, says so', async () => {
   const reports = [];
   mem.delays = createDelayMemory(store, { report: l => reports.push(l) });
   const src = Object.assign(stream('x', { tracks: JSON.stringify(TRACKS) }), { filename: null, title: 'plain' });
-  const t = makeEngine({ adapter: 'mpv', createEngine, memory: mem, sources: [src], http: { get: async () => SRT } });
+  const t = makeEngine({ adapter: 'mpv', memory: mem, sources: [src], http: { get: async () => SRT } });
   await t.start();
   await t.advance(40000);
   t.engine.setSubtitleDelay(300);
@@ -180,4 +155,42 @@ test('no link, host or token in a stored key, value or delay line', async () => 
   const texts = [...store.m.keys(), ...[...store.m.values()].map(v => JSON.stringify(v)), ...reports, ...delayLines(a), ...delayLines(b)];
   assert.ok(dk(store).length >= 2);
   for (const x of texts) assert.doesNotMatch(x, /:\/\/|\?|subs\.example|media\.fixture|SECRET|token/i, x);
+});
+
+// ---- the TV adapter (AVPlay has no sub-delay): an add-on subtitle's cues are moved, a file track cannot be shifted ----
+const stamp = (ms) => { const p = (n, w) => String(n).padStart(w, '0'); const s = Math.floor(ms / 1000); return p(Math.floor(s / 3600), 2) + ':' + p(Math.floor(s / 60) % 60, 2) + ':' + p(s % 60, 2) + ',' + p(ms % 1000, 3); };
+const shownNow = (t) => { const e = t.events.subtitle; return e.length && e[e.length - 1].lines ? e[e.length - 1].lines.map((l) => l.map((s) => s.text).join('')).join('/') : null; };
+
+test('TV: a remembered add-on delay comes back on the next play for that release and subtitle, and shifts its cues', async () => {
+  const store = plainStore();
+  const a = await play({ store, adapter: 'avplay', addonIds: ['id1'] });
+  await a.engine.selectSubtitle({ kind: 'addon', sub: a.engine.tracks().addonSubs[0] });
+  a.engine.setSubtitleDelay(300);
+  assert.deepEqual(store.m.get('delay/' + releaseKey(stream(REL_A)) + '/addon:Subs:id1'), { ms: 300 });
+  let p0 = 0;
+  const srtAt = (pos) => { p0 = pos; return ['1', stamp(pos + 1000) + ' --> ' + stamp(pos + 5000), 'hi', ''].join('\n'); };
+  const b = await play({ store, adapter: 'avplay', addonIds: ['id1'], srtAt });
+  await b.engine.selectSubtitle({ kind: 'addon', sub: b.engine.tracks().addonSubs[0] });
+  assert.equal(b.engine.tracks().subDelay, 300);
+  assert.ok(delayLines(b).includes('delay: applied 0.3 s'));
+  await b.advance(p0 + 1100 - b.position());
+  assert.equal(shownNow(b), null, 'its cues are moved: not yet at +1.1 s');
+  await b.advance(p0 + 1500 - b.position());
+  assert.equal(shownNow(b), 'hi');
+  const other = await play({ store, adapter: 'avplay', rel: REL_B, addonIds: ['id1'] });
+  await other.engine.selectSubtitle({ kind: 'addon', sub: other.engine.tracks().addonSubs[0] });
+  assert.equal(other.engine.tracks().subDelay, 0, 'another release');
+});
+
+test('TV: a file track cannot be shifted: canShift false, nothing sent, nothing remembered or applied', async () => {
+  const store = plainStore();
+  store.set('delay/' + releaseKey(stream(REL_A)) + '/file:en:0:English', { ms: 300 }); // a remembered value that must not be used
+  const t = await play({ store, adapter: 'avplay' });
+  assert.equal(t.engine.tracks().subMode, 'file');
+  assert.equal(t.engine.tracks().canShift, false);
+  assert.equal(t.engine.tracks().subDelay, 0, 'the remembered delay is not applied to a file track');
+  t.engine.setSubtitleDelay(500);
+  assert.equal(t.engine.tracks().subDelay, 0);
+  assert.equal(dk(store).length, 1, 'nothing new stored');
+  assert.deepEqual(delayLines(t), []);
 });

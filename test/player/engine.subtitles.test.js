@@ -3,10 +3,15 @@ import assert from 'node:assert/strict';
 import { both, makeEngine, stream } from './helpers.js';
 import { Subtitle } from '../../src/core/addon.js';
 import { buildReport } from '../../src/screens/diagnostics.js';
+import { createStore, memoryStorage } from '../../src/lib/store.js';
+import { createSourceMemory } from '../../src/core/ranking.js';
+import { createSubtitleMemory } from '../../src/core/subtitle-memory.js';
+import { clearSubtitleCache } from '../../src/player/subtitle-fetch.js';
 
 const addon = (name, answer) => ({ name, serves: () => true, subtitles: async () => { if (answer instanceof Error) throw answer; return answer.map((l, i) => new Subtitle(`https://${name}/${l}${i}.srt`, l, name)); } });
 
 async function run(addons, refresh) {
+  clearSubtitleCache(); // the fetch keeps answers per add-on name and video id for ten minutes: each test asks afresh
   const t = makeEngine({ sources: [stream('Film')] });
   const asked = [];
   t.stremio.addons = async (key, fresh) => { asked.push(!!fresh); if (fresh && refresh instanceof Error) throw refresh; return fresh ? refresh : addons; };
@@ -17,7 +22,7 @@ async function run(addons, refresh) {
 
 both('add-on subtitles: an add-on only the refreshed list has is asked', async () => {
   const { subs, asked } = await run([addon('Old', ['eng'])], [addon('Old', ['eng']), addon('New', ['eng'])]);
-  assert.deepEqual(asked, [true]);
+  assert.deepEqual(asked, [true, false]); // the refreshed list, and the list in memory (both asked at once)
   assert.deepEqual(subs.map((s) => s.addon), ['Old', 'New']);
 });
 
@@ -44,6 +49,7 @@ function recordingAddon(requests) { return { name: 'Rec', base: 'rec', serves: (
 const hinted = (name, hash, file) => { const s = stream(name, {}, { filename: file, size: 5 }); s.videoHash = hash; return s; };
 
 both('add-on subtitles: the playing file\'s details go to every add-on request', async () => {
+  clearSubtitleCache();
   const requests = [];
   const t = makeEngine({ sources: [hinted('Film', 'h1', 'Film.mkv')] });
   t.stremio.addons = async () => [recordingAddon(requests)];
@@ -54,6 +60,7 @@ both('add-on subtitles: the playing file\'s details go to every add-on request',
 });
 
 both('add-on subtitles: failover to a source with other hints asks again, with identical hints does not', async () => {
+  clearSubtitleCache();
   const requests = [];
   const t = makeEngine({ sources: [hinted('A', 'h1', 'A.mkv'), hinted('B', 'h2', 'B.mkv'), hinted('B2', 'h2', 'B.mkv')] });
   t.stremio.addons = async () => [recordingAddon(requests)];
@@ -113,7 +120,10 @@ const EN_FILE = {
 };
 const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n';
 function autoRig(adapter, { tracks = EN_FILE, subLang = 'tr', subtitlesOn = true, delay = 0 } = {}) {
-  const t = makeEngine({ sources: [stream('Film', { tracks: tracks[adapter] })], tvLanguage: 'en', http: { get: async () => SRT }, settings: { subtitles: subtitlesOn } });
+  const memStore = createStore({ storage: memoryStorage() }); // the session's memory: the subtitle memory plans the start (the setting is its fallback)
+  const memory = createSourceMemory(memStore);
+  memory.subtitles = createSubtitleMemory(memStore, { report: () => {} });
+  const t = makeEngine({ memory, sources: [stream('Film', { tracks: tracks[adapter] })], tvLanguage: 'en', http: { get: async () => SRT }, settings: { subtitles: subtitlesOn } });
   if (subLang) t.store.set('settings/subLang@p1', subLang);
   t.stremio.addons = async () => (delay ? new Promise((r) => t.clock.setTimeout(() => r([addon('A', ['eng', 'tur'])]), delay)) : [addon('A', ['eng', 'tur'])]);
   return t;
@@ -126,7 +136,7 @@ both('auto add-on start: no file track in the picked language, so the add-on one
   const tr = t.engine.tracks();
   assert.equal(tr.subMode, 'addon');
   assert.equal(tr.chosenSub.lang, 'tur');
-  assert.ok(t.diag.snapshot().decisions.some((d) => /no file track in Turkish, starting the add-on one from A/.test(d.text)));
+  assert.ok(t.diag.snapshot().decisions.some((d) => /memory: subtitles Turkish from A/.test(d.text)));
 });
 
 both('auto add-on start: a file track in the language wins, no add-on start', async (adapter) => {
@@ -134,7 +144,7 @@ both('auto add-on start: a file track in the language wins, no add-on start', as
   await t.start();
   await t.advance(3000);
   assert.equal(t.engine.tracks().subMode, 'file');
-  assert.ok(!t.diag.snapshot().decisions.some((d) => /starting the add-on one/.test(d.text)));
+  assert.ok(!t.diag.snapshot().decisions.some((d) => /memory: subtitles Turkish from A/.test(d.text)));
 });
 
 both('auto add-on start: not over a menu pick, not without the setting, not with subtitles off', async (adapter) => {
@@ -159,7 +169,7 @@ both('auto add-on start: the add-ons answering before the tracks are known start
   await t.start();
   await t.advance(3000);
   assert.equal(t.engine.tracks().subMode, 'addon');
-  assert.equal(t.diag.snapshot().decisions.filter((d) => /starting the add-on one/.test(d.text)).length, 1);
+  assert.equal(t.diag.snapshot().decisions.filter((d) => /memory: subtitles Turkish from A/.test(d.text)).length, 1);
 });
 
 both('Diagnostics: the add-on and service of the stream and the file details sent', async () => {
