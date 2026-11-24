@@ -10,7 +10,8 @@ import { createSubtitleMemory } from '../../src/core/subtitle-memory.js';
 import { clearSubtitleCache } from '../../src/player/subtitle-fetch.js';
 import { makeEngine, stream } from './helpers.js';
 
-const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n';
+// a real subtitle has at least 5 cues (the engine skips message files)
+const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n' + [2, 3, 4, 5, 6].map((n) => '\n' + n + '\n01:0' + n + ':00,000 --> 01:0' + n + ':02,000\nlater ' + n + '\n').join('');
 const OWN = 'Show.S01E02.1080p.WEB-DL.x264-GRP';
 const plainStore = () => {
   const m = new Map();

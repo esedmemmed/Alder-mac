@@ -118,7 +118,8 @@ const EN_FILE = {
     { type: 'sub', id: 1, lang: 'eng', title: 'English', codec: 'subrip', selected: false },
   ]),
 };
-const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n';
+// a real subtitle has at least 5 cues (the engine skips message files)
+const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n' + [2, 3, 4, 5, 6].map((n) => '\n' + n + '\n01:0' + n + ':00,000 --> 01:0' + n + ':02,000\nlater ' + n + '\n').join('');
 function autoRig(adapter, { tracks = EN_FILE, subLang = 'tr', subtitlesOn = true, delay = 0 } = {}) {
   const memStore = createStore({ storage: memoryStorage() }); // the session's memory: the subtitle memory plans the start (the setting is its fallback)
   const memory = createSourceMemory(memStore);

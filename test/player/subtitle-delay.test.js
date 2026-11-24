@@ -20,7 +20,8 @@ const video = { type: 'video', id: 1, codec: 'h264', selected: true, 'demux-w': 
 const audio = { type: 'audio', id: 1, lang: 'eng', title: 'English', codec: 'aac', 'audio-channels': 2, selected: true };
 const sub = (id, lang, title) => ({ type: 'sub', id, lang, title, codec: 'subrip', selected: false });
 const TRACKS = [video, audio, sub(1, 'eng', 'English'), sub(2, 'fra', 'Francais')];
-const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n';
+// a real subtitle has at least 5 cues (the engine skips message files)
+const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n' + [2, 3, 4, 5, 6].map((n) => '\n' + n + '\n01:0' + n + ':00,000 --> 01:0' + n + ':02,000\nlater ' + n + '\n').join('');
 
 async function play({ tracks = TRACKS, addons = [] } = {}) {
   const src = stream('Movie 1080p WEB-DL x264-A', { tracks: JSON.stringify(tracks) });

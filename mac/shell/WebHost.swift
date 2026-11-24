@@ -39,8 +39,66 @@ final class AlderSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
 }
 
+/// One range GET that never keeps more than the range: it cancels at once on an answer that is not 206 (a server that
+/// ignores Range would send the whole file) and when more bytes than the range arrive. [done] is called once, off the main thread.
+final class RangeFetch: NSObject, URLSessionDataDelegate {
+    private let limit: Int
+    private let done: (Data?, Int64, String?) -> Void
+    private var buffer = Data()
+    private var total: Int64 = 0
+    private var failure: String?
+
+    init(limit: Int, done: @escaping (Data?, Int64, String?) -> Void) {
+        self.limit = limit
+        self.done = done
+        super.init()
+    }
+
+    func start(_ url: URL, from: Int64, to: Int64) {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 8
+        request.setValue("bytes=\(from)-\(to)", forHTTPHeaderField: "Range")
+        let session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
+        session.dataTask(with: request).resume()
+        session.finishTasksAndInvalidate()
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        guard let http = response as? HTTPURLResponse else {
+            failure = "network error"
+            completionHandler(.cancel)
+            return
+        }
+        if http.statusCode != 206 {
+            failure = http.statusCode == 200 ? "server ignores Range" : "HTTP \(http.statusCode)"
+            completionHandler(.cancel)
+            return
+        }
+        if let range = http.allHeaderFields["Content-Range"] as? String, let slash = range.lastIndex(of: "/") {
+            total = Int64(range[range.index(after: slash)...].trimmingCharacters(in: .whitespaces)) ?? 0
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        buffer.append(data)
+        if buffer.count > limit + 1024 {
+            failure = "server ignores Range"
+            dataTask.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let failure = failure { done(nil, 0, failure) }
+        else if error != nil { done(nil, 0, "network error") }
+        else if buffer.count != limit { done(nil, 0, "short read") }
+        else { done(buffer, total, nil) }
+    }
+}
+
 /// JS to native dispatcher (wire: docs/ops/INDEX.md, Bridge v2 wire): load, pause, seek, observe, setProp, getProp,
-/// subAdd, fullscreen, saveFile, quit, log, report. Every message gets one reply event.
+/// subAdd, fullscreen, saveFile, fileHash, quit, log, report. Every message gets one reply event.
 final class Bridge: NSObject, WKScriptMessageHandler {
     private let player: Player
     private let reportPath: String?
@@ -103,6 +161,41 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         while out.hasPrefix(".") { out.removeFirst() }
         if out.count > 120 { out = String(out.prefix(120)) }
         return out.isEmpty ? "alder.txt" : out
+    }
+
+    /// The OpenSubtitles hash of the file: two range requests (first and last 64 KiB), the reply value {hash} on the main thread.
+    private func fileHash(_ id: Int, url: URL, size: Int64) {
+        let chunk: Int64 = 65536
+        func fail(_ message: String) {
+            DispatchQueue.main.async { self.reply(id, ok: false, error: message) }
+        }
+        func fetch(_ start: Int64, _ end: Int64, _ done: @escaping (Data, Int64) -> Void) {
+            RangeFetch(limit: Int(end - start + 1)) { data, total, problem in
+                if let problem = problem { fail(problem); return }
+                done(data ?? Data(), total)
+            }.start(url, from: start, to: end)
+        }
+        func wordSum(_ data: Data) -> UInt64 {
+            var sum: UInt64 = 0
+            var i = data.startIndex
+            while i + 8 <= data.endIndex {
+                var word: UInt64 = 0
+                for k in 0..<8 { word |= UInt64(data[i + k]) << UInt64(8 * k) }
+                sum = sum &+ word
+                i += 8
+            }
+            return sum
+        }
+        fetch(0, chunk - 1) { head, headTotal in
+            let total = size > 0 ? size : headTotal
+            if total <= 0 { fail("size unknown"); return }
+            if total < 2 * chunk { fail("file too small to hash"); return }
+            fetch(total - chunk, total - 1) { tail, _ in
+                let sum = UInt64(total) &+ wordSum(head) &+ wordSum(tail)
+                let hash = String(format: "%016llx", sum)
+                DispatchQueue.main.async { self.reply(id, ok: true, value: ["hash": hash]) }
+            }
+        }
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {

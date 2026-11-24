@@ -15,7 +15,7 @@
   var DEFAULT_REPLY_DELAY_MS = 5;
   var TICK_MS = 250;
   var LOAD_ERROR = -13; // MPV_ERROR_LOADING_FAILED, general knowledge: confirm against client.h in T6
-  var SETTABLE = ['aid', 'sid', 'sub-visibility', 'panscan', 'video-aspect-override', 'volume', 'sub-delay'];
+  var SETTABLE = ['aid', 'sid', 'sub-visibility', 'panscan', 'video-aspect-override', 'volume', 'sub-delay', 'sub-speed'];
   var OBSERVABLE = ['time-pos', 'duration', 'pause', 'paused-for-cache', 'cache-buffering-state', 'track-list', 'aid',
     'sid', 'hwdec-current', 'video-params', 'audio-params', 'eof-reached'];
   var DEFAULT_OBSERVED = ['time-pos', 'duration', 'pause'];
@@ -44,7 +44,7 @@
       'time-pos': null, pause: false, duration: null, 'hwdec-current': 'mock', 'paused-for-cache': false,
       'cache-buffering-state': null, 'eof-reached': null, 'track-list': [], aid: null, sid: null,
       'video-params': null, 'audio-params': null, 'sub-visibility': true, panscan: 0, 'video-aspect-override': -1,
-      volume: 100, 'sub-delay': 0, 'frame-drop-count': 0, 'decoder-frame-drop-count': 0, 'vo-delayed-frame-count': 0,
+      volume: 100, 'sub-delay': 0, 'sub-speed': 1, 'frame-drop-count': 0, 'decoder-frame-drop-count': 0, 'vo-delayed-frame-count': 0,
       'mistimed-frame-count': 0
     };
     var observed = DEFAULT_OBSERVED.slice();
@@ -220,6 +220,11 @@
         var name = sanitizeName(args.name);
         mock.saved.push({ name: name, text: args.text });
         return { value: '~/Downloads/' + name };
+      },
+      fileHash: function (args) {
+        if (typeof args.url !== 'string' || !args.url) throw new Error('fileHash needs url');
+        if (mock.fileHash) return { value: { hash: mock.fileHash } };
+        throw new Error('no network in the mock');
       },
       log: function (args) {
         if (typeof args.line !== 'string') throw new Error('log needs line');

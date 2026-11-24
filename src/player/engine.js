@@ -59,11 +59,12 @@ import { toIso1, languageName } from '../core/lang.js';
 import { errorCode } from './avplay.js';
 import { parseTextTracks, startSubtitle } from './tracks.js';
 import { whyChosen } from '../core/ranking.js';
-import { subtitlePlan, matchContext } from '../core/subtitle-memory.js';
+import { subtitlePlan, matchContext, isNoticeSub, noticesLast, notASubtitle } from '../core/subtitle-memory.js';
 import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';
 import { fetchAddonSubtitles } from './subtitle-fetch.js';
 import { resolvePlayableUrl } from './sources.js';
 import { createSubtitleDelay } from './subtitle-delay.js';
+import { syncSubtitle, createAligner, mapCues, alignedLine, referenceFor } from './subtitle-sync.js';
 import { PICTURE, PICTURE_NAMES, normalisePicture, parseVideoShape, shapeText, shapeNote, hasBars, cropPercent } from './picture.js';
 
 const { TICK, PUSH_EVERY, RESUME_SLACK, SKIP_SHOWN, START_WAIT, START_WAIT_CACHED, RETRIES, RETRY_WAIT, SEEK_SETTLE, STALL_WINDOW, STALLS_FOR_LOWER } = PLAYER;
@@ -170,10 +171,25 @@ export function createEngine(params, deps) {
   let subDelay = 0;
   // The delay: where the adapter can delay any track (the Mac's mpv) it does; where it cannot (AVPlay) only an add-on subtitle is shifted, by its cues.
   const hasSubDelay = typeof avplay.setSubDelay === 'function';
+  // Timing against an English reference (player/subtitle-sync.js): alignT = { ratio, offset } moves the add-on subtitle onto the playing file.
+  // mpv (setSubSpeed present): sub-speed and sub-delay; elsewhere the page's own cues are mapped (alignedCues) and the viewer's delay is shifted on top.
+  const hasSubSpeed = hasSubDelay && typeof avplay.setSubSpeed === 'function';
+  let alignT = null;
+  let alignedCues = null;
+  let speedSet = false;
+  let syncToken = 0;
+  let syncSub = null; let syncCues = null; let syncHadRef = false;
+  let syncRestart = false; // a run for the new source waits for its first picture
+  let addonSubsAt = 0; // the source the add-on answers were asked for
+  let syncWait = null; // a run that waits for the first picture
+  const unusable = new Set(); // add-on subtitles that turned out not to be subtitles (a message file): never started automatically on this play
+  const aligner = deps.aligner || createAligner({ defer: (fn) => after(fn, 0) });
+  const refSubs = () => (addonSubsAt === at ? autoSubs() : []); // the answers of another source never give this file's reference
+  const autoSubs = () => addonSubs.filter((x) => !isNoticeSub(x) && !unusable.has(x));
   let macDelayFor = null; // the file track whose remembered delay was applied
   const macDelaySel = (kind) => (kind === 'addon' ? { kind, sub: chosenSub } : { kind, track: textTracks.find((x) => x.index === textIndex) });
   const macDelaySay = (line) => { if (line) { decide(line); if (memory && memory.delays) memory.delays.report(line); } };
-  const macDelay = createSubtitleDelay({ avplay: hasSubDelay ? { setSubDelay: (s) => avplay.setSubDelay(s) } : {}, decide: (l) => decide(l),
+  const macDelay = createSubtitleDelay({ avplay: hasSubDelay ? { setSubDelay: (s) => avplay.setSubDelay(s + (alignT && hasSubSpeed ? alignT.offset / 1000 : 0)) } : {}, decide: (l) => decide(l),
     remembered: (kind) => { if (!memory || !memory.delays) return 0; const r = memory.delays.apply(sources && sources[at], macDelaySel(kind)); macDelaySay(r.line); return r.ms; } });
   let subHint = 0;
   let subShown = null;
@@ -301,6 +317,7 @@ export function createEngine(params, deps) {
     }
     if (mine !== gen || shut) return;
     await afterPrepare(mine, position, forcedAudio);
+    fileHashFor(mine, s, url);
   }
 
   async function afterPrepare(mine, position, forcedAudio) {
@@ -483,6 +500,8 @@ export function createEngine(params, deps) {
     if (memory) memory.remember(videoId, metaId, source());
     say('picture on, source ' + (at + 1) + '/' + sources.length + ' (' + source().label + ')');
     emit('started', { source: at });
+    if (syncWait) { const run = syncWait; syncWait = null; after(run, 0); }
+    if (syncRestart) { syncRestart = false; if (subMode === 'addon' && chosenSub && subCues) alignStart(chosenSub, subCues, null); }
   }
 
   /** The stream ran out. At the real end the next episode starts, unless the viewer chose to watch the credits. */
@@ -549,6 +568,7 @@ export function createEngine(params, deps) {
     const here = position();
     if (at + 1 < sources.length) {
       at++;
+      alignSourceChanged();
       refreshSubtitlesForSource();
       stalls = [];
       retries = 0;
@@ -834,6 +854,26 @@ export function createEngine(params, deps) {
     void loadAddonSubtitles();
   }
 
+  // The file's OpenSubtitles hash, once per source, when the stream carries none and the platform can read the file: never blocks playback.
+  const hashTried = new WeakSet();
+  async function fileHashFor(mine, s, url) {
+    if (mine !== gen || shut || !s || s.videoHash || hashTried.has(s) || !/^https?:\/\//i.test(url)) return;
+    hashTried.add(s);
+    if (typeof avplay.fileHash !== 'function') { decide('file hash: not available in a browser'); return; }
+    const t0 = clock.now();
+    let hash = null;
+    let reason = 'no hash for this file';
+    try {
+      hash = await Promise.race([Promise.resolve(avplay.fileHash(url, Number.isInteger(s.size) && s.size > 0 ? s.size : null)), new Promise((resolve, reject) => after(() => reject(new Error('timeout')), 8000))]);
+    } catch (e) { reason = String(e && e.message ? e.message : e).replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[link]').slice(0, 60); }
+    if (shut) return;
+    if (!hash) { decide('file hash: failed (' + reason + ')'); return; }
+    decide('file hash: computed in ' + (clock.now() - t0) + ' ms');
+    if (source() !== s) return;
+    s.videoHash = hash;
+    refreshSubtitlesForSource();
+  }
+
   // Mac subtitle memory: Off -> none; a language -> the file's track, else the first add-on subtitle in it as the answers arrive; else the normal rule
   function macSubStart() {
     if (macSub.started || !memory || !memory.subtitles || !settings.subtitles()) return;
@@ -857,7 +897,7 @@ export function createEngine(params, deps) {
   // an add-on answer that arrives after an unmatched add-on subtitle started: a match replaces it, within the first 15 s, never over a menu pick
   function macSubLate() {
     if (shut || macSub.hand || clock.now() - macSub.t0 >= 15000) { macSub.watch = false; return; }
-    const plan = subtitlePlan(macSub.choice, { textTracks, addonSubs, addonsDone: macSub.addonsDone, lang: toIso1, match: macMatch() });
+    const plan = subtitlePlan(macSub.choice, { textTracks, addonSubs: autoSubs(), addonsDone: macSub.addonsDone, lang: toIso1, match: macMatch() });
     if (macSub.addonsDone) macSub.watch = false;
     if (plan.kind !== 'addon' || !plan.matched || plan.sub === chosenSub) return;
     macSub.watch = false;
@@ -870,7 +910,7 @@ export function createEngine(params, deps) {
     const auto = macSub.auto;
     if (shut || !auto || auto.matched || macSub.upgraded || macSub.hand || clock.now() - auto.at >= 15000) return;
     if (!chosenSub || chosenSub.addon !== auto.addon) return;
-    const run = addonSubs.filter((s) => toIso1(s.lang) === auto.language);
+    const run = autoSubs().filter((s) => toIso1(s.lang) === auto.language);
     const rank = (name) => run.findIndex((s) => s.addon === name);
     const remembered = macSub.choice && macSub.choice.addon;
     let target = null;
@@ -885,7 +925,7 @@ export function createEngine(params, deps) {
   }
   function macSubTry() {
     if (!macSub.choice || macSub.final || shut) return;
-    const plan = subtitlePlan(macSub.choice, { textTracks, addonSubs, addonsDone: macSub.addonsDone, lang: toIso1, match: macMatch() });
+    const plan = subtitlePlan(macSub.choice, { textTracks, addonSubs: autoSubs(), addonsDone: macSub.addonsDone, lang: toIso1, match: macMatch() });
     if (plan.kind === 'wait') return;
     macSub.final = true;
     const language = languageName(macSub.choice.language || '');
@@ -903,14 +943,71 @@ export function createEngine(params, deps) {
     const s = source(); subExtra = s ? subtitleExtra(s) : '';
     if (diag) diag.subtitleExtraKeys(subExtra ? subExtra.split('&').map((p) => p.split('=')[0]) : []);
     decide('subtitles: asked add-ons ' + (subExtra ? 'with the file\'s ' + subExtra.split('&').map((p) => p.split('=')[0]).join(', ') : 'without file details'));
-    return fetchAddonSubtitles({ stremio, authKey, type, videoId, extra: subExtra, tvLanguage: subtitleLanguage, choose: chooseAddonSubtitles, set: (v) => { addonSubs = v; }, changed: () => emit('tracks'), say, warn, diag, isShut: () => shut, match: macMatch });
+    return fetchAddonSubtitles({ stremio, authKey, type, videoId, extra: subExtra, tvLanguage: subtitleLanguage, choose: chooseAddonSubtitles, set: (v) => { addonSubs = noticesLast(v); addonSubsAt = at; alignRetry(); }, changed: () => emit('tracks'), say, warn, diag, isShut: () => shut, match: macMatch });
+  }
+
+  // ---- timing against the English reference (player/subtitle-sync.js) ----
+  function alignClear() {
+    syncToken++; syncWait = null; syncSub = null; alignT = null; alignedCues = null;
+    if (speedSet) { speedSet = false; try { avplay.setSubSpeed(1); avplay.setSubDelay(subDelay / 1000); } catch (e) { /* no bridge */ } } // the viewer's own delay only
+  }
+  // The alignment belongs to one release: another source (failover) drops it, the sync counts as not run, and it runs again after the new source's first picture.
+  function alignSourceChanged() {
+    const had = alignT !== null;
+    const again = syncSub !== null || had;
+    alignClear();
+    if (had && !hasSubSpeed && subMode === 'addon' && subCues) applyCueShift();
+    syncRestart = again;
+  }
+  function alignApply(t) {
+    alignT = { ratio: t.ratio, offset: t.offset };
+    if (hasSubSpeed) {
+      // mpv: sub-speed multiplies the subtitle event timestamps, sub-delay is added after: shown = time * sub-speed + sub-delay, which is
+      // subtitle-align's mapTime (time * ratio + offset) with sub-speed = ratio and sub-delay = offset (+ the viewer's own delay, added in macDelay's setSubDelay).
+      speedSet = true;
+      try { avplay.setSubSpeed(t.ratio); avplay.setSubDelay(subDelay / 1000 + t.offset / 1000); } catch (e) { /* no bridge */ }
+    } else if (subCues) { alignedCues = mapCues(subCues, t); applyCueShift(); }
+  }
+  function alignStart(sub, cues, aligned) {
+    if (aligned) { alignApply(aligned); return; }
+    if (!sub.isLocal(subtitleLanguage()) || sub.isEnglish()) return;
+    const kept = memory && memory.aligns ? memory.aligns.get(sources && sources[at], sub) : null;
+    if (kept) { alignApply(kept); decide('timing: remembered alignment'); return; }
+    syncSub = sub; syncCues = cues; syncHadRef = false;
+    alignRun();
+  }
+  // one run: waits for the first picture. syncHadRef: the run saw a reference, so a later add-on answer does not start another.
+  function alignRun() {
+    if (!http || !syncSub) return;
+    const sub = syncSub, cues = syncCues, token = syncToken;
+    syncHadRef = !!referenceFor(refSubs());
+    const run = () => {
+      if (shut || token !== syncToken) return;
+      syncSubtitle({
+        sub, cues, addonSubs: refSubs(), sameLanguage: (x) => x.isLocal(subtitleLanguage()), http, parse: parseSubtitles, decide,
+        compute: (ref, cands) => aligner.compute(ref, cands),
+        current: () => !shut && token === syncToken && chosenSub === sub,
+        apply: (r, target, switched) => {
+          const t = { ratio: r.ratio, offset: r.offset, gain: r.gain };
+          if (memory && memory.aligns) memory.aligns.remember(sources && sources[at], target, t);
+          if (switched) { decide('timing: switched to ' + String(target.label || target.addon).replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[link]').slice(0, 60) + ' (fits this file better)'); selectSubtitle({ kind: 'addon', sub: target }, true, t); }
+          else { alignApply(t); decide(alignedLine(t)); }
+        },
+      });
+    };
+    if (started) after(run, 0); else syncWait = run;
+  }
+  // the add-ons answered again (the file's hash is known now): a reference that was missing before may be there, and the subtitle on screen is not aligned yet
+  function alignRetry() {
+    if (shut || !syncSub || syncHadRef || alignT || chosenSub !== syncSub || !referenceFor(refSubs())) return;
+    alignRun();
   }
 
   /**
    * The viewer's subtitle choice: { kind: 'off' } | { kind: 'file', index } | { kind: 'addon', sub }. An add-on file is
    * fetched, parsed and drawn by us from the same second: no reload, as the clock does the syncing.
    */
-  async function selectSubtitle(choice, fromMemory = false) {
+  async function selectSubtitle(choice, fromMemory = false, aligned = null) {
     if (shut) return false;
     if (!fromMemory) { macSub.final = true; macSub.hand = true; macSub.auto = null; } // a menu pick ends the remembered start and any later replacement
     const token = ++subChoiceToken;
@@ -920,9 +1017,18 @@ export function createEngine(params, deps) {
       try { cues = parseSubtitles(await http.get(choice.sub.url), choice.sub.format); } catch (e) { cues = null; warn('subtitle file failed: ' + (e && e.message ? e.message : e)); }
       if (token !== subChoiceToken || shut) return false;
       if (!cues || !cues.length) { emit('notice', { message: "Couldn't load that subtitle" }); return false; }
+      const notReal = notASubtitle(cues, duration);
+      if (fromMemory && notReal) { // an automatic start must be a real subtitle: a message file is skipped and the next candidate starts
+        unusable.add(choice.sub);
+        if (hasSubDelay) { try { avplay.subtitlesOn(false); } catch (e) { /* no bridge */ } } // mpv was handed the file before the check: its picture stays hidden
+        decide('subtitles: skipped ' + String(choice.sub.label || choice.sub.addon).replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, '[link]').slice(0, 60) + ': not a subtitle (' + cues.length + ' cues)');
+        if (macSub.started && macSub.auto) { macSub.final = false; macSub.auto = null; macSubTry(); }
+        return false;
+      }
       chosenSub = choice.sub;
       subCues = cues;
       macDelayFor = null;
+      alignClear();
       subDelay = macDelay.pick('addon');
       shifted = cues;
       subHint = 0;
@@ -934,9 +1040,10 @@ export function createEngine(params, deps) {
       cancel(subsTimer);
       subtitleTask();
       decide('subtitles: add-on file from ' + choice.sub.addon + ' (' + choice.sub.language + ', ' + cues.length + ' cues)');
-      if (!fromMemory) macSubRemember({ kind: 'lang', language: toIso1(choice.sub.lang), addon: choice.sub.addon });
+      alignStart(choice.sub, cues, aligned);
+      if (!fromMemory && !notReal && !isNoticeSub(choice.sub)) macSubRemember({ kind: 'lang', language: toIso1(choice.sub.lang), addon: choice.sub.addon });
     } else {
-      chosenSub = null; subCues = null; shifted = null; subDelay = 0; macDelayFor = null; subShown = null;
+      chosenSub = null; subCues = null; shifted = null; subDelay = 0; macDelayFor = null; subShown = null; alignClear();
       cancel(subsTimer); subsTimer = null;
       if (choice.kind === 'file') { subMode = 'file'; textIndex = choice.index; decide('subtitles: the file\'s track #' + choice.index); if (!fromMemory) macSubRememberFile(choice.index); }
       else { subMode = 'off'; textIndex = null; decide('subtitles: off'); if (!fromMemory) macSubRemember({ kind: 'off' }); }
@@ -959,7 +1066,7 @@ export function createEngine(params, deps) {
   /** Where the adapter has no sub-delay: an add-on subtitle's cues are moved by subDelay (the only subtitle that can be shifted there). */
   function applyCueShift() {
     if (hasSubDelay || subMode !== 'addon' || !subCues) return;
-    shifted = shiftCues(subCues, subDelay);
+    shifted = shiftCues(alignedCues || subCues, subDelay);
     subHint = 0;
     subShown = null;
     cancel(subsTimer);

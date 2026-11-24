@@ -25,6 +25,7 @@ import { SourceFinder, streamAddonsFor } from '../core/finder.js'
 import { createRanker, createSourceMemory } from '../core/ranking.js'
 import { createReleaseMemory } from '../core/release-memory.js'
 import { createDelayMemory } from '../core/delay-memory.js'
+import { createAlignMemory } from '../player/subtitle-sync.js'
 import { createSubtitleMemory } from '../core/subtitle-memory.js'
 import { deviceProfile } from '../core/device.js'
 import { obj, optInt, optString, getString } from '../core/util.js'
@@ -46,6 +47,7 @@ export function createSession({ store, http: rawHttp, webapis, log = nothing, tv
   const memory = createReleaseMemory(store, createSourceMemory(store))
   memory.subtitles = createSubtitleMemory(store)
   memory.delays = createDelayMemory(store) // the subtitle delay per release and subtitle
+  memory.aligns = createAlignMemory(store) // the English-reference alignment per release and subtitle
   const settings = createSettings({ store, activeProfileId: () => base.activeId(), tvLanguage })
   // Settings reads the active profile each time, so one object serves every profile ("re-bound" on a switch).
 

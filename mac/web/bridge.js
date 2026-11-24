@@ -2,7 +2,7 @@
 // JS to native: window.webkit.messageHandlers.alder.postMessage({id, cmd, args})
 // Native to JS: window.alderNative.onEvent({type, ...})
 // Args:   load {url, headers?, start?} · pause {paused} · seek {seconds} · observe {names} · setProp {name, value}
-//         getProp {name} · subAdd {text, lang?, title?} · fullscreen {on} · saveFile {name, text} · orientation {mode: landscape|any} (Android only) · quit {}
+//         getProp {name} · subAdd {text, lang?, title?} · fullscreen {on} · saveFile {name, text} · fileHash {url, size?} (reply value {hash}) · orientation {mode: landscape|any} (Android only) · quit {}
 //         log {line} · report {text}  (text for the shell's --report file; scrubbed of links like everything else)
 // Events: reply {id, ok, value|error} · prop {name, value} · fileLoaded · playbackRestart
 //         endFile {reason: eof|stop|quit|error|redirect, error?: mpv error code, message?}
@@ -15,7 +15,7 @@
   'use strict';
 
   var COMMANDS = ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report',
-    'observe', 'subAdd', 'fullscreen', 'saveFile', 'orientation'];
+    'observe', 'subAdd', 'fullscreen', 'saveFile', 'orientation', 'fileHash'];
   var EVENT_TYPES = ['reply', 'prop', 'fileLoaded', 'playbackRestart', 'endFile',
     'sleep', 'wake', 'audioDevice', 'willQuit'];
   var LINK_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]*|\bmagnet:\?[^\s"'<>]*/gi;
@@ -120,6 +120,11 @@
       fullscreen: function (on) { return send('fullscreen', { on: !!on }); },
       orientation: function (mode) { return send('orientation', { mode: mode }); }, // Android only: 'landscape' (the player) or 'any'
       saveFile: function (name, text) { return send('saveFile', { name: name, text: text }); },
+      fileHash: function (url, size) {
+        if (typeof url !== 'string' || !url) return Promise.reject(new Error('fileHash needs a link'));
+        if (known.indexOf(url) < 0) known.push(url);
+        return send('fileHash', { url: url, size: typeof size === 'number' && size > 0 ? size : 0 });
+      },
       pause: function (paused) { return send('pause', { paused: !!paused }); },
       seek: function (seconds) { return send('seek', { seconds: seconds }); },
       setProp: function (name, value) { return send('setProp', { name: name, value: value }); },

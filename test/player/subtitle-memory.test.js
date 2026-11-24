@@ -24,7 +24,8 @@ const TR_EN = [video, audio, sub(1, 'eng', 'English'), sub(2, 'tur', 'Turkish')]
 const EN_ONLY = [video, audio, sub(1, 'eng', 'English')];
 const NONE = [video, audio];
 
-const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n';
+// a real subtitle has at least 5 cues (the engine skips message files)
+const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n' + [2, 3, 4, 5, 6].map((n) => '\n' + n + '\n01:0' + n + ':00,000 --> 01:0' + n + ':02,000\nlater ' + n + '\n').join('');
 const addon = (clock, name, langs, delay = 0) => ({
   name, serves: () => true,
   subtitles: () => new Promise((resolve) => clock.setTimeout(() => resolve(langs.map((l, i) => new Subtitle('https://' + name.toLowerCase() + '.example/' + l + i + '.srt', l, name))), delay)),

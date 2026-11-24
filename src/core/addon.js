@@ -170,7 +170,10 @@ export class Addon {
     const out = []
     for (const s of objects(arr(answer, 'subtitles'))) {
       const url = text(s, 'url')
-      if (url) { const sb = new Subtitle(url, text(s, 'lang') || 'und', this.name); sb.id = text(s, 'id'); sb.label = text(s, 'label'); out.push(sb) }
+      if (url) { const sb = new Subtitle(url, text(s, 'lang') || 'und', this.name); sb.id = text(s, 'id'); sb.label = text(s, 'label')
+        const m = text(s, 'm'); sb.matchedBy = m === 'h' ? 'hash' : m === 'i' ? 'imdb' : null
+        const fm = Number(s.fpsMilli); sb.fps = isFinite(fm) && fm > 0 ? fm / 1000 : null
+        sb.releaseName = text(s, 'movieReleaseName') || text(s, 'subtitleFileName'); out.push(sb) }
     }
     return out
   }
@@ -259,6 +262,10 @@ export class Subtitle {
     this.url = url
     this.lang = lang
     this.addon = addon
+    // OpenSubtitles-style extras some add-ons send (m, fpsMilli, movieReleaseName / subtitleFileName); null when absent
+    this.matchedBy = null // 'hash' (m 'h': the file's moviehash matched), 'imdb' (m 'i'), else null
+    this.fps = null // the frame rate the subtitle was made for
+    this.releaseName = null
   }
 
   get language() { return languageName(this.lang).trim() || this.lang }

@@ -93,7 +93,7 @@ test('unknown commands never reach native', async () => {
   const { bridge, mock } = setup();
   await assert.rejects(bridge.send('rm', {}), /unknown command/);
   assert.equal(mock.posted.length, 0);
-  assert.deepEqual(COMMANDS, ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report', 'observe', 'subAdd', 'fullscreen', 'saveFile', 'orientation']);
+  assert.deepEqual(COMMANDS, ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report', 'observe', 'subAdd', 'fullscreen', 'saveFile', 'orientation', 'fileHash']);
 });
 
 test('no native handler: send rejects, no throw', async () => {

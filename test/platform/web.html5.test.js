@@ -48,7 +48,7 @@ test('same function names and exports as src/player/avplay.js (less what it cann
   const surface = (o) => Object.keys(o).sort();
   const tv = surface(avplay.createAvplay({ webapis: null }));
   const web = surface(createAvplay({ video: new FakeVideo() }));
-  assert.deepEqual(tv.filter((k) => !web.includes(k)), []);
+  assert.deepEqual(tv.filter((k) => !web.includes(k)), ['fileHash']); // the browser cannot read a file's bytes
   assert.ok(!web.includes('addSubtitle') && !web.includes('setSubDelay') && !web.includes('delayKeysHint'));
   for (const name of ['SCREEN', 'FIT_METHOD', 'FILL_ENABLED', 'fillOffered', 'errorCode', 'splitHeaders', 'attachVideoObject', 'createAvplay']) assert.ok(name in html5, name);
 });

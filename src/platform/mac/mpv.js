@@ -361,6 +361,17 @@ export function createAvplay({ bridge = null, log = null } = {}) {
       return true;
     },
 
+    /** The file's OpenSubtitles hash (Stremio's videoHash), read by the shell with two range requests (bridge fileHash); hex or null. */
+    fileHash(url, size) {
+      return bridgeOrThrow().fileHash(url, size).then((r) => (r && typeof r.hash === 'string' && r.hash ? r.hash : null));
+    },
+
+    /** mpv's sub-speed: the subtitle event timestamps are multiplied by [factor] (1 = untouched); used with setSubDelay to map a subtitle onto this file. */
+    setSubSpeed(factor) {
+      send('sub-speed', bridgeOrThrow().setProp('sub-speed', Number(factor)));
+      return true;
+    },
+
     /** The file's own subtitles: mpv draws them (sub-visibility). */
     subtitlesOn(on) {
       send('sub-visibility', bridgeOrThrow().setProp('sub-visibility', !!on));
@@ -414,6 +425,6 @@ export function createAvplay({ bridge = null, log = null } = {}) {
  * addSubtitle, setSubDelay or delayKeysHint, and the native `sub-text` property feeds the engine's file-subtitle handler (onProp, observe).
  */
 function withoutSubtitleDrawing(api) {
-  delete api.addSubtitle; delete api.setSubDelay; delete api.delayKeysHint;
+  delete api.addSubtitle; delete api.setSubDelay; delete api.setSubSpeed; delete api.delayKeysHint;
   return api;
 }

@@ -18,7 +18,8 @@ const audio = { type: 'audio', id: 1, lang: 'eng', title: 'English', codec: 'aac
 const sub = (id, lang, title) => ({ type: 'sub', id, lang, title, codec: 'subrip', selected: false });
 const TRACKS = [video, audio, sub(1, 'eng', 'English'), sub(2, 'fra', 'Francais')];
 const TV_TRACKS = JSON.stringify([{ type: 'AUDIO', codec: 'AAC', lang: 'eng', channels: 2 }, { type: 'TEXT', codec: 'SRT', lang: 'eng' }, { type: 'TEXT', codec: 'SRT', lang: 'fra' }]);
-const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n';
+// a real subtitle has at least 5 cues (the engine skips message files)
+const SRT = '1\n00:00:01,000 --> 00:00:02,000\nhi\n' + [2, 3, 4, 5, 6].map((n) => '\n' + n + '\n01:0' + n + ':00,000 --> 01:0' + n + ':02,000\nlater ' + n + '\n').join('');
 const REL_A = 'Movie 1080p WEB-DL x264-A';
 const REL_B = 'Movie 2160p BluRay x265-B';
 

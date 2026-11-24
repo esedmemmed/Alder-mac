@@ -19,6 +19,7 @@
  */
 
 import { fillRoi } from './picture.js';
+import { hashFromRanges } from '../core/file-hash.js';
 
 /** Screen size AVPlay's coordinates are always expressed in, whatever the page's CSS size (Samsung: "always 1920x1080"). */
 export const SCREEN = Object.freeze({ width: 1920, height: 1080 });
@@ -49,6 +50,33 @@ export function errorCode(e) {
   if (named) return named[0];
   if (e.name && e.name !== 'Error') return e.name + (message ? ': ' + message : '');
   return message || String(e);
+}
+
+/**
+ * One byte range of [url] over XMLHttpRequest: the app's widget access policy (config.xml) lets the page read any host, and XHR follows
+ * redirects. Resolves { bytes, total } (total from Content-Range). A server that ignores Range (status 200) is aborted at its headers, so
+ * the whole file is never downloaded.
+ */
+export function xhrRange(url, start, endInclusive, { xhr = typeof XMLHttpRequest !== 'undefined' ? XMLHttpRequest : null, timeout = 8000 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!xhr) { reject(new Error('no XMLHttpRequest')); return; }
+    const x = new xhr();
+    x.open('GET', url, true);
+    x.responseType = 'arraybuffer';
+    x.timeout = timeout;
+    x.setRequestHeader('Range', 'bytes=' + start + '-' + endInclusive);
+    x.onreadystatechange = () => {
+      if (x.readyState === 2 && x.status !== 206) { const status = x.status; x.abort(); reject(new Error(status === 200 ? 'server ignores Range' : 'HTTP ' + status)); }
+    };
+    x.onload = () => {
+      if (x.status !== 206) { reject(new Error('HTTP ' + x.status)); return; }
+      const m = /\/(\d+)\s*$/.exec(x.getResponseHeader('Content-Range') || '');
+      resolve({ bytes: x.response, total: m ? Number(m[1]) : null });
+    };
+    x.onerror = () => reject(new Error('network error'));
+    x.ontimeout = () => reject(new Error('timeout'));
+    x.send();
+  });
 }
 
 const lower = (s) => String(s).toLowerCase();
@@ -207,6 +235,9 @@ export function createAvplay({ webapis = typeof window !== 'undefined' ? window.
         try { av().seekTo(Math.max(0, Math.round(ms)), () => { if (mine === session) resolve(); }, (e) => { if (mine === session) reject(e); }); } catch (e) { reject(e); }
       });
     },
+
+    /** The file's OpenSubtitles hash (Stremio's videoHash) read with two range requests; [size] null when unknown. Resolves hex or null (a small file). */
+    fileHash(url, size) { return hashFromRanges(size, (a, b) => xhrRange(url, a, b)); },
 
     /** Current time in ms, or null while the state does not allow asking. */
     time() { return safe('getCurrentTime', () => { const t = av().getCurrentTime(); return Number.isFinite(t) ? t : null; }, null); },

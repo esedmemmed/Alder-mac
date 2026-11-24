@@ -70,3 +70,17 @@ export function subtitlePlan(choice, { textTracks, addonSubs, addonsDone, lang, 
   if (pick) return { kind: 'addon', sub: pick, index: addonSubs.indexOf(pick), matched, stats };
   return { kind: addonsDone ? 'none' : 'wait' };
 }
+
+/** An add-on's message posing as a subtitle ("download limit used up"): its label or id says so. Hidden from every automatic start, listed last in the menu. */
+const NOTICE = /indirme(ler)?\s+(hakk[ıi]n\s+doldu|bitti)|download(s)?\s+(limit|quota)|quota\s+(reached|exceeded)|limit\s+reached/i;
+export function isNoticeSub(sub) { return !!sub && NOTICE.test(String(sub.label || '') + ' ' + String(sub.id || '')); }
+
+/** The subtitles with the notice ones moved last, the order of the others kept. */
+export function noticesLast(subs) { return subs.filter((s) => !isNoticeSub(s)).concat(subs.filter(isNoticeSub)); }
+
+/** Parsed cues that cannot be a real subtitle: fewer than 5 cues, or spanning under 120 s while the video runs over 10 minutes (durationMs 0: unknown). */
+export function notASubtitle(cues, durationMs) {
+  if (!cues || cues.length < 5) return true;
+  const span = cues[cues.length - 1].end - cues[0].start;
+  return span < 120000 && durationMs > 600000;
+}

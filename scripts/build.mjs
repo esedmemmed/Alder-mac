@@ -40,13 +40,19 @@ function walk(dir, out = []) {
 
 function sizeKb(bytes) { return (bytes / 1024).toFixed(1) + ' KB'; }
 
+/** The subtitle alignment's Web Worker as a string (src/player/subtitle-sync-worker.js bundled with the aligner): the page starts it from a Blob URL (__ALDER_ALIGN_WORKER__). */
+async function alignWorkerSource(target, supported) {
+  const r = await esbuild({ bundle: true, write: false, target, logLevel: 'silent', absWorkingDir: ROOT, entryPoints: ['src/player/subtitle-sync-worker.js'], format: 'iife', minify: true, legalComments: 'none', supported });
+  return r.outputFiles[0].text;
+}
+
 export async function build({ dev = false, log = console.log } = {}) {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
   const outDir = join(DIST, dev ? 'dev' : 'app');
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
-  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(pkg.version), __ALDER_ANDROID__: 'false', __ALDER_WEB__: 'false' };
+  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(pkg.version), __ALDER_ANDROID__: 'false', __ALDER_WEB__: 'false', __ALDER_ALIGN_WORKER__: JSON.stringify(await alignWorkerSource(TARGET)) };
   const common = { bundle: true, target: TARGET, logLevel: 'silent', absWorkingDir: ROOT, legalComments: dev ? 'none' : 'external' };
 
   const js = await esbuild({
@@ -262,7 +268,7 @@ export async function buildMac({ log = console.log, dev = false, outDir: outDirA
   mkdirSync(outDir, { recursive: true });
 
   const macVersion = readFileSync(join(ROOT, 'mac/VERSION'), 'utf8').trim(); // the Mac app's own version (the TV keeps package.json's)
-  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(macVersion), __ALDER_ANDROID__: android ? 'true' : 'false', __ALDER_WEB__: web ? 'true' : 'false' };
+  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(macVersion), __ALDER_ANDROID__: android ? 'true' : 'false', __ALDER_WEB__: web ? 'true' : 'false', __ALDER_ALIGN_WORKER__: JSON.stringify(await alignWorkerSource(MAC_TARGET, { destructuring: true, 'class-field': false })) };
   const common = { bundle: true, target: MAC_TARGET, logLevel: 'silent', absWorkingDir: ROOT, legalComments: 'external', minify: !dev,
     // esbuild cannot lower destructuring for safari14 (a WebKit 14 bug in some destructuring forms), so it fails the build
     // instead; the shell's WebKit runs it as written (T3.c1 note; revisit if the Air shows a Safari 14 fault).
