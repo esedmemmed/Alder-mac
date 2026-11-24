@@ -60,7 +60,7 @@ export class SourceFinder {
     if (this.addons.length === 0) { this.onStatus('no-addons'); return }
     this.addons.forEach((addon, i) => {
       addon.streams(this.type, this.videoId).then(
-        streams => this.answer(i, streams),
+        streams => { if (Array.isArray(streams)) streams.forEach(s => { if (s && typeof s === 'object') s.addonName = addon.name }); this.answer(i, streams) },
         () => this.answer(i, []), // an add-on that fails just has no sources
       )
     })

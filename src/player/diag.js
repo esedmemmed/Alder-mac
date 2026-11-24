@@ -23,12 +23,13 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
   let decisions = [];
   let errors = [];
   let subtitleAddons = [];
+  let subtitleExtra = null;
 
   return {
     /** A source was opened: { url, label, at, total, height }. Clears the previous stream's tracks and decisions. */
     setStream(info) {
       const { host, file } = urlParts(info.url);
-      stream = { host, file, label: info.label || '', at: info.at, total: info.total, openedAt: now(), headers: info.headers || [] };
+      stream = { host, file, label: info.label || '', at: info.at, total: info.total, openedAt: now(), headers: info.headers || [], addon: info.addon || null, service: info.service || null };
       rawTracks = null;
       picture = null;
     },
@@ -48,11 +49,18 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
     /** What an add-on answered when asked for subtitles: a count, or the failure (an Error or text, URLs cut out). null starts a fresh list. */
     subtitleAddon(name, result) {
       if (name === null) { subtitleAddons = []; return; }
-      const text = typeof result === 'number' ? result + ' found'
-        : 'failed: ' + String(result && result.message ? result.message : result).replace(/\S*:\/\/\S*/g, '').trim().slice(0, 60);
+      const e = result;
+      const reason = e && e.kind === 'timeout' ? 'timed out'
+        : e && e.kind === 'network' ? 'no answer (network or blocked)'
+        : e && e.kind === 'http' ? 'HTTP ' + e.status
+        : e && e.name === 'SyntaxError' ? 'bad answer (not JSON)'
+        : String(e && e.message ? e.message : e).replace(/\S*:\/\/\S*/g, '').trim().slice(0, 60);
+      const text = typeof result === 'number' ? result + ' found' : 'failed: ' + reason;
       subtitleAddons.push({ name: String(name), text });
     },
-    snapshot() { return { stream, rawTracks, picture, decisions: decisions.slice(), errors: errors.slice(), subtitleAddons: subtitleAddons.slice() }; },
+    /** The names of the file details the add-ons were asked with ([] for none). */
+    subtitleExtraKeys(keys) { subtitleExtra = Array.isArray(keys) ? keys.slice() : null; },
+    snapshot() { return { stream, rawTracks, picture, decisions: decisions.slice(), errors: errors.slice(), subtitleAddons: subtitleAddons.slice(), subtitleExtra: subtitleExtra === null ? null : subtitleExtra.slice() }; },
     clear() { stream = null; rawTracks = null; picture = null; decisions = []; errors = []; subtitleAddons = []; },
   };
 }

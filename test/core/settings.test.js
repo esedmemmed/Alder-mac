@@ -151,7 +151,7 @@ test('nextSettingIndex', () => {
 
 test('choice lists: Alder\'s wording, matchFrameRate and passthrough dropped, AV1 added', () => {
   const keys = [].concat(STREAMING, PICTURE_AND_SOUND, SUBTITLES, ADVANCED).map(c => c.key)
-  assert.deepEqual(keys, ['alwaysList', 'maxHeight', 'maxSizeGb', 'release', 'hdrPref', 'audioLang', 'dub', 'pictureSize', 'subtitles', 'subSize', 'subBackground', 'av1'])
+  assert.deepEqual(keys, ['alwaysList', 'maxHeight', 'maxSizeGb', 'release', 'hdrPref', 'audioLang', 'dub', 'pictureSize', 'subtitles', 'subLang', 'subSize', 'subBackground', 'av1'])
   assert.ok(!keys.includes('matchFrameRate'))
   assert.ok(!keys.includes('passthrough'))
   const c = STREAMING.find(x => x.key === 'maxHeight')
@@ -192,4 +192,34 @@ test('picture size: Fit by default, per profile, a stored junk value reads as Fi
   assert.equal(settings.pictureSize(), 'fit')
   assert.equal(settings.shift(c, 1)[0], 'fill')
   assert.equal(settings.shift(c, 1)[0], 'fit')
+})
+
+test('subLang: listed per profile with no default, subtitleLanguage() falls back to the TV language, follows the profile, forget clears it', () => {
+  const c = SUBTITLES.find(x => x.key === 'subLang')
+  assert.equal(c.perProfile, true)
+  assert.equal(c.label, 'Subtitle language')
+  assert.equal(c.values[0][0], '')
+  assert.equal(c.values[0][1], PICTURE_AND_SOUND.find(x => x.key === 'audioLang').values[0][1])
+  assert.deepEqual(c.values.slice(1).map(v => v[0]), ['tr', 'en', 'az', 'ru', 'de', 'fr', 'es', 'ar'])
+  const a = make({}, '1', () => 'de')
+  assert.equal(a.settings.stored(c), '')
+  assert.equal(a.settings.subtitleLanguage(), 'de')
+  a.settings.set(c, 'tr')
+  assert.equal(a.store.get('settings/subLang@1'), 'tr')
+  assert.equal(a.settings.subtitleLanguage(), 'tr')
+  a.setProfile('2')
+  assert.equal(a.settings.subtitleLanguage(), 'de')
+  a.setProfile('1')
+  a.settings.forget('1')
+  assert.equal(a.store.get('settings/subLang@1'), undefined)
+  assert.equal(a.settings.subtitleLanguage(), 'de')
+})
+
+test('subtitleLanguagePicked: false by default, true once chosen, per profile', () => {
+  const a = make({}, '1', () => 'de')
+  assert.equal(a.settings.subtitleLanguagePicked(), false)
+  a.settings.set(a.settings.choice('subLang'), 'tr')
+  assert.equal(a.settings.subtitleLanguagePicked(), true)
+  a.setProfile('2')
+  assert.equal(a.settings.subtitleLanguagePicked(), false)
 })

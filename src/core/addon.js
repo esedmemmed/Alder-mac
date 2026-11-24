@@ -154,8 +154,19 @@ export class Addon {
   }
 
   /** Subtitle files for one video (OpenSubtitles and co. through Stremio's `subtitles` resource). */
-  async subtitles(type, videoId) {
-    const answer = await this.get(false, 'subtitles', type, videoId)
+  async subtitles(type, videoId, extra = '') {
+    let answer
+    if (extra) {
+      // Stremio's extra args (videoHash, videoSize, filename), already encoded; an add-on that refuses them is asked the plain way
+      const url = this.base + '/subtitles/' + uriEncode(type, ':=') + '/' + uriEncode(videoId, ':=') + '/' + extra + '.json'
+      try {
+        answer = JSON.parse(await this.deps.http.get(url, { keep: false }))
+      } catch (first) {
+        try { answer = await this.get(false, 'subtitles', type, videoId) } catch (second) { throw first }
+      }
+    } else {
+      answer = await this.get(false, 'subtitles', type, videoId)
+    }
     const out = []
     for (const s of objects(arr(answer, 'subtitles'))) {
       const url = text(s, 'url')
@@ -277,7 +288,7 @@ export class Subtitle {
 }
 
 export class Stream {
-  constructor(title, description, url, headers, size, filename, bingeGroup) {
+  constructor(title, description, url, headers, size, filename, bingeGroup, videoHash) {
     this.title = title
     this.description = description
     this.url = url
@@ -285,6 +296,7 @@ export class Stream {
     this.size = size
     this.filename = filename === undefined ? null : filename
     this.bingeGroup = bingeGroup === undefined ? null : bingeGroup
+    this.videoHash = videoHash === undefined ? null : videoHash
 
     // What the release is, read from its file name and the add-ons' labels (AIOStreams writes "2160p", "DV", "HEVC"
     // into them; the file name says it for every add-on). ponytail (Alder): name matching, not the file's real tracks.
@@ -385,7 +397,7 @@ export class Stream {
   get mayNotPlay() { return this.unsupportedHeaders.length > 0 }
 
   toJson() {
-    return { name: this.title, description: this.description, url: this.url, headers: this.headers, size: this.size, filename: this.filename, binge: this.bingeGroup }
+    return { name: this.title, description: this.description, url: this.url, headers: this.headers, size: this.size, filename: this.filename, binge: this.bingeGroup, videoHash: this.videoHash }
   }
 
   static from(json) {
@@ -403,6 +415,7 @@ export class Stream {
       optInt(hints, 'videoSize'),
       text(hints, 'filename'),
       text(hints, 'bingeGroup'),
+      text(hints, 'videoHash'),
     )
   }
 
@@ -412,8 +425,30 @@ export class Stream {
     const h = obj(json, 'headers') || {}
     for (const k of Object.keys(h)) headers[k] = String(h[k])
     return new Stream(optString(json, 'name'), optString(json, 'description'), getString(json, 'url'), headers,
-      optInt(json, 'size'), text(json, 'filename'), text(json, 'binge'))
+      optInt(json, 'size'), text(json, 'filename'), text(json, 'binge'), text(json, 'videoHash'))
   }
+}
+
+/** The debrid service named in a stream's title or description ("[TB+] 4K", "RD+ 1080p"), or null. First match wins. */
+export function debridService(stream) {
+  if (!stream) return null
+  const t = (stream.title || '') + ' ' + (stream.description || '')
+  const rows = [
+    [/torbox|\bTB\b/i, 'TorBox'], [/real-?debrid|\bRD\b/i, 'Real-Debrid'], [/all-?debrid|\bAD\b/i, 'AllDebrid'],
+    [/premiumize|\bPM\b/i, 'Premiumize'], [/offcloud|\bOC\b/i, 'Offcloud'], [/debrid-?link/i, 'Debrid-Link'], [/easy-?debrid/i, 'EasyDebrid'],
+  ]
+  for (const [re, name] of rows) if (re.test(t)) return name
+  return null
+}
+
+/** The playing file's details as Stremio's subtitle extra args (videoHash, videoSize, filename), encoded; '' without a stream. */
+export function subtitleExtra(stream) {
+  if (!stream) return ''
+  const parts = []
+  if (typeof stream.videoHash === 'string' && stream.videoHash) parts.push('videoHash=' + encodeURIComponent(stream.videoHash))
+  if (Number.isInteger(stream.size) && stream.size > 0) parts.push('videoSize=' + stream.size)
+  if (typeof stream.filename === 'string' && stream.filename) parts.push('filename=' + encodeURIComponent(stream.filename))
+  return parts.join('&')
 }
 
 /** "147 min" reads "2h 27m" as on the mock; under an hour, and anything not in minutes, stays as the add-on wrote it. */

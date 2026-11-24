@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Addon, Meta, Subtitle, Stream } from '../../src/core/addon.js'
+import { Addon, Meta, Subtitle, Stream, subtitleExtra, debridService } from '../../src/core/addon.js'
 import { fakeHttp, fixtureAddons, fixtureJson, fixturePath } from './helpers.js'
 
 const byName = (list, name) => list.find(a => a.name === name)
@@ -272,6 +272,52 @@ test('subtitles: url + lang, "und" when missing, entries without a url dropped',
   assert.deepEqual(got.map(s => [s.url, s.lang]), [['https://s/a.srt', 'und']])
 })
 
+test('subtitleExtra: hash, size, file name in that order; missing, empty and non-positive parts left out', () => {
+  const st = (size, filename, videoHash) => new Stream('t', 'd', 'u', {}, size, filename, null, videoHash)
+  assert.equal(subtitleExtra(st(5, 'a b.mkv', 'abc')), 'videoHash=abc&videoSize=5&filename=a%20b.mkv')
+  assert.equal(subtitleExtra(st(0, null, null)), '')
+  assert.equal(subtitleExtra(st(-3, '', '')), '')
+  assert.equal(subtitleExtra(st(7, null, null)), 'videoSize=7')
+  assert.equal(subtitleExtra(st(1.5, 'x.mkv', null)), 'filename=x.mkv')
+  assert.equal(subtitleExtra(st(0, 'a&b c.mkv', null)), 'filename=a%26b%20c.mkv')
+  assert.equal(subtitleExtra(null), '')
+  assert.equal(subtitleExtra(undefined), '')
+})
+
+test('subtitles with extra: exact URL, colons kept; no extra is today\'s URL', async () => {
+  const base = 'https://opensubtitles-v3.strem.io'
+  const body = JSON.stringify({ subtitles: [{ url: 'https://s/a.srt', lang: 'eng' }] })
+  const extra = 'videoHash=abc&videoSize=5&filename=a%20b.mkv'
+  const m = setup({ overrides: { [base + '/subtitles/movie/tt1/' + extra + '.json']: body } })
+  assert.equal((await m.subs.subtitles('movie', 'tt1', extra)).length, 1)
+  assert.deepEqual(m.http.log.map(l => l.url), [base + '/subtitles/movie/tt1/' + extra + '.json'])
+  assert.equal(m.http.log[0].opts.keep, false)
+  const s = setup({ overrides: { [base + '/subtitles/series/tt1:1:2/' + extra + '.json']: body } })
+  assert.equal((await s.subs.subtitles('series', 'tt1:1:2', extra)).length, 1)
+  assert.equal(s.http.log[0].url, base + '/subtitles/series/tt1:1:2/' + extra + '.json')
+  const p = setup({ overrides: { [base + '/subtitles/movie/tt1.json']: body } })
+  await p.subs.subtitles('movie', 'tt1', '')
+  assert.deepEqual(p.http.log.map(l => l.url), [base + '/subtitles/movie/tt1.json'])
+})
+
+test('subtitles with extra: a failing request is retried once the plain way; both failing gives the first error; an empty list is no failure', async () => {
+  const base = 'https://opensubtitles-v3.strem.io'
+  const body = JSON.stringify({ subtitles: [{ url: 'https://s/a.srt', lang: 'eng' }] })
+  const withExtra = base + '/subtitles/movie/tt1/filename=a.mkv.json'
+  const plain = base + '/subtitles/movie/tt1.json'
+  const a = setup({ overrides: { [withExtra]: new Error('first'), [plain]: body } })
+  assert.equal((await a.subs.subtitles('movie', 'tt1', 'filename=a.mkv')).length, 1)
+  assert.deepEqual(a.http.log.map(l => l.url), [withExtra, plain])
+  const bad = setup({ overrides: { [withExtra]: 'not json', [plain]: body } })
+  assert.equal((await bad.subs.subtitles('movie', 'tt1', 'filename=a.mkv')).length, 1)
+  const b = setup({ overrides: { [withExtra]: new Error('first'), [plain]: new Error('second') } })
+  await assert.rejects(b.subs.subtitles('movie', 'tt1', 'filename=a.mkv'), /first/)
+  assert.equal(b.http.log.length, 2)
+  const c = setup({ overrides: { [withExtra]: JSON.stringify({ subtitles: [] }), [plain]: body } })
+  assert.deepEqual(await c.subs.subtitles('movie', 'tt1', 'filename=a.mkv'), [])
+  assert.equal(c.http.log.length, 1)
+})
+
 test('Subtitle: language name, mime type, and "in the TV\'s language"', () => {
   const sub = (lang, url = 'https://s/a.srt') => new Subtitle(url, lang, 'OS')
   assert.equal(sub('eng').language, 'English')
@@ -304,4 +350,15 @@ test('fixture layout: every URL the app builds for the demo account resolves to 
   ]) assert.ok(fixturePath(url), url)
   assert.equal(fixturePath('https://v3-cinemeta.strem.io/catalog/movie/nope.json'), null)
   assert.ok(cinemeta)
+})
+
+test('debridService: the service a release names, first match in the fixed order, null for none', () => {
+  const st = (title, description = '') => new Stream(title, description, 'u', {}, 0)
+  assert.equal(debridService(st('[TB+] 4K')), 'TorBox')
+  assert.equal(debridService(st('x', 'TorBox cached')), 'TorBox')
+  assert.equal(debridService(st('RD+ 1080p')), 'Real-Debrid')
+  assert.equal(debridService(st('WEB-DL 1080p')), null)
+  assert.equal(debridService(st('Premiumize')), 'Premiumize')
+  assert.equal(debridService(null), null)
+  assert.equal(debridService(st('[RD+] TB cached')), 'TorBox') // TorBox is checked first
 })

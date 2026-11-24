@@ -198,3 +198,15 @@ test('streamAddonsFor: a lender that cannot be read is skipped; saved lists are 
   const list = await streamAddonsFor(stremio, 'ME', [{ authKey: 'GONE' }, { authKey: 'THEM' }], 'movie', 'tt15239678')
   assert.deepEqual(list.map(a => a.name), ['Torrentio', 'AIOStreams (example)'])
 })
+
+test('each stream carries the name of the add-on it came from (not part of toJson)', async () => {
+  const { addons, finder, events } = setup({ count: 2, pick: true })
+  finder.start()
+  const a = web('A'), b = web('B')
+  addons[0].give([a])
+  addons[1].give([b])
+  await tick()
+  assert.equal(a.addonName, 'addon0')
+  assert.equal(b.addonName, 'addon1')
+  assert.ok(!('addonName' in a.toJson()))
+})

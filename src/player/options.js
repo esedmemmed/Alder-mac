@@ -69,7 +69,7 @@ export function createOptions({ host, engine }) {
       if (r.kind === 'off') engine.selectSubtitle({ kind: 'off' });
       else if (r.kind === 'file') engine.selectSubtitle({ kind: 'file', index: r.index });
       else engine.selectSubtitle({ kind: 'addon', sub: r.sub });
-    }, t.addonSubs.length && t.deviceLanguage ? ['Device language: ' + t.deviceLanguage] : []);
+    }, t.addonSubs.length && t.deviceLanguage ? ['Subtitle language: ' + t.deviceLanguage] : []);
 
     // Picture: Fit or Fill, with what the file says about its own shape (so black bars can be told from a small picture)
     const pic = engine.pictureInfo();

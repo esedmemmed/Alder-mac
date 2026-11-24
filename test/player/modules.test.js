@@ -260,6 +260,27 @@ test('diag: a new stream clears the old tracks; the lists are bounded', () => {
   assert.equal(s.errors.length, 1);
 });
 
+test('diag: stream add-on and service, subtitle failure reasons, the extra keys', () => {
+  const d = createDiag();
+  d.setStream({ url: 'https://h/f.mkv', addon: 'Torrentio', service: 'TorBox' });
+  assert.equal(d.snapshot().stream.addon, 'Torrentio');
+  assert.equal(d.snapshot().stream.service, 'TorBox');
+  d.setStream({ url: 'https://h/g.mkv' });
+  assert.equal(d.snapshot().stream.addon, null);
+  assert.equal(d.snapshot().subtitleExtra, null);
+  const e = (props) => Object.assign(new Error('boom https://x.example/a?t=1'), props);
+  d.subtitleAddon('A', e({ kind: 'timeout' }));
+  d.subtitleAddon('B', e({ kind: 'network' }));
+  d.subtitleAddon('C', e({ kind: 'http', status: 403 }));
+  d.subtitleAddon('D', new SyntaxError('Unexpected token'));
+  d.subtitleAddon('E', e({}));
+  assert.deepEqual(d.snapshot().subtitleAddons.map((a) => a.text), ['failed: timed out', 'failed: no answer (network or blocked)', 'failed: HTTP 403', 'failed: bad answer (not JSON)', 'failed: boom']);
+  d.subtitleExtraKeys(['videoHash', 'filename']);
+  assert.deepEqual(d.snapshot().subtitleExtra, ['videoHash', 'filename']);
+  d.subtitleExtraKeys([]);
+  assert.deepEqual(d.snapshot().subtitleExtra, []);
+});
+
 test('MIME-like fourCCs from AVPlay classify (audio/mpeg, audio/x-ac3, audio/mp4a-latm)', () => {
   const t = (fourCC) => parseAudioTracks([{ index: 1, type: 'AUDIO', extra_info: JSON.stringify({ language: 'ENG', channels: '2', fourCC }) }])[0];
   assert.equal(t('audio/mpeg').codec, 'MP3');

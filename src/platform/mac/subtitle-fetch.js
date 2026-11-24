@@ -33,7 +33,7 @@ function bridgeLog(line) {
  * set(list): the chosen rows so far (engine's addonSubs); changed(): the options menu rebuilds; choose(entries, language): core chooseAddonSubtitles.
  */
 export async function macLoadAddonSubtitles({ stremio, authKey, type, videoId, tvLanguage, choose, set, changed, say = () => {}, warn = () => {}, diag = null,
-  isShut = () => false, now = Date.now, report = bridgeLog, match = null }) {
+  isShut = () => false, now = Date.now, report = bridgeLog, match = null, extra = '' }) {
   const asked = new Map(); // add-on identity -> slot
   const entries = [];      // { addon, subs, done } in the order the add-ons were first seen (stable rows)
   const runs = [];
@@ -47,10 +47,10 @@ export async function macLoadAddonSubtitles({ stremio, authKey, type, videoId, t
   };
 
   function fetchList(a) {
-    const key = (a.base || a.name) + '|' + type + '|' + videoId;
+    const key = (a.base || a.name) + '|' + type + '|' + videoId + '|' + extra;
     const hit = cache.get(key);
     if (hit && now() - hit.at < CACHE_MS) return { promise: hit.promise, cached: true };
-    const promise = Promise.resolve().then(() => a.subtitles(type, videoId));
+    const promise = Promise.resolve().then(() => a.subtitles(type, videoId, extra));
     const kept = { at: now(), promise };
     if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
     cache.set(key, kept);

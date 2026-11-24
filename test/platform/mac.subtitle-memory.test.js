@@ -50,12 +50,13 @@ const addon = (clock, name, langs, delay = 0) => ({
 });
 
 /** One playback of an episode on the shared store; returns the engine's harness plus what the memory said. */
-async function play({ store, videoId = 'tt9:1:1', tracks = TR_EN, addons = [], menu = null, ms = 40000 }) {
+async function play({ store, videoId = 'tt9:1:1', tracks = TR_EN, addons = [], menu = null, ms = 40000, subLang = '' }) {
   const reports = [];
   const mem = createReleaseMemory(store, createSourceMemory(store), { report: () => {} });
   mem.subtitles = createSubtitleMemory(store, { report: l => { if (!/^match:/.test(l)) reports.push(l); } }); // the T3 match: line is tested in mac.subtitle-match.test.js
   const src = stream('Movie 1080p WEB-DL x264-A', { tracks: JSON.stringify(tracks) });
   const t = makeEngine({ adapter: 'mpv', createEngine, memory: mem, sources: [src], params: { type: 'series', metaId: 'tt9', videoId }, http: { get: async () => SRT } });
+  if (subLang) t.store.set('settings/subLang@p1', subLang);
   t.stremio.addons = async () => addons.map(a => addon(t.clock, a.name, a.langs, a.delay || 0));
   await t.start();
   await t.advance(ms);
@@ -180,6 +181,27 @@ test('the start rule and a remembered start never write; nothing remembered says
   await play({ store, videoId: 'tt9:1:2', tracks: EN_ONLY, addons: [{ name: 'A', langs: ['tur'] }] });
   assert.equal(store.sets.filter(k => /^subs\//.test(k)).length, 1, 'applying the memory is not a pick');
   assert.ok(!/https?:|example|\.srt/i.test(JSON.stringify([...store.m])), 'no link in the store');
+});
+
+test('subtitle language set, nothing remembered: the Turkish file track, else the first Turkish add-on subtitle', async () => {
+  const f = await play({ store: plainStore(), subLang: 'tr' });
+  assert.equal(f.info().subMode, 'file');
+  assert.equal(f.info().textIndex, 1);
+  const a = await play({ store: plainStore(), subLang: 'tr', tracks: EN_ONLY, addons: [{ name: 'A', langs: ['eng', 'tur'] }] });
+  assert.equal(a.info().subMode, 'addon');
+  assert.equal(a.info().chosenSub.lang, 'tur');
+});
+
+test('subtitle language set: a remembered Off stays off, a remembered English wins over the setting', async () => {
+  const off = plainStore();
+  off.m.set('subs/tt9', { kind: 'off' });
+  const o = await play({ store: off, subLang: 'tr', tracks: EN_ONLY, addons: [{ name: 'A', langs: ['tur'] }] });
+  assert.equal(o.info().subMode, 'off');
+  const en = plainStore();
+  en.m.set('subs/tt9', { kind: 'lang', language: 'en' });
+  const e = await play({ store: en, subLang: 'tr' });
+  assert.equal(e.info().subMode, 'file');
+  assert.equal(e.info().textIndex, 0);
 });
 
 test('Mac build: the session builds the subtitle memory; the engine anchors are in engine.js and session.js', () => {

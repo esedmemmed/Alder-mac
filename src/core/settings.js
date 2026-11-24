@@ -41,8 +41,10 @@ export const PICTURE_AND_SOUND = [
 ]
 
 export const SUBTITLES = [
-  choice('subtitles', 'Subtitles by default', "Subtitles in the TV's language start with the video when available.",
+  choice('subtitles', 'Subtitles by default', "Subtitles in your subtitle language start with the video when available.",
     [[true, 'On'], [false, 'Off']]),
+  choice('subLang', 'Subtitle language', 'Subtitles in this language come first and start by themselves.',
+    [['', 'TV language'], ['tr', 'Turkish'], ['en', 'English'], ['az', 'Azerbaijani'], ['ru', 'Russian'], ['de', 'German'], ['fr', 'French'], ['es', 'Spanish'], ['ar', 'Arabic']], true),
   choice('subSize', 'Subtitle size', 'How big subtitles are on screen.',
     [[100, 'Medium'], [130, 'Large'], [160, 'Extra large'], [80, 'Small']]),
   choice('subBackground', 'Subtitle background', 'A dark box behind subtitles keeps them readable in bright scenes.',
@@ -102,13 +104,16 @@ export function createSettings({ store, activeProfileId = () => null, tvLanguage
       const own = typed(Settings.profileKey('audioLang'), typed(KEYS.setting('audioLang'), ''))
       return own || tvLanguage()
     },
+    /** Two-letter code of the subtitle language: the TV's language unless one is picked. */
+    subtitleLanguage: () => typed(Settings.profileKey('subLang'), '') || tvLanguage(),
+    subtitleLanguagePicked: () => typed(Settings.profileKey('subLang'), '') !== '',
     subtitleSize: () => typed(KEYS.setting('subSize'), 100), // percent of the default size
     subtitleBackground: () => typed(KEYS.setting('subBackground'), true),
     av1: () => typed(KEYS.setting('av1'), false),
 
     /** A removed profile's taste goes with it, so a new profile in its place starts with none. */
     forget(profileId) {
-      ['release', 'dub', 'audioLang', 'pictureSize'].forEach(n => store.remove(KEYS.profileSetting(n, profileId)))
+      ['release', 'dub', 'audioLang', 'subLang', 'pictureSize'].forEach(n => store.remove(KEYS.profileSetting(n, profileId)))
     },
 
     // ---- for the Settings screen ----

@@ -52,7 +52,7 @@ export function buildReport({ log, diag, device = null, version = '', env = '', 
       'host  ' + (s.host || '(none)'),
       'file  ' + (s.file || '(none)'),
       'request headers sent: ' + (s.headers.length ? s.headers.join(', ') : 'none'),
-    ]);
+    ].concat(s.addon ? ['Add-on: ' + s.addon] : [], s.service ? ['Service: ' + s.service] : []));
   } else section('STREAM', ['Nothing has been played yet']);
 
   // What shape the file is and what the player did about it: tells a film's own black bars from a picture that is too small
@@ -64,7 +64,7 @@ export function buildReport({ log, diag, device = null, version = '', env = '', 
   else section('AVPLAY TRACKS (raw)', raw.length ? raw.map((t) => '#' + t.index + ' ' + t.type + '  ' + (typeof t.extra_info === 'string' ? t.extra_info : JSON.stringify(t.extra_info))) : ['The list is empty']);
 
   section('AUDIO AND SOURCE DECISIONS', diag.decisions.length ? diag.decisions.map((d) => clockOf(d.t) + '  ' + d.text) : ['None yet']);
-  if (diag.subtitleAddons && diag.subtitleAddons.length) section('SUBTITLE ADD-ONS', diag.subtitleAddons.map((a) => ({ text: a.name + ': ' + a.text, level: /failed/.test(a.text) ? 'error' : undefined })));
+  if (diag.subtitleAddons && diag.subtitleAddons.length) section('SUBTITLE ADD-ONS', (Array.isArray(diag.subtitleExtra) ? ['File details sent: ' + (diag.subtitleExtra.length ? diag.subtitleExtra.join(', ') : 'none')] : []).concat(diag.subtitleAddons.map((a) => ({ text: a.name + ': ' + a.text, level: /failed/.test(a.text) ? 'error' : undefined }))));
   if (diag.errors.length) section('PLAYER ERRORS', diag.errors.map((e) => ({ text: clockOf(e.t) + '  ' + e.text, level: 'error' })));
 
   const entries = log.lines();

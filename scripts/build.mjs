@@ -180,6 +180,7 @@ export const SUBTITLE_SESSION_PATCHES = [
 ];
 export const SUBTITLE_MEMORY_PATCHES = [
   ["import { parseTextTracks, startSubtitle } from './tracks.js';", "import { parseTextTracks, startSubtitle } from './tracks.js';\nimport { subtitlePlan, matchContext } from '#platform/subtitle-memory';"],
+  ['let autoAddonStart = true;', 'let autoAddonStart = false; // Mac: platform/subtitle-memory plans the start'],
   ['let subsPicked = false;', 'let subsPicked = false;\n  const macSub = { started: false, final: false, choice: null, addonsDone: false, hand: false, watch: false, t0: 0 }; // the remembered subtitle choice, resolved once'],
   ['const emit = (name, data = {}) => {', "const emit = (name, data = {}) => {\n    if (name === 'tracks') macSubTick();"],
   ["// Releases flag foreign subtitles as forced or default: start with subtitles only in the TV's language, else none.", "macSubStart();\n    // Releases flag foreign subtitles as forced or default: start with subtitles only in the TV's language, else none."],
@@ -189,7 +190,7 @@ export const SUBTITLE_MEMORY_PATCHES = [
     if (macSub.started || !memory || !memory.subtitles || !settings.subtitles()) return;
     macSub.started = true;
     macSub.t0 = clock.now();
-    macSub.choice = memory.subtitles.get(metaId);
+    macSub.choice = memory.subtitles.get(metaId) || (settings.subtitleLanguagePicked && settings.subtitleLanguagePicked() ? { kind: 'lang', language: settings.subtitleLanguage() } : null);
     macSubTry();
   }
   function macMatch() { return matchContext(sources && sources[at]); }
@@ -245,7 +246,7 @@ export const SUBTITLE_ID_PATCHES = [
 // match() gives the playing release, so the menu lists a name match first in its language (T3).
 export const SUBTITLE_FETCH_PATCHES = [
   ["import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';", "import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';\nimport { macLoadAddonSubtitles } from '#platform/subtitle-fetch';"],
-  ['async function loadAddonSubtitles() {', 'async function loadAddonSubtitles() {\n    if (stremio && authKey) return macLoadAddonSubtitles({ stremio, authKey, type, videoId, tvLanguage, choose: chooseAddonSubtitles, set: (v) => { addonSubs = v; }, changed: () => emit(\'tracks\'), say, warn, diag, isShut: () => shut, match: macMatch });'],
+  ['async function loadAddonSubtitles() {', 'async function loadAddonSubtitles() {\n    if (stremio && authKey) { const s = source(); subExtra = s ? subtitleExtra(s) : \'\'; if (diag) diag.subtitleExtraKeys(subExtra ? subExtra.split(\'&\').map((p) => p.split(\'=\')[0]) : []); decide(\'subtitles: asked add-ons \' + (subExtra ? \'with the file\\\'s \' + subExtra.split(\'&\').map((p) => p.split(\'=\')[0]).join(\', \') : \'without file details\')); } if (stremio && authKey) return macLoadAddonSubtitles({ stremio, authKey, type, videoId, extra: subExtra, tvLanguage: subtitleLanguage, choose: chooseAddonSubtitles, set: (v) => { addonSubs = v; }, changed: () => emit(\'tracks\'), say, warn, diag, isShut: () => shut, match: macMatch });'],
 ];
 
 // Mac-only subtitle timing: 0.1 s steps from -2 s to +2 s (Alder's list is -2, -1, -0.5, 0, 0.5, 1, 2 s). src/player/tracks.js stays untouched.
@@ -318,7 +319,6 @@ function macPlatform() {
           ['parseSubtitles(await http.get(choice.sub.url), choice.sub.format)', 'parseSubtitles(((t) => { avplay.addSubtitle(t, choice.sub); return t; })(await http.get(choice.sub.url)), choice.sub.format)'],
           ...SUBTITLE_FETCH_PATCHES,
           ['avplay.subtitlesOn(false);', "avplay.subtitlesOn(subMode === 'addon');"],
-          ['in the TV language', 'in the Mac language'], // (decision lines on the Diagnostics screen)
           ['by the TV', 'by the player'],
           ["message: 'No sound on this TV'", "message: 'No sound on this Mac'"],
         ]],
@@ -349,7 +349,7 @@ function macPlatform() {
           ['than your TV (16:9)', 'than your window'], ['on this TV', 'on this Mac'], ['by the TV', 'by the player'],
         ]],
         [join(ROOT, 'src/core/settings.js'), [
-          ["'TV language'", "'Mac language'"], ["in the TV's language", "in the Mac's language"], ['My TV plays AV1', 'My Mac plays AV1'], ['plays on this TV.', 'plays on this Mac.'],
+          ["'TV language'", "'Mac language'"], ['My TV plays AV1', 'My Mac plays AV1'], ['plays on this TV.', 'plays on this Mac.'],
         ]],
         [join(ROOT, 'src/screens/settings.js'), [
           ['Alder for Tizen is a port of Alder', 'Alder for Mac is a port of Alder'],

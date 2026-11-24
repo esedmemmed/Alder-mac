@@ -54,7 +54,7 @@
  */
 import { PLAYER, lowerSourceHeight, upNextWindow, plausibleEpisode, nextVideo as nextVideoIn, chooseAddonSubtitles, parseSegments, introDbUrl } from '../core/playback.js';
 import { parseAudioTracks, decideAudio, afterAudioError, describeTracks } from '../core/audio.js';
-import { Stream, runtime } from '../core/addon.js';
+import { Stream, runtime, subtitleExtra, debridService } from '../core/addon.js';
 import { toIso1, languageName } from '../core/lang.js';
 import { errorCode } from './avplay.js';
 import { parseTextTracks, startSubtitle } from './tracks.js';
@@ -124,6 +124,10 @@ export function createEngine(params, deps) {
   let seekedAt = -1e9;
   let audioPicked = false;
   let subsPicked = false;
+  let autoAddonStart = true;
+  let autoStarted = false;
+  let viewerChoseSub = false;
+  let autoCall = false;
   let failedAudio = new Set(); // indexes of audio tracks that failed to decode
   let scrubTo = -1;
   let segments = [];
@@ -158,6 +162,7 @@ export function createEngine(params, deps) {
   let subMode = 'off'; // 'off' | 'file' | 'addon'
   let textIndex = null;
   let addonSubs = [];
+  let subExtra = '';
   let chosenSub = null;
   let subCues = null; // the add-on subtitle's cues, as fetched
   let shifted = null; // ... moved by subDelay
@@ -189,6 +194,7 @@ export function createEngine(params, deps) {
     (listeners[name] || []).slice().forEach((fn) => { try { fn(data); } catch (e) { warn('listener for ' + name + ' threw: ' + (e && e.message ? e.message : e)); } });
   };
   const decide = (text) => { say(text); if (diag) diag.decision(text); };
+  const subtitleLanguage = () => (settings && typeof settings.subtitleLanguage === 'function' ? settings.subtitleLanguage() : tvLanguage());
 
   const source = () => sources[at];
   const nextVideo = () => nextVideoIn(meta && meta.videos, videoId);
@@ -267,7 +273,7 @@ export function createEngine(params, deps) {
       return next('could not resolve the URL');
     }
     if (mine !== gen || shut) return;
-    if (diag) diag.setStream({ url, label: s.label, at: at + 1, total: sources.length, headers: Object.keys(s.headers) });
+    if (diag) diag.setStream({ url, label: s.label, at: at + 1, total: sources.length, headers: Object.keys(s.headers), addon: s.addonName || null, service: debridService(s) });
     try {
       avplay.open(url, { headers: s.headers }, handlersFor(mine));
       await avplay.prepare();
@@ -310,11 +316,12 @@ export function createEngine(params, deps) {
     // Releases flag foreign subtitles as forced or default: start with subtitles only in the TV's language, else none.
     if (!subsPicked && textTracks.length) {
       subsPicked = true;
-      const pick = startSubtitle(textTracks, { enabled: settings.subtitles(), tvLanguage: tvLanguage() });
-      if (pick) { subMode = 'file'; textIndex = pick.index; decide('subtitles: started #' + pick.index + ' (' + (pick.language || 'unknown') + ') in the TV language'); }
-      else decide('subtitles: none start (' + (settings.subtitles() ? 'no track in the TV language' : 'off in Settings') + ')');
+      const pick = startSubtitle(textTracks, { enabled: settings.subtitles(), tvLanguage: subtitleLanguage() });
+      if (pick) { subMode = 'file'; textIndex = pick.index; decide('subtitles: started #' + pick.index + ' (' + (pick.language || 'unknown') + ') in the subtitle language'); }
+      else decide('subtitles: none start (' + (settings.subtitles() ? 'no track in the subtitle language' : 'off in Settings') + ')');
     }
     applySubtitleMode();
+    maybeAutoStartAddon();
     emit('tracks');
     applyPicture();
 
@@ -522,6 +529,7 @@ export function createEngine(params, deps) {
     const here = position();
     if (at + 1 < sources.length) {
       at++;
+      refreshSubtitlesForSource();
       stalls = [];
       retries = 0;
       audioPicked = false;
@@ -797,17 +805,43 @@ export function createEngine(params, deps) {
     subsTimer = after(subtitleTask, SUBTITLE_EVERY);
   }
 
+  function refreshSubtitlesForSource() {
+    if (!stremio || !authKey || shut) return;
+    const s = source();
+    const next = s ? subtitleExtra(s) : '';
+    if (next === subExtra) return;
+    decide('subtitles: source changed, asking the add-ons again');
+    void loadAddonSubtitles();
+  }
+
+  function maybeAutoStartAddon() {
+    if (!autoAddonStart || autoStarted || shut) return;
+    if (!settings.subtitles() || !(settings.subtitleLanguagePicked && settings.subtitleLanguagePicked())) return;
+    if (!subsPicked || subMode !== 'off' || viewerChoseSub) return;
+    const want = subtitleLanguage();
+    const sub = addonSubs.find((s) => s.isLocal(want));
+    if (!sub) return;
+    autoStarted = true;
+    decide('subtitles: no file track in ' + languageName(want) + ', starting the add-on one from ' + sub.addon);
+    autoCall = true;
+    try { selectSubtitle({ kind: 'addon', sub }, true); } finally { autoCall = false; }
+  }
+
   async function loadAddonSubtitles() {
     if (!stremio || !authKey) return;
     try {
+      const s = source(); subExtra = s ? subtitleExtra(s) : '';
+      if (diag) diag.subtitleExtraKeys(subExtra ? subExtra.split('&').map((p) => p.split('=')[0]) : []);
       // the list is refreshed (an add-on installed since the app started is asked too; it also updates the shared cache); the cached one if offline
       let all;
       try { all = await stremio.addons(authKey, true); } catch (e) { warn('add-on list refresh failed, using the cached one: ' + (e && e.message ? e.message : e)); all = await stremio.addons(authKey); }
       const addons = all.filter((a) => a.serves('subtitles', type, videoId));
       if (diag) diag.subtitleAddon(null);
-      const lists = await Promise.all(addons.map((a) => Promise.resolve().then(() => a.subtitles(type, videoId)).then((subs) => { say('subtitles from ' + a.name + ' (' + type + ' ' + videoId + '): ' + subs.length); if (diag) diag.subtitleAddon(a.name, subs.length); return subs; }).catch((e) => { warn('subtitles from ' + a.name + ' (' + type + ' ' + videoId + ') failed: ' + (e && e.message ? e.message : e)); if (diag) diag.subtitleAddon(a.name, e); return []; })));
+      decide('subtitles: asked add-ons ' + (subExtra ? 'with the file\'s ' + subExtra.split('&').map((p) => p.split('=')[0]).join(', ') : 'without file details'));
+      const lists = await Promise.all(addons.map((a) => Promise.resolve().then(() => a.subtitles(type, videoId, subExtra)).then((subs) => { say('subtitles from ' + a.name + ' (' + type + ' ' + videoId + '): ' + subs.length); if (diag) diag.subtitleAddon(a.name, subs.length); return subs; }).catch((e) => { warn('subtitles from ' + a.name + ' (' + type + ' ' + videoId + ') failed: ' + (e && e.message ? e.message : e)); if (diag) diag.subtitleAddon(a.name, e); return []; })));
       // every language from every add-on: the device language first, then English, then the rest by name; the add-ons take turns
-      addonSubs = chooseAddonSubtitles(addons.map((a, i) => ({ addon: a.name, subs: lists[i] })), tvLanguage());
+      addonSubs = chooseAddonSubtitles(addons.map((a, i) => ({ addon: a.name, subs: lists[i] })), subtitleLanguage());
+      maybeAutoStartAddon();
       say('add-on subtitles: ' + addonSubs.length);
       emit('tracks');
     } catch (e) {
@@ -820,6 +854,7 @@ export function createEngine(params, deps) {
    * fetched, parsed and drawn by us from the same second: no reload, as the clock does the syncing.
    */
   async function selectSubtitle(choice) {
+    if (!autoCall) viewerChoseSub = true;
     if (shut) return false;
     const token = ++subChoiceToken;
     if (choice.kind === 'addon') {
@@ -1006,7 +1041,7 @@ export function createEngine(params, deps) {
     },
     /** What the options panel lists. */
     tracks() {
-      return { audio: audioTracks, audioIndex, text: textTracks, textIndex, subMode, addonSubs, deviceLanguage: languageName(tvLanguage()), chosenSub, subDelay, canShift: subMode === 'addon' && !!subCues };
+      return { audio: audioTracks, audioIndex, text: textTracks, textIndex, subMode, addonSubs, deviceLanguage: languageName(subtitleLanguage()), chosenSub, subDelay, canShift: subMode === 'addon' && !!subCues };
     },
     /** The source playing, for the "Change stream" row of the options panel. */
     currentSource() { return source() || null; },

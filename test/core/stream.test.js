@@ -174,12 +174,21 @@ test('Stream.from: add-on JSON -> Stream, with Alder\'s fallbacks', () => {
 })
 
 test('Stream.toJson / Stream.read round trip', () => {
-  const a = Stream.from({ name: 'N', description: 'D', url: 'https://x/y', behaviorHints: { videoSize: 99, filename: 'f.mkv', bingeGroup: 'g', proxyHeaders: { request: { Cookie: 'a=b' } } } })
+  const a = Stream.from({ name: 'N', description: 'D', url: 'https://x/y', behaviorHints: { videoSize: 99, filename: 'f.mkv', bingeGroup: 'g', videoHash: 'abc123', proxyHeaders: { request: { Cookie: 'a=b' } } } })
   const json = JSON.parse(JSON.stringify(a.toJson()))
-  assert.deepEqual(json, { name: 'N', description: 'D', url: 'https://x/y', headers: { Cookie: 'a=b' }, size: 99, filename: 'f.mkv', binge: 'g' })
+  assert.deepEqual(json, { name: 'N', description: 'D', url: 'https://x/y', headers: { Cookie: 'a=b' }, size: 99, filename: 'f.mkv', binge: 'g', videoHash: 'abc123' })
   const b = Stream.read(json)
   assert.deepEqual(b.toJson(), a.toJson())
   assert.equal(Stream.read({ name: 'n', url: 'u' }).filename, null)
+  assert.equal(b.videoHash, 'abc123')
+  assert.equal(Stream.read({ name: 'n', url: 'u', filename: 'f.mkv' }).videoHash, null) // old saved JSON
+})
+
+test('Stream.from: videoHash from behaviorHints, null when absent or empty', () => {
+  assert.equal(Stream.from({ url: 'https://x/y', behaviorHints: { videoHash: '8e245d9679d31e12' } }).videoHash, '8e245d9679d31e12')
+  assert.equal(Stream.from({ url: 'https://x/y' }).videoHash, null)
+  assert.equal(Stream.from({ url: 'https://x/y', behaviorHints: { videoHash: '' } }).videoHash, null)
+  assert.equal(new Stream('t', 'd', 'u', {}, 0).videoHash, null)
 })
 
 test('Tizen: request headers AVPlay cannot send mark a stream "may not play"', () => {
