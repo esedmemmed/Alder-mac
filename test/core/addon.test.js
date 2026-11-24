@@ -259,6 +259,7 @@ test('stream requests are not kept (links expire) and ask for the colon-bearing 
   await torrentio.streams('series', 'tt11280740:1:4')
   assert.equal(http.log[0].url, 'https://torrentio.strem.fun/stream/series/tt11280740:1:4.json')
   assert.equal(http.log[0].opts.keep, false)
+  assert.deepEqual(http.log[0].opts, { keep: false, timeoutMs: 15000 })
 })
 
 test('subtitles: url + lang, "und" when missing, entries without a url dropped', async () => {

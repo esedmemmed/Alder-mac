@@ -149,7 +149,7 @@ export class Addon {
 
   /** Playable streams only: torrent-only results (no url) need a streaming server, which this app doesn't have. */
   async streams(type, videoId) {
-    const answer = await this.get(false, 'stream', type, videoId)
+    const answer = JSON.parse(await this.deps.http.get(this.url(['stream', type, videoId]), { keep: false, timeoutMs: 15000 }))
     return objects(arr(answer, 'streams')).map(s => Stream.from(s)).filter(s => s !== null)
   }
 
@@ -300,9 +300,12 @@ export class Stream {
 
     // What the release is, read from its file name and the add-ons' labels (AIOStreams writes "2160p", "DV", "HEVC"
     // into them; the file name says it for every add-on). ponytail (Alder): name matching, not the file's real tracks.
-    const words = (this.filename || '') + ' ' + title + ' ' + description
+    // Styled letters ("𝟰𝗞") are read as plain ones: NFKC first, for matching only (title and description stay as given).
+    const norm = s => (typeof s.normalize === 'function' ? s.normalize('NFKC') : s)
+    const words = norm((this.filename || '') + ' ' + title + ' ' + description)
     const w = words.toLowerCase()
     this.words = w
+    this._cachedText = norm(title + ' ' + description).toLowerCase() // not the file name: that says nothing about the add-on's cache
     this.height = /2160|\b4k\b|\buhd\b/.test(w) ? 2160 : w.includes('1080') ? 1080 : w.includes('720') ? 720
       : w.includes('576') ? 576 : w.includes('480') ? 480 : 0
     this.dolbyVision = /\b(dv|dovi|dolby.?vision)\b/.test(w)
@@ -334,6 +337,34 @@ export class Stream {
    * They stay listed but are never picked or focused first. Unknown size counts as a video.
    */
   get isVideo() { return this.size === 0 || this.size >= 50 * MIB }
+
+  /** What the add-on's own name and description say about its debrid cache: 1 cached, -1 not cached (a download), 0 unknown. */
+  get cached() {
+    const t = this._cachedText
+    if (/⏳|\buncached\b|\[(?:tb|rd|ad|pm|oc|dl|ed)\s*download\]|\bdownload\s*\[(?:tb|rd|ad|pm)\]/i.test(t)) return -1
+    if (/⚡|\binstant\b|\bcached\b|\[(?:tb|rd|ad|pm|oc|dl|ed)\+\]|\b(?:tb|rd|ad|pm|oc)\+/i.test(t)) return 1
+    return 0
+  }
+
+  /** A dub in a language other than the original, with no sign that the original audio is in it too. */
+  get foreignDub() {
+    const w = this.words
+    return /\b(?:hindi|tamil|telugu|malayalam|kannada|bengali|latino|castellano|truefrench|vff|vf2|vfi|dublado|ita|rus|ukr)\b|\bdub(?:bed)?\b/.test(w) &&
+      !/\b(?:multi|dual)\b|\beng(?:lish)?\b|\boriginal\b|\bvo\b|\bvost/.test(w)
+  }
+
+  /**
+   * A dub language listed before the original English: "[Org DvD Hindi DD 2.0 + English DD 2.0]", "Hindi-English", "Tam+Tel+Hin+Eng".
+   * Full language names count when "eng"/"english" comes after them (not "english subs"); the short tags (hin, tam, tel, mal, kan, ben)
+   * only inside a "+ & / , -" chain that ends in eng. A language word alone, with no English named after it, is not it.
+   */
+  get dubFirst() {
+    const w = this.words
+    const lang = /\b(?:hindi|tamil|telugu|malayalam|kannada|bengali|latino|castellano)\b/.exec(w)
+    const eng = /\beng(?:lish)?\b(?!\s?sub)/.exec(w)
+    if (lang && eng && lang.index < eng.index) return true
+    return /\b(?:hin|tam|tel|mal|kan|ben)\b(?:\s?[+&\/,-]\s?[a-z]{3}\b)*\s?[+&\/,-]\s?eng\b/.test(w)
+  }
 
   /** The add-on's name for it on one line: "Torrentio (2160p)" becomes "Torrentio  ·  2160p". */
   get label() { return lines(this.title).map(l => l.trim()).join(' ').replace(/\s*\((.+?)\)\s*$/, '  ·  $1') }

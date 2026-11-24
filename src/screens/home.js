@@ -447,7 +447,7 @@ export function createHomeScreen(params = {}) {
     clearTimeout(timers[tk(pg, 'heroTop')]);
     if (pg.el.parentNode) pg.el.parentNode.removeChild(pg.el);
     const keep = pg.activeEntry || pg.entries[0] || null;
-    pg.entries.forEach((e) => { if (e !== keep) dropRow(pg, e); });
+    if (!document.documentElement.classList.contains('phone')) pg.entries.forEach((e) => { if (e !== keep) dropRow(pg, e); });
     if (pg.grid) mountGridRows(pg, pg.grid.at, 'away');
     pg.captionEl.hidden = true;
   }
@@ -845,12 +845,14 @@ export function createHomeScreen(params = {}) {
   /** Rows sit one band apart; the page slides so the row in use is in the band. */
   function renumber(pg) {
     pg.entries.forEach((e, i) => { e.top = i * ROW_STEP; if (e.row) e.row.el.style.top = e.top + 'px'; });
+    if (document.documentElement.classList.contains('phone')) pg.entries.forEach((e) => { if (!e.row) mountEntry(pg, e); }); // phone: every row shows under the one before it
     place(pg);
   }
 
   function place(pg) {
+    const phone = document.documentElement.classList.contains('phone'); // phone: every row shows, the screen scrolls
     const at = pg.entries.indexOf(pg.activeEntry);
-    pg.rowsEl.style.transform = 'translate3d(0,' + (-Math.max(0, at) * ROW_STEP) + 'px,0)';
+    if (!phone) pg.rowsEl.style.transform = 'translate3d(0,' + (-Math.max(0, at) * ROW_STEP) + 'px,0)';
     pg.entries.forEach((e, i) => {
       if (!e.row) return;
       e.row.el.classList.toggle('away', at >= 0 && i < at);
@@ -1038,7 +1040,7 @@ export function createHomeScreen(params = {}) {
     if (changed) {
       // Only the row in use and its neighbours keep cards.
       const at = pg.entries.indexOf(e);
-      pg.entries.forEach((x, k) => { if (x.row && Math.abs(k - at) > 1) dropRow(pg, x); });
+      if (!document.documentElement.classList.contains('phone')) pg.entries.forEach((x, k) => { if (x.row && Math.abs(k - at) > 1) dropRow(pg, x); });
     }
   }
 
@@ -1209,7 +1211,7 @@ export function createHomeScreen(params = {}) {
     i = Math.max(0, Math.min(pg.grid.items.length - 1, i));
     const r = Math.floor(i / COLUMNS);
     mountGridRows(pg, r, 'full');
-    pg.gridTrack.style.transform = 'translate3d(0,' + (-r * GRID_STEP) + 'px,0)';
+    if (!document.documentElement.classList.contains('phone')) pg.gridTrack.style.transform = 'translate3d(0,' + (-r * GRID_STEP) + 'px,0)';
     const card = gridCard(i);
     return card ? ctx.engine.focus(card) : false;
   }

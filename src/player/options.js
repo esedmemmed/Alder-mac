@@ -98,11 +98,13 @@ export function createOptions({ host, engine }) {
 
   function render() {
     build();
+    const keepTop = phone() ? scroller.scrollTop : 0; // phone: a rebuilt list stays where the finger left it
     scroller.innerHTML = '';
     scroller.appendChild(list);
+    if (keepTop) scroller.scrollTop = keepTop;
     // The list is rebuilt after a pick (a tick moves, the Picture rows change their words): keep it where it was scrolled to,
     // or the row just chosen would jump out of view.
-    if (scrollY) list.style.transform = 'translate3d(0,' + (-scrollY) + 'px,0)';
+    if (scrollY && !phone()) list.style.transform = 'translate3d(0,' + (-scrollY) + 'px,0)';
     let index = rows.findIndex((r) => r.id === wantId);
     if (index < 0) index = Math.min(at, rows.length - 1);
     focusRow(Math.max(0, index));
@@ -123,9 +125,10 @@ export function createOptions({ host, engine }) {
     if (top - 24 < current) next = Math.max(0, top - 24);
     else if (bottom + 24 > current + view) next = bottom + 24 - view;
     if (at === 0 || at === 1) next = 0;
-    if (next !== current) { scrollY = next; list.style.transform = 'translate3d(0,' + (-next) + 'px,0)'; }
+    if (next !== current && !phone()) { scrollY = next; list.style.transform = 'translate3d(0,' + (-next) + 'px,0)'; }
   }
   let scrollY = 0;
+  const phone = () => typeof document !== 'undefined' && !!document.documentElement && document.documentElement.classList.contains('phone'); // phone: the list scrolls natively by touch (phone.css)
 
   const api = {
     onClose: null,

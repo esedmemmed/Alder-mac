@@ -1,0 +1,264 @@
+/*
+ * Phone layout. Rules apply only under html.phone; written screen by screen from screenshots (npm run shots:phone).
+ *
+ * src/platform/mac/layout.js puts `phone` on <html> when the shorter window side is under 600 px, with `portrait` (design width
+ * 1080) or `landscape` (design width 1920), and scales the body to the window. Here a screen scrolls natively by touch instead of
+ * moving by transform (the JS that moves a list by transform returns early under html.phone).
+ */
+
+/* ---- every screen: the design width, and vertical touch scrolling ---- */
+html.phone.portrait body, html.phone.portrait #app, html.phone.portrait #overlay, html.phone.portrait .screen { width: 1080px; }
+html.phone .screen { overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+html.phone .screen::-webkit-scrollbar { display: none; }
+
+/* art and shades follow the screen's width (the picture stays put; it is as high as the window) */
+html.phone .b-artwrap, html.phone .b-art, html.phone .b-shades, html.phone .b-shade-left, html.phone .b-shade-rest, html.phone .st-veil,
+html.phone .ob-backdrop, html.phone .ob-scene, html.phone .ob-backdrop-art, html.phone .ob-backdrop-shade { width: 100%; height: var(--app-h); }
+
+/* ---- horizontal rows: the track scrolls by touch and snaps; cards keep their place by `left` (src/ui/row.js) ---- */
+html.phone .row { width: 100%; }
+html.phone .row-heading { padding-left: 40px; max-width: none; }
+html.phone .row-viewport { left: 0; width: 100%; }
+html.phone .row-track {
+  left: 0; top: -32px; width: 100%; height: calc(100% + 64px); transition: none; padding: 0 40px;
+  overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity; scroll-padding: 0 40px; scrollbar-width: none;
+}
+html.phone .row-track::-webkit-scrollbar { display: none; }
+html.phone .row-track > .card { scroll-snap-align: start; margin: 32px 0 0 40px; }
+html.phone .row-spacer { position: absolute; top: 0; width: 1px; height: 1px; pointer-events: none; }
+
+/* ======================================================================================================================
+ * Portrait
+ * ==================================================================================================================== */
+
+/* ---- 1. Sign-in (and the name step): a centred column, 960 px at most, all of it reached by scrolling ---- */
+html.phone.portrait .ob-frame { position: relative; left: auto; top: auto; width: 100%; max-width: 960px; height: auto; margin: 0 auto; }
+html.phone.portrait .ob-top { position: relative; left: auto; top: auto; width: 100%; height: auto; padding: 48px 40px 0 40px; }
+html.phone.portrait .ob-body { position: relative; left: auto; top: auto; width: 100%; height: auto; display: block; padding: 40px 40px 24px 40px; }
+html.phone.portrait .ob-left, html.phone.portrait .ob-right { width: auto !important; margin: 0 0 48px 0; }
+html.phone.portrait .ob-bottom { position: relative; left: auto; bottom: auto; flex-wrap: wrap; padding: 0 40px 80px 40px; }
+html.phone.portrait .ob-codecard { width: 100%; }
+html.phone.portrait .ob-qr { max-width: 100%; }
+html.phone.portrait .ob-codetiles { flex-wrap: wrap; }
+
+/* ---- 2. Home: the profile circle and the nav bar in one top line, the title, then the rows ---- */
+html.phone.portrait .hm-screen { display: flex; flex-direction: column; }
+html.phone.portrait .hm-screen .art { position: absolute; left: 0; top: 0; z-index: 0; width: 100%; height: 1100px; -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent); mask-image: linear-gradient(to bottom, #000 55%, transparent); }
+html.phone.portrait .hm-screen .topbar, html.phone.portrait .hm-screen .hm-hero, html.phone.portrait .hm-screen .hm-page { z-index: 1; }
+html.phone.portrait .hm-screen .art-img, html.phone.portrait .hm-screen .art-shade { width: 100%; height: 100%; }
+html.phone.portrait .hm-topshade { display: none; }
+html.phone.portrait .hm-screen .topbar {
+  order: 0; position: relative; flex: none; width: 100%; height: auto; padding: 40px 40px 0 40px;
+  display: flex; align-items: center; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+html.phone.portrait .hm-screen .topbar::-webkit-scrollbar { display: none; }
+html.phone.portrait .hm-screen .topbar .avatar { position: relative; left: auto; top: auto; flex: none; margin-right: 24px; }
+html.phone.portrait .hm-screen .topbar .navpill { position: relative; left: auto; top: auto; transform: none; flex: none; }
+html.phone.portrait .hm-screen .topbar .clock { position: relative; right: auto; top: auto; flex: none; margin-left: 24px; }
+html.phone.portrait .hm-screen .hm-hero {
+  order: 1; position: relative; flex: none; left: auto; bottom: auto; width: 100%; max-width: 1000px; margin-top: 56px; padding: 0 40px;
+}
+html.phone.portrait .hm-screen .hm-hero.hm-measure { position: absolute; top: 0; left: 0; margin-top: 0; }
+html.phone.portrait .hm-logo { max-width: 100%; }
+html.phone.portrait .hm-facts { flex-wrap: wrap; white-space: normal; }
+html.phone.portrait .hm-about { max-height: none; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+html.phone.portrait .hm-screen .hm-page { order: 2; position: relative; flex: none; left: auto; top: auto; width: 100%; height: auto; margin-top: 48px; padding-bottom: 80px; }
+html.phone.portrait .hm-rows { position: relative; top: auto; width: 100%; height: auto; }
+html.phone.portrait .hm-row { position: relative !important; top: auto !important; margin-bottom: 48px; }
+html.phone.portrait .hm-row.away { opacity: 1; }
+html.phone.portrait .hm-row.below .row-heading { visibility: visible; }
+html.phone.portrait .hm-caption, html.phone.portrait .hm-next, html.phone.portrait .hm-listhint { display: none; }
+html.phone.portrait .hm-note { position: relative; left: auto; top: auto; width: auto; padding: 0 40px; }
+html.phone.portrait .hm-chips { position: relative; top: auto; width: 100%; height: auto; padding: 0 40px 24px 40px; overflow-x: auto; scrollbar-width: none; }
+
+/* ---- 3. Details (movie and series): the picture on top, then the title, facts, story, buttons, seasons and episodes ---- */
+html.phone.portrait .dt-screen .b-artwrap { height: 600px; }
+html.phone.portrait .dt-screen .b-art, html.phone.portrait .dt-screen .b-shades, html.phone.portrait .dt-screen .b-shade-left, html.phone.portrait .dt-screen .b-shade-rest { height: 600px; }
+html.phone.portrait .dt-hero { position: relative; width: 100%; height: auto; padding-top: 480px; }
+html.phone.portrait .dt-stack { position: relative; left: auto; bottom: auto; width: auto; padding: 0 40px; }
+html.phone.portrait .dt-title { height: auto; min-height: 150px; }
+html.phone.portrait .dt-logo { max-width: 100%; }
+html.phone.portrait .dt-facts { flex-wrap: wrap; }
+html.phone.portrait .dt-facts .ellipsis { max-width: none; white-space: normal; overflow: visible; }
+html.phone.portrait .dt-about { width: auto; -webkit-line-clamp: 6; }
+html.phone.portrait .dt-where { width: auto; white-space: normal; overflow: visible; }
+html.phone.portrait .dt-buttons { flex-wrap: wrap; }
+html.phone.portrait .dt-buttons > .pill, html.phone.portrait .dt-buttons > .btn-round { margin-bottom: 16px; }
+html.phone.portrait .dt-more { display: none; }
+/* the episode list sits under the buttons instead of replacing the title page */
+html.phone.portrait .eg, html.phone.portrait .eg[hidden] { display: block !important; position: relative; width: 100%; height: auto; opacity: 1; transform: none; transition: none; }
+html.phone.portrait .eg-logo, html.phone.portrait .eg-name { display: none !important; }
+html.phone.portrait .eg-seasons { position: relative; left: auto; top: auto; width: 100%; height: auto; padding: 16px 40px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+html.phone.portrait .eg-seasons::-webkit-scrollbar { display: none; }
+html.phone.portrait .eg-seasons .chip { flex: none; }
+html.phone.portrait .eg-pane { position: relative; left: auto; top: auto; width: auto; height: auto; margin: 8px 40px 80px 40px; padding: 16px 0; min-height: 0; }
+html.phone.portrait .eg-rows-clip { width: auto; margin: 0; padding: 0 16px; }
+html.phone.portrait .eg-rows { width: auto; }
+html.phone.portrait .eg-row { height: auto; min-height: 90px; flex-wrap: wrap; padding: 16px 24px; }
+html.phone.portrait .eg-title { flex: 1 1 0; min-width: 0; white-space: normal; overflow: visible; text-overflow: clip; }
+html.phone.portrait .eg-status { flex: 0 0 100%; margin: 4px 0 0 68px; text-align: left; }
+html.phone.portrait .eg-still, html.phone.portrait .eg-still-progress, html.phone.portrait .eg-ptitle, html.phone.portrait .eg-pfacts, html.phone.portrait .eg-pabout { display: none; }
+html.phone.portrait .dt-info { position: relative; width: 100%; height: auto; padding-top: 480px; }
+html.phone.portrait .dt-info-shade { display: none; }
+html.phone.portrait .dt-info-col { position: relative; left: auto; bottom: auto; width: auto; padding: 0 40px 80px 40px; }
+
+/* ---- 4. Sources ---- */
+html.phone.portrait .st-panel { position: relative; left: auto; top: auto; width: auto; height: auto; margin: 150px 40px 80px 40px; padding: 28px 32px; min-height: 0; }
+html.phone.portrait .st-header { height: auto; flex-wrap: wrap; padding-bottom: 8px; }
+html.phone.portrait .st-info { flex: 1 1 360px; }
+html.phone.portrait .st-count { width: auto; margin-left: 24px; }
+html.phone.portrait .st-cols { display: none; }
+html.phone.portrait .st-row { height: auto; min-height: 76px; flex-wrap: wrap; padding: 14px 24px; }
+html.phone.portrait .st-detail { display: contents; }
+html.phone.portrait .st-q { width: auto; margin-right: 20px; order: 1; }
+html.phone.portrait .st-best { order: 2; }
+html.phone.portrait .st-summary, html.phone.portrait .st-summary.best { order: 3; flex: 1 1 0; min-width: 0; max-width: none; margin-right: 0; white-space: normal; overflow: visible; text-overflow: clip; }
+html.phone.portrait .st-row::after { content: ''; order: 4; flex: 0 0 100%; height: 0; }
+html.phone.portrait .st-tag { order: 5; margin-top: 8px; }
+html.phone.portrait .st-provider { order: 6; flex: 1 1 auto; margin-top: 8px; white-space: normal; overflow: visible; text-overflow: clip; }
+html.phone.portrait .st-size { order: 7; width: auto; margin: 8px 0 0 auto; padding-left: 16px; }
+html.phone.portrait .st-help { height: auto; flex-wrap: wrap; white-space: normal; padding-top: 16px; }
+html.phone.portrait .st-help .ellipsis { white-space: normal; overflow: visible; text-overflow: clip; flex: 1 1 0; min-width: 0; }
+
+/* ---- 5. Settings: one column, the section list, then the open section under it ---- */
+html.phone.portrait .sg-header { position: relative; width: 100%; height: auto; padding: 130px 40px 32px 40px; display: flex; align-items: center; }
+html.phone.portrait .sg-avatar { position: relative; left: auto; top: auto; flex: none; }
+html.phone.portrait .sg-title { position: relative; left: auto; top: auto; margin-left: 24px; }
+html.phone.portrait .sg-profile { position: relative; left: auto; top: auto; margin-left: 24px; padding-top: 0; }
+html.phone.portrait .sg-groups { position: relative; left: auto; top: auto; width: auto; height: auto; margin: 0 40px 48px 40px; }
+html.phone.portrait .sg-detail { position: relative; left: auto; top: auto; width: auto; height: auto; margin: 0 40px 80px 40px; }
+html.phone.portrait .sg-row { height: auto; min-height: 84px; flex-wrap: wrap; padding: 12px 24px; }
+html.phone.portrait .sg-label { white-space: normal; }
+html.phone.portrait .sg-hint { padding: 0 24px; }
+
+/* ---- 6. Diagnostics ---- */
+html.phone.portrait .dg-screen { position: relative; width: 100%; height: auto; padding: 130px 40px 80px 40px; }
+html.phone.portrait .dg-title { position: relative; left: auto; top: auto; }
+html.phone.portrait .dg-viewport { position: relative; left: auto; top: auto; width: auto; height: auto; overflow: visible; }
+html.phone.portrait .dg-status { display: none; }
+html.phone.portrait .dg-line, html.phone.portrait .dg-heading { overflow-wrap: anywhere; }
+html.phone.portrait .dg-strips { flex-wrap: wrap; }
+html.phone.portrait .dg-strip { width: auto; max-width: 100%; height: auto; min-height: 60px; flex-wrap: wrap; }
+html.phone.portrait .dg-strip + .dg-strip { margin-left: 0; margin-top: 12px; }
+
+/* ======================================================================================================================
+ * Landscape: the TV layout, scrolled; room for the Back button where it would sit on a title
+ * ==================================================================================================================== */
+/* lists that moved by transform inside a clip now run their full length (the screen scrolls) */
+html.phone .eg-pane { height: auto; min-height: 770px; }
+html.phone .eg-rows-clip { position: relative; left: auto; top: auto; width: 760px; height: auto; margin: 28px; overflow: visible; }
+html.phone .eg-rows-clip::after, html.phone .st-scroll::after { display: none; }
+html.phone .st-panel { height: auto; min-height: 972px; }
+html.phone .st-scroll { flex: none; overflow: visible; }
+html.phone .sg-detail { height: auto; }
+html.phone .sg-clip { height: auto; overflow: visible; }
+html.phone .dt-story { height: auto; overflow: visible; }
+html.phone .dg-viewport { height: auto; overflow: visible; }
+html.phone .dg-status { display: none; }
+html.phone .dg-line, html.phone .dg-heading { overflow-wrap: anywhere; }
+
+html.phone.landscape .hm-hero { bottom: auto; top: 190px; }
+html.phone.landscape .hm-row.away { opacity: 1; }
+html.phone.landscape .hm-row.below .row-heading { visibility: visible; }
+html.phone.landscape .dt-stack { bottom: auto; top: 150px; }
+html.phone.landscape .eg-logo, html.phone.landscape .eg-name { left: 300px; }
+html.phone.landscape .st-panel { top: 130px; }
+html.phone.landscape .sg-header { top: 110px; }
+html.phone.landscape .sg-groups, html.phone.landscape .sg-detail { top: 286px; }
+html.phone.landscape .dg-screen { position: relative; height: auto; padding: 130px 0 80px 0; }
+html.phone.landscape .dg-title { position: relative; left: auto; top: auto; margin-left: 96px; }
+html.phone.landscape .dg-viewport { position: relative; left: auto; top: auto; margin: 0 96px; width: auto; }
+
+/* ======================================================================================================================
+ * Titles: a fixed box with overflow hidden clipped them; in phone mode they wrap, three lines at most
+ * ==================================================================================================================== */
+html.phone .hm-name, html.phone .dt-name, html.phone .st-brandname, html.phone .eg-name, html.phone .dt-info-name {
+  max-width: 1000px; width: auto; height: auto; white-space: normal; overflow: hidden; text-overflow: clip;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+}
+html.phone.landscape .hm-name, html.phone.landscape .dt-name, html.phone.landscape .st-brandname, html.phone.landscape .eg-name, html.phone.landscape .dt-info-name { max-width: 1400px; }
+html.phone .dt-name { position: relative; padding-top: 0; align-items: normal; }
+html.phone .st-brand { width: auto; height: auto; min-height: 80px; max-width: 1000px; }
+html.phone .st-brandname { position: relative; }
+html.phone.landscape .st-brand { max-width: 1400px; }
+
+/* ======================================================================================================================
+ * Portrait: Settings and Diagnostics text 1.4x, rows tall enough to tap (96 design px)
+ * ==================================================================================================================== */
+html.phone.portrait .sg-title.t-title, html.phone.portrait .dg-title.t-title { font-size: 80px; line-height: 84px; }
+html.phone.portrait .sg-profile { font-size: 35px; line-height: 48px; }
+html.phone.portrait .sg-group { height: auto; min-height: 96px; font-size: 41px; line-height: 56px; }
+html.phone.portrait .sg-icon { width: 40px; height: 40px; }
+html.phone.portrait .sg-row { min-height: 96px; font-size: 41px; line-height: 56px; }
+html.phone.portrait .sg-tag { font-size: 23px; line-height: 28px; }
+html.phone.portrait .sg-detail-title { font-size: 41px; line-height: 56px; }
+html.phone.portrait .sg-sub, html.phone.portrait .sg-hint { font-size: 35px; line-height: 48px; }
+html.phone.portrait .sg-wordmark { font-size: 80px; line-height: 84px; }
+html.phone.portrait .dg-heading, html.phone.portrait .dg-line { font-size: 40px; line-height: 56px; }
+
+/* ======================================================================================================================
+ * Search: the results scroll with the screen, a poster grid that wraps full width (the TV keyboard is the phone's own)
+ * ==================================================================================================================== */
+html.phone .sr-shades { width: 100%; height: var(--app-h); }
+html.phone .sr-results { height: auto; overflow: visible; }
+html.phone .sr-viewport { height: auto; overflow: visible; }
+html.phone .sr-section { height: auto; }
+html.phone.portrait .sr-screen .topbar { position: relative; width: 100%; height: auto; padding: 140px 40px 0 40px; display: flex; align-items: center; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+html.phone.portrait .sr-screen .topbar .avatar { position: relative; left: auto; top: auto; flex: none; margin-right: 24px; }
+html.phone.portrait .sr-screen .topbar .navpill { position: relative; left: auto; top: auto; transform: none; flex: none; }
+html.phone.portrait .sr-field { position: relative; left: auto; top: auto; width: auto; height: 96px; margin: 40px 40px 0 40px; }
+html.phone.portrait .sr-input { height: 96px; }
+html.phone.portrait .sr-cursor { display: none; }
+html.phone.portrait .sr-kb { display: none; }
+html.phone.portrait .sr-recentbox { position: relative; left: auto; top: auto; width: auto; margin: 32px 40px 0 40px; }
+html.phone.portrait .sr-hero { position: relative; left: auto; top: auto; width: auto; height: auto; margin: 32px 40px 0 40px; }
+html.phone.portrait .sr-herologo, html.phone.portrait .sr-heroname, html.phone.portrait .sr-facts, html.phone.portrait .sr-about { position: relative; left: auto; top: auto; }
+html.phone.portrait .sr-heroname { height: auto; font-size: 76px; line-height: 80px; white-space: normal; }
+html.phone.portrait .sr-facts { height: auto; margin-top: 16px; flex-wrap: wrap; white-space: normal; }
+html.phone.portrait .sr-about { width: auto; height: auto; margin-top: 16px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+html.phone.portrait .sr-results { position: relative; left: auto; top: auto; width: auto; margin: 32px 0 80px 0; }
+html.phone.portrait .sr-results-inner, html.phone.portrait .sr-section { width: auto; }
+html.phone.portrait .sr-label { padding-left: 40px; }
+html.phone.portrait .sr-track { position: relative; top: auto; width: auto; height: auto; display: flex; flex-wrap: wrap; padding: 16px 40px 0 40px; }
+html.phone.portrait .sr-track > .card { position: relative; left: auto !important; top: auto; flex: none; margin: 0 28px 28px 0; }
+html.phone .sr-caption { display: none; }
+
+/* ======================================================================================================================
+ * Player (both orientations): the control bar spans the screen with 40 px at each side, buttons at least 96 design px
+ * ==================================================================================================================== */
+html.phone .pl-screen { overflow: hidden; }
+html.phone .av-object, html.phone .pl-subs-host, html.phone .pl-layers, html.phone .pl-controls, html.phone .pl-loading, html.phone .pl-pausedshade,
+html.phone .pl-options, html.phone .pl-cardhost, html.phone .pl-loading-dim, html.phone .pl-shade-top, html.phone .pl-shade-bottom { width: 100%; }
+html.phone .subs { left: 40px; right: 40px; }
+html.phone .pl-logo, html.phone .pl-topname, html.phone .pl-pauseinfo { left: 40px; }
+html.phone .pl-topname, html.phone .pl-pausetitle { width: auto; max-width: calc(100% - 320px); }
+html.phone .pl-clock { right: 40px; }
+html.phone .pl-hints { display: none; }
+html.phone .pl-mainbar { left: 40px; bottom: 250px; }
+html.phone .pl-elapsed { left: 40px; bottom: 214px; }
+html.phone .pl-length { right: 40px; bottom: 214px; }
+html.phone .pl-buttons { width: 100%; height: 184px; bottom: 22px; padding: 0 40px; }
+html.phone .pl-cell { flex: 1 1 0; width: auto; min-width: 96px; height: 184px; }
+html.phone .pl-cell.primary { width: auto; }
+html.phone .pl-btn { width: 96px; height: 96px; margin-left: -48px; border-radius: 48px; }
+html.phone .pl-btn .icon { width: 48px; height: 48px; }
+html.phone .pl-btn.primary { width: 120px; height: 120px; margin-left: -60px; border-radius: 60px; }
+html.phone .pl-btn.primary .icon { width: 60px; height: 60px; }
+html.phone .pl-btn-label { top: 112px; }
+html.phone .pl-cell.primary .pl-btn-label { top: 136px; }
+html.phone .pl-divider { margin: 36px 8px 0 8px; }
+html.phone .pl-skip { right: 40px; bottom: 300px; }
+html.phone .pl-card { right: 40px; max-width: calc(100% - 80px); }
+html.phone .pl-upnext, html.phone .pl-stall, html.phone .pl-error { width: auto; bottom: 280px; }
+html.phone .pl-opt-panel { left: 40px; top: 40px; width: calc(100% - 80px); max-width: 700px; height: calc(var(--app-h) - 80px); }
+html.phone .pl-opt-bar, html.phone .pl-opt-elapsed, html.phone .pl-opt-left { display: none; }
+
+/* ======================================================================================================================
+ * The player's list panel (Audio, Subtitles, Picture, Subtitle timing, Change stream) scrolls by touch; a swipe never picks a row
+ * (a scroll gesture sends no click). The panel is as high as the window in both orientations.
+ * ==================================================================================================================== */
+html.phone .pl-opt-scroll { overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; max-height: 100%; scrollbar-width: none; }
+html.phone .pl-opt-scroll::-webkit-scrollbar { display: none; }
+html.phone .pl-opt-list { transition: none; padding-bottom: 40px; }
+html.phone .pl-row { min-height: 96px; height: auto; }

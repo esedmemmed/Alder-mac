@@ -55,6 +55,8 @@ export function createRow({
   const mounted = new Map();
   let selected = 0;
   let scroll = 0;
+  const onPhone = () => typeof document !== 'undefined' && document.documentElement.classList.contains('phone'); // phone.css: the track scrolls natively
+  let spacer = null;
 
   const heading = h('div', { class: 'row-heading caps' }, title);
   const track = h('div', { class: 'row-track' });
@@ -79,6 +81,11 @@ export function createRow({
 
   /** Mounts what is near the visible part and drops what is far (never the selected card, which holds focus). */
   function update() {
+    if (onPhone()) {
+      scroll = track.scrollLeft; // native scrolling moves the track: mount what is near where it is
+      if (!spacer) { spacer = h('div', { class: 'row-spacer', 'aria-hidden': 'true' }); track.appendChild(spacer); }
+      spacer.style.left = Math.max(0, (items.length - 1) * step + itemWidth + 79) + 'px'; // gives the unmounted cards their scroll length
+    }
     const [from, to] = windowRange({ scroll, viewport, step, count: items.length, buffer });
     Array.from(mounted.keys()).forEach((i) => { if ((i < from || i >= to) && i !== selected) unmount(i); });
     // Right to left: the image loader serves the newest request first, so the leftmost (visible) card's picture is asked for last
@@ -87,6 +94,7 @@ export function createRow({
   }
 
   function place(animate) {
+    if (onPhone()) return;
     if (!animate) track.style.transition = 'none';
     track.style.transform = 'translate3d(' + (-scroll) + 'px,0,0)';
     if (!animate) { void track.offsetWidth; track.style.transition = ''; }
@@ -100,6 +108,7 @@ export function createRow({
     update();
   }
 
+  track.addEventListener('scroll', () => { if (onPhone()) update(); }, { passive: true });
   el.addEventListener('focusin', (e) => {
     const card = e.target.closest ? e.target.closest('.card') : null;
     if (!card || card.parentNode !== track) return;

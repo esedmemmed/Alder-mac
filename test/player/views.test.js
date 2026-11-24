@@ -83,3 +83,21 @@ test('the top-left name is the title\'s name, else the meta\'s, never a bare IMD
   const c = makeEngine({ sources: [stream('X')], params: { name: 'Dune: Part Two' } });
   assert.equal(c.engine.titleInfo().name, 'Dune: Part Two');
 });
+
+test('the Diagnostics report: a SOURCES section before STREAM from the finder report, none without one; no links', () => {
+  const diag = createDiag();
+  diag.setStream({ url: 'https://h/f.mkv', label: 'x', at: 1, total: 1 });
+  assert.ok(!buildReport({ log: createLogger(), diag: diag.snapshot() }).some((s) => s.title === 'SOURCES'));
+  diag.setFind({ start: 'early (good cached source)', addons: [
+    { name: 'Torrentio', ms: 640, count: 18, error: null },
+    { name: 'Slow', ms: 8000, count: 0, error: 'timed out' },
+    { name: 'Empty', ms: 300, count: 0, error: null },
+    { name: 'Odd https://x.example/a?t=1', ms: 5, count: 1, error: null },
+  ] });
+  const report = buildReport({ log: createLogger(), diag: diag.snapshot() });
+  const titles = report.map((s) => s.title);
+  assert.equal(titles.indexOf('SOURCES') + 1, titles.indexOf('STREAM'));
+  const lines = report.find((s) => s.title === 'SOURCES').lines.map((l) => l.text);
+  assert.deepEqual(lines, ['Start: early (good cached source)', 'Torrentio: 18 in 640 ms', 'Slow: timed out after 8000 ms', 'Empty: nothing playable in 300 ms', 'Odd: 1 in 5 ms']);
+  assert.ok(!/:\/\//.test(lines.join('\n')));
+});

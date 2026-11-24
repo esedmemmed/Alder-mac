@@ -2,7 +2,7 @@
 // JS to native: window.webkit.messageHandlers.alder.postMessage({id, cmd, args})
 // Native to JS: window.alderNative.onEvent({type, ...})
 // Args:   load {url, headers?, start?} · pause {paused} · seek {seconds} · observe {names} · setProp {name, value}
-//         getProp {name} · subAdd {text, lang?, title?} · fullscreen {on} · saveFile {name, text} · quit {}
+//         getProp {name} · subAdd {text, lang?, title?} · fullscreen {on} · saveFile {name, text} · orientation {mode: landscape|any} (Android only) · quit {}
 //         log {line} · report {text}  (text for the shell's --report file; scrubbed of links like everything else)
 // Events: reply {id, ok, value|error} · prop {name, value} · fileLoaded · playbackRestart
 //         endFile {reason: eof|stop|quit|error|redirect, error?: mpv error code, message?}
@@ -15,7 +15,7 @@
   'use strict';
 
   var COMMANDS = ['load', 'pause', 'seek', 'setProp', 'getProp', 'quit', 'log', 'report',
-    'observe', 'subAdd', 'fullscreen', 'saveFile'];
+    'observe', 'subAdd', 'fullscreen', 'saveFile', 'orientation'];
   var EVENT_TYPES = ['reply', 'prop', 'fileLoaded', 'playbackRestart', 'endFile',
     'sleep', 'wake', 'audioDevice', 'willQuit'];
   var LINK_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]*|\bmagnet:\?[^\s"'<>]*/gi;
@@ -118,6 +118,7 @@
       observe: function (names) { return send('observe', { names: names }); },
       subAdd: function (text, lang, title) { return send('subAdd', { text: text, lang: lang || '', title: title || '' }); },
       fullscreen: function (on) { return send('fullscreen', { on: !!on }); },
+      orientation: function (mode) { return send('orientation', { mode: mode }); }, // Android only: 'landscape' (the player) or 'any'
       saveFile: function (name, text) { return send('saveFile', { name: name, text: text }); },
       pause: function (paused) { return send('pause', { paused: !!paused }); },
       seek: function (seconds) { return send('seek', { seconds: seconds }); },

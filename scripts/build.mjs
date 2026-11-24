@@ -46,7 +46,7 @@ export async function build({ dev = false, log = console.log } = {}) {
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
-  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(pkg.version) };
+  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(pkg.version), __ALDER_ANDROID__: 'false', __ALDER_WEB__: 'false' };
   const common = { bundle: true, target: TARGET, logLevel: 'silent', absWorkingDir: ROOT, legalComments: dev ? 'none' : 'external' };
 
   const js = await esbuild({
@@ -116,7 +116,13 @@ const MAC_SWAPS = {
   'src/lib/keys.js': 'keys.js', 'src/core/device.js': 'device.js', 'src/player/language.js': 'language.js', 'src/player/avplay.js': 'mpv.js',
   'src/ui/osk.js': 'osk.js', // native text fields, no on-screen keyboard
 };
+/** The web variant (--web) swaps these two for src/platform/web/<file>; every other swap stays the Mac's. */
+const WEB_SWAPS = { 'src/core/device.js': 'device.js', 'src/player/avplay.js': 'html5.js' };
+/** The Android variant (--android) swaps the device profile for src/platform/android/device.js (the phone decodes HEVC, HDR and 4K in hardware). */
+const ANDROID_SWAPS = { 'src/core/device.js': 'device.js' };
 // src/main.js is shared and holds the Tizen exit and key registration: the Mac plugin patches its text on load (and throws if a piece moved).
+/** Tag on a patch pair that only the Mac's mpv-draws-subtitles design needs: the Android variant (--android) skips it. */
+export const MPV_SUBS = 'mpvSubs';
 const MAIN_PATCHES = [ // also diagnostics.js (webapis) and settings.js (the About text) below
   ["import { installed as polyfilled } from './lib/compat.js';", "import { installed as polyfilled } from './lib/compat.js';\nimport { macExit, installMacLifecycle } from './platform/mac/lifecycle.js';\nimport './platform/mac/layout.js';\nimport { installPointer, installPlayHook, installBackButton } from './platform/mac/index.js';\nimport { setReportSink } from './lib/report.js';\nimport { macBridge } from '#platform/bridge';"],
   ['const engine = createFocusEngine({ root: document.body });', 'const engine = createFocusEngine({ root: document.body });\n  setReportSink((line) => { const b = macBridge(); return b && b.log ? b.log(line) : undefined; });\n  installPointer(engine);\n  installMacLifecycle();'],
@@ -133,13 +139,13 @@ const MAIN_PATCHES = [ // also diagnostics.js (webapis) and settings.js (the Abo
 ];
 
 /** esbuild plugin: `#platform/<name>` resolves to src/platform/mac/<name>.js, so shared code never branches at run time. */
-function macPlatform() {
+function macPlatform({ android = false, web = false, skipped = [] } = {}) {
   return {
     name: 'mac-platform',
     setup(b) {
-      const swaps = new Map(Object.entries(MAC_SWAPS).map(([from, to]) => [join(ROOT, from), join(ROOT, 'src/platform/mac', to)]));
+      const swaps = new Map(Object.entries(MAC_SWAPS).map(([from, to]) => [join(ROOT, from), web && WEB_SWAPS[from] ? join(ROOT, 'src/platform/web', WEB_SWAPS[from]) : android && !web && ANDROID_SWAPS[from] ? join(ROOT, 'src/platform/android', ANDROID_SWAPS[from]) : join(ROOT, 'src/platform/mac', to)]));
       b.onResolve({ filter: /^\.\.?\// }, (a) => {
-        if (a.kind === 'entry-point' || !a.importer || a.importer.startsWith(join(ROOT, 'src/platform/mac'))) return null;
+        if (a.kind === 'entry-point' || !a.importer || a.importer.startsWith(join(ROOT, 'src/platform/mac')) || a.importer.startsWith(join(ROOT, 'src/platform/web')) || a.importer.startsWith(join(ROOT, 'src/platform/android'))) return null;
         const target = resolve(a.resolveDir, a.path);
         return swaps.has(target) ? { path: swaps.get(target) } : null;
       });
@@ -163,13 +169,13 @@ function macPlatform() {
         // add-on subtitles: the text the page fetched goes to mpv (adapter addSubtitle) and mpv draws it; mpv also draws the file's own
         // tracks, so the DOM subtitle line stays hidden
         [join(ROOT, 'src/player/engine.js'), [
-          ['parseSubtitles(await http.get(choice.sub.url), choice.sub.format)', 'parseSubtitles(((t) => { avplay.addSubtitle(t, choice.sub); return t; })(await http.get(choice.sub.url)), choice.sub.format)'],
-          ['avplay.subtitlesOn(false);', "avplay.subtitlesOn(subMode === 'addon');"],
+          ['parseSubtitles(await http.get(choice.sub.url), choice.sub.format)', 'parseSubtitles(((t) => { avplay.addSubtitle(t, choice.sub); return t; })(await http.get(choice.sub.url)), choice.sub.format)', MPV_SUBS],
+          ['avplay.subtitlesOn(false);', "avplay.subtitlesOn(subMode === 'addon');", MPV_SUBS],
           ['by the TV', 'by the player'],
           ["message: 'No sound on this TV'", "message: 'No sound on this Mac'"],
         ]],
         [join(ROOT, 'src/player/screen.js'), [
-          ["engine.on('subtitle', (d) => { if (d.lines && d.lines.length) subtitles.show(d.lines); else subtitles.hide(); });", "// Mac: mpv draws the subtitles, the DOM line stays hidden"],
+          ["engine.on('subtitle', (d) => { if (d.lines && d.lines.length) subtitles.show(d.lines); else subtitles.hide(); });", "// Mac: mpv draws the subtitles, the DOM line stays hidden", MPV_SUBS],
           // lifecycle (platform/mac/lifecycle.js): sleep, wake, audio device and quit act on this engine; F and Esc handle fullscreen first
           ["import { createTvLanguage } from './language.js';", "import { createTvLanguage } from './language.js';\nimport { macBindPlayer, macFullscreenKey } from '#platform/lifecycle';\nimport { macBindInput, macPlayerKey } from '#platform/player-input';"],
           ['let closed = false;', 'let closed = false;\n  let macUnbind = null;\n  let macUnbindInput = null;\n  let macAv = null;'],
@@ -222,7 +228,8 @@ function macPlatform() {
         const list = patches.get(a.path);
         if (!list) return null;
         let text = readFileSync(a.path, 'utf8');
-        for (const [from, to] of list) {
+        for (const [from, to, tag] of list) {
+          if ((android || web) && tag === MPV_SUBS) { skipped.push([relative(ROOT, a.path).split('\\').join('/'), from]); continue; } // the page draws the subtitles on Android and on the web
           if (!text.includes(from)) throw new Error('Mac build: ' + relative(ROOT, a.path) + ' no longer contains ' + JSON.stringify(from));
           text = text.split(from).join(to);
         }
@@ -233,8 +240,9 @@ function macPlatform() {
         return { contents: readFileSync(a.path, 'utf8').replace(/(^|[^-\w])height:\s*1080px/g, '$1height: var(--app-h, 1080px)'), loader: 'css', resolveDir: dirname(a.path) };
       });
       b.onResolve({ filter: /^#platform\// }, (a) => {
-        const file = join(ROOT, 'src/platform/mac', a.path.slice('#platform/'.length) + '.js');
-        if (!existsSync(file)) return { errors: [{ text: 'no Mac platform module ' + relative(ROOT, file) }] };
+        const name = a.path.slice('#platform/'.length);
+        const file = join(ROOT, 'src/platform', web && name === 'bridge' ? 'web' : 'mac', name + '.js');
+        if (!existsSync(file)) return { errors: [{ text: 'no platform module ' + relative(ROOT, file) }] };
         return { path: file };
       });
     },
@@ -246,31 +254,43 @@ function macPlatform() {
  * bridge), app.js, app.css, assets and licences. mac/shell/build-app.sh copies it into the app's web/ directory.
  * Same sources as the Tizen build, bundled for WebKit; the Tizen output is not touched.
  */
-export async function buildMac({ log = console.log, dev = false, outDir: outDirArg = null } = {}) {
+export async function buildMac({ log = console.log, dev = false, outDir: outDirArg = null, android = false, web = false } = {}) {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-  const outDir = outDirArg || join(ROOT, 'dist-mac'); // dev (dev/screenshot-mac.mjs): fixture-server rewrites on, not minified
+  const outDir = outDirArg || join(ROOT, web ? 'dist-web' : android ? 'dist-android' : 'dist-mac'); // dev (dev/screenshot-mac.mjs): fixture-server rewrites on, not minified
+  const skipped = []; // [file, anchor] of every patch pair the Android variant left out
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
   const macVersion = readFileSync(join(ROOT, 'mac/VERSION'), 'utf8').trim(); // the Mac app's own version (the TV keeps package.json's)
-  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(macVersion) };
+  const define = { __ALDER_ENV__: JSON.stringify(dev ? 'dev' : 'prod'), __ALDER_DEV__: dev ? 'true' : 'false', __ALDER_VERSION__: JSON.stringify(macVersion), __ALDER_ANDROID__: android ? 'true' : 'false', __ALDER_WEB__: web ? 'true' : 'false' };
   const common = { bundle: true, target: MAC_TARGET, logLevel: 'silent', absWorkingDir: ROOT, legalComments: 'external', minify: !dev,
     // esbuild cannot lower destructuring for safari14 (a WebKit 14 bug in some destructuring forms), so it fails the build
     // instead; the shell's WebKit runs it as written (T3.c1 note; revisit if the Air shows a Safari 14 fault).
     supported: { destructuring: true,
       'class-field': false } }; // pako's `class { options; }` fields: esbuild passes them for safari14, Safari 14.0 cannot parse them (14.1 can)
-  await esbuild({ ...common, entryPoints: ['src/main.js'], outfile: join(outDir, 'app.js'), format: 'iife', define, plugins: [macPlatform()] });
+  await esbuild({ ...common, entryPoints: ['src/main.js'], outfile: join(outDir, 'app.js'), format: 'iife', define, plugins: [macPlatform({ android, web, skipped })] });
   await esbuild({
-    ...common, outfile: join(outDir, 'app.css'), plugins: [macPlatform()],
+    ...common, outfile: join(outDir, 'app.css'), plugins: [macPlatform({ web })],
     // the shared stylesheet, then the Mac-only one (cursor, stronger focus)
     stdin: { contents: '@import "./src/ui/styles/main.css";\n@import "./src/platform/mac/mac.css";', resolveDir: ROOT, sourcefile: 'mac-main.css', loader: 'css' },
     loader: { '.woff': 'file', '.woff2': 'file', '.png': 'file', '.webp': 'file' }, assetNames: 'assets/[name]-[hash]',
   });
 
-  const html = readFileSync(join(ROOT, 'mac/web/alder-index.html'), 'utf8');
+  let html = readFileSync(join(ROOT, 'mac/web/alder-index.html'), 'utf8');
   if (html.includes('$WEBAPIS')) throw new Error('mac/web/alder-index.html must not load the Samsung webapis');
-  writeFileSync(join(outDir, 'index.html'), html);
-  copyFileSync(join(ROOT, 'mac/web/bridge.js'), join(outDir, 'bridge.js'));
+  if (android || web) { // a phone: the viewport is fixed from the first frame (src/platform/mac/layout.js starts phone mode from innerWidth; a page that may zoom out reports a wider one)
+    const meta = '<meta name="viewport" content="width=device-width, initial-scale=1">';
+    if (!html.includes(meta)) throw new Error('mac/web/alder-index.html no longer contains its viewport meta');
+    html = html.replace(meta, '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">');
+  }
+  if (web) { // no native bridge in a browser: the page does not load it (all other URLs in the page are already relative, so a sub-path works)
+    const tag = '<script src="bridge.js"></script>';
+    if (!html.includes(tag)) throw new Error('mac/web/alder-index.html no longer contains ' + tag);
+    writeFileSync(join(outDir, 'index.html'), html.split(tag).join(''));
+  } else {
+    writeFileSync(join(outDir, 'index.html'), html);
+    copyFileSync(join(ROOT, 'mac/web/bridge.js'), join(outDir, 'bridge.js'));
+  }
 
   copyFileSync(join(ROOT, 'LICENSE'), join(outDir, 'LICENSE.txt'));
   mkdirSync(join(outDir, 'licenses'), { recursive: true });
@@ -283,10 +303,10 @@ export async function buildMac({ log = console.log, dev = false, outDir: outDirA
   report(compat, { log });
   if (compat.errors.length) throw new Error('compat check failed (Mac)');
   const files = walk(outDir).map((p) => relative(outDir, p).split('\\').join('/'));
-  log('dist-mac: ' + files.length + ' files, app.js ' + sizeKb(statSync(join(outDir, 'app.js')).size));
-  return { outDir, files };
+  log((web ? 'dist-web' : android ? 'dist-android' : 'dist-mac') + ': ' + files.length + ' files, app.js ' + sizeKb(statSync(join(outDir, 'app.js')).size));
+  return { outDir, files, skipped };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  (process.argv.includes('--mac') ? buildMac() : build({ dev: process.argv.includes('--dev') })).catch((e) => { console.error(e.message || e); process.exit(1); });
+  (process.argv.includes('--mac') ? buildMac({ android: process.argv.includes('--android'), web: process.argv.includes('--web') }) : build({ dev: process.argv.includes('--dev') })).catch((e) => { console.error(e.message || e); process.exit(1); });
 }

@@ -58,6 +58,7 @@ import { Stream, runtime, subtitleExtra, debridService } from '../core/addon.js'
 import { toIso1, languageName } from '../core/lang.js';
 import { errorCode } from './avplay.js';
 import { parseTextTracks, startSubtitle } from './tracks.js';
+import { whyChosen } from '../core/ranking.js';
 import { subtitlePlan, matchContext } from '../core/subtitle-memory.js';
 import { parseSubtitles, shiftCues, cueAt, cueLines } from './subtitles.js';
 import { fetchAddonSubtitles } from './subtitle-fetch.js';
@@ -65,7 +66,7 @@ import { resolvePlayableUrl } from './sources.js';
 import { createSubtitleDelay } from './subtitle-delay.js';
 import { PICTURE, PICTURE_NAMES, normalisePicture, parseVideoShape, shapeText, shapeNote, hasBars, cropPercent } from './picture.js';
 
-const { TICK, PUSH_EVERY, RESUME_SLACK, SKIP_SHOWN, START_WAIT, RETRIES, RETRY_WAIT, SEEK_SETTLE, STALL_WINDOW, STALLS_FOR_LOWER } = PLAYER;
+const { TICK, PUSH_EVERY, RESUME_SLACK, SKIP_SHOWN, START_WAIT, START_WAIT_CACHED, RETRIES, RETRY_WAIT, SEEK_SETTLE, STALL_WINDOW, STALLS_FOR_LOWER } = PLAYER;
 
 export const CHECK_EVERY = 500; // the Skip intro / Up next check (Alder's skipTask)
 const SEEK_GRACE = 2000; // a buffering this soon after a seek is the seek, not a stall
@@ -248,17 +249,25 @@ export function createEngine(params, deps) {
     reloadAt = null;
     pendingSeek = null;
     startMessage = message || 'Starting · ' + s.label;
+    decide('source: ' + whyChosen(s, memory && memory.level ? memory.level(videoId, metaId, s) : 0, { device, sources }));
     showLoading(startMessage);
     cancel(startTimer);
-    startTimer = after(onStartTimeout, START_WAIT);
+    startTimer = after(onStartTimeout, startWait());
     attempt(position, {});
+  }
+
+  /** How long a source gets to show a picture: less for one its add-on says is cached (a dead cached link is a dead link). */
+  function startWait() {
+    const cached = source() && source().cached === 1;
+    const w = device && device.startWait; // the Android profile only: a phone's first picture takes longer than the Mac's
+    return w ? (cached ? w.cached : w.other) : (cached ? START_WAIT_CACHED : START_WAIT);
   }
 
   function onStartTimeout() {
     startTimer = null;
     if (started) return;
     warn('source ' + (at + 1) + '/' + sources.length + ' timed out');
-    next('no picture after ' + START_WAIT / 1000 + ' s');
+    next('no picture after ' + startWait() / 1000 + ' s');
   }
 
   /**
@@ -523,7 +532,7 @@ export function createEngine(params, deps) {
       // AVPlay's own buffering already took a while: each retry of ours gets a fresh START_WAIT, or the start timeout would
       // move on to the next source before the second retry ran.
       cancel(startTimer);
-      startTimer = after(onStartTimeout, RETRY_WAIT + START_WAIT);
+      startTimer = after(onStartTimeout, RETRY_WAIT + startWait());
       showLoading(loadingMessage());
       say('retry ' + retries + '/' + RETRIES + ' in ' + RETRY_WAIT + ' ms');
       after(() => { if (!shut && !finished) attempt(here, { forcedAudio: audioIndex !== null && audioPicked ? audioIndex : null }); }, RETRY_WAIT);
@@ -997,6 +1006,7 @@ export function createEngine(params, deps) {
 
   function start() {
     if (!sources.length) { exit(); return; }
+    if (diag && params.findReport) diag.setFind(params.findReport);
     fetchSegments();
     Promise.resolve().then(loadMeta).then((m) => { meta = m; emit('meta'); }).catch((e) => warn('episode list unavailable: ' + (e && e.message ? e.message : e)));
     loadAddonSubtitles().then(() => { macSub.addonsDone = true; macSubTick(); });

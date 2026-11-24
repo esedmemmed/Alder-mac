@@ -288,3 +288,15 @@ test('MIME-like fourCCs from AVPlay classify (audio/mpeg, audio/x-ac3, audio/mp4
   assert.equal(t('audio/mp4a-latm').codec, 'AAC');
   assert.equal(t('audio/x-dts').playable, 'no');
 });
+
+test('diag: setFind stores the finder report, snapshot carries it, a new stream keeps it, clear drops it', () => {
+  const d = createDiag();
+  assert.equal(d.snapshot().find, null);
+  const report = { addons: [{ name: 'A', ms: 1, count: 2, error: null }], start: 'list' };
+  d.setFind(report);
+  assert.deepEqual(d.snapshot().find, report);
+  d.setStream({ url: 'https://h/g.mkv' });
+  assert.deepEqual(d.snapshot().find, report);
+  d.clear();
+  assert.equal(d.snapshot().find, null);
+});

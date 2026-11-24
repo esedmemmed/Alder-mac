@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { SourceFinder, streamAddonsFor, GAP_WAIT_MS } from '../../src/core/finder.js'
 import { createRanker } from '../../src/core/ranking.js'
-import { Addon } from '../../src/core/addon.js'
+import { Addon, Stream } from '../../src/core/addon.js'
 import { fakeHttp, fixtureAddons, manualTime, settingsStub, stream, tv } from './helpers.js'
 
 /** An add-on whose streams() answer is controlled by the test. */
@@ -17,14 +17,15 @@ function setup({ count = 2, pick = false, settings } = {}) {
   const addons = Array.from({ length: count }, (_, i) => fakeAddon('addon' + i))
   const time = manualTime()
   const events = []
+  const reports = []
   const ranker = createRanker({ settings: settings || settingsStub(), device: tv(), memory: null, videoId: 'v', metaId: 'm' })
   const finder = new SourceFinder({
-    addons, type: 'movie', videoId: 'v', ranker, pick, timers: time.timers,
-    onPlay: streams => events.push(['play', streams.map(s => s.filename)]),
-    onList: model => events.push(['list', model.streams.map(s => s.filename), model]),
+    addons, type: 'movie', videoId: 'v', ranker, pick, timers: time.timers, now: time.now,
+    onPlay: (streams, report) => { reports.push(report); events.push(['play', streams.map(s => s.filename)]) },
+    onList: (model, report) => { reports.push(report); events.push(['list', model.streams.map(s => s.filename), model]) },
     onStatus: code => events.push(['status', code]),
   })
-  return { addons, time, events, finder }
+  return { addons, time, events, finder, reports }
 }
 const web = n => stream(`Movie.1080p.WEB-DL.DDP5.1.x264-${n}.mkv`)
 
@@ -209,4 +210,134 @@ test('each stream carries the name of the add-on it came from (not part of toJso
   assert.equal(a.addonName, 'addon0')
   assert.equal(b.addonName, 'addon1')
   assert.ok(!('addonName' in a.toJson()))
+})
+
+// ---- early start ----
+const hot = n => stream(`Movie.1080p.WEB-DL.DDP5.1.x264-${n}.mkv`, { title: '[TB+] 1080p' })
+
+test('early start: a cached, sound, fitting answer from a later add-on plays at once, without the 800 ms wait', async () => {
+  const { addons, finder, events, time } = setup({ count: 3 })
+  finder.start()
+  addons[1].give([hot('FAST')])
+  await tick()
+  assert.deepEqual(events, [['play', ['Movie.1080p.WEB-DL.DDP5.1.x264-FAST.mkv']]])
+  assert.equal(time.pending(), 0)
+  addons[0].give([web('SLOW')]) // ignored: playing already
+  await tick()
+  assert.equal(events.length, 1)
+})
+
+test('early start: an uncached later answer still waits 800 ms', async () => {
+  const { addons, finder, events, time } = setup({ count: 3 })
+  finder.start()
+  addons[1].give([web('PLAIN')])
+  await tick()
+  assert.deepEqual(events, [])
+  assert.equal(time.pending(), 1)
+})
+
+test('early start: the remembered-release hold keeps its precedence', async () => {
+  const addons = [fakeAddon('a0'), fakeAddon('a1'), fakeAddon('a2')]
+  const time = manualTime()
+  const events = []
+  let held = 0
+  const memory = { file: () => null, binge: () => null, level: () => 0, pending: () => true, noteHeld: () => { held++ } }
+  const ranker = createRanker({ settings: settingsStub(), device: tv(), memory, videoId: 'v', metaId: 'm' })
+  const finder = new SourceFinder({ addons, type: 'movie', videoId: 'v', ranker, timers: time.timers, onPlay: s => events.push(['play', s.length]), onList: () => {} })
+  finder.start()
+  addons[0].give([web('A0')]) // the first add-on answered without the remembered release: held
+  await tick()
+  assert.equal(held, 1)
+  addons[1].give([hot('FAST')])
+  await tick()
+  assert.deepEqual(events, [])
+  assert.equal(held, 1)
+  time.advance(GAP_WAIT_MS)
+  assert.deepEqual(events, [['play', 2]])
+})
+
+// ---- the report for Diagnostics ----
+test('report: an early start says so, with one entry per add-on that answered (ms, count, error), and onPlay gets it', async () => {
+  const { addons, finder, events, time, reports } = setup({ count: 3 })
+  finder.start()
+  time.advance(300)
+  addons[1].give([hot('FAST'), web('B')])
+  await tick()
+  assert.equal(events.length, 1)
+  assert.equal(reports[0], finder.report)
+  assert.equal(finder.report.start, 'early (good cached source)')
+  assert.deepEqual(finder.report.addons, [{ name: 'addon1', ms: 300, count: 2, error: null }])
+  time.advance(200)
+  addons[0].fail(new Error('boom'))
+  await tick()
+  assert.deepEqual(finder.report.addons[1], { name: 'addon0', ms: 500, count: 0, error: 'failed' })
+})
+
+test('report: a timeout says "timed out"; 800 ms gap start; all answered; list', async () => {
+  const gap = setup()
+  gap.finder.start()
+  gap.addons[1].give([web('LATE')])
+  await tick()
+  gap.time.advance(GAP_WAIT_MS)
+  assert.equal(gap.finder.report.start, 'gap 800 ms')
+  assert.equal(gap.reports[0], gap.finder.report)
+  gap.addons[0].fail(Object.assign(new Error('x'), { kind: 'timeout' }))
+  await tick()
+  assert.deepEqual(gap.finder.report.addons.map(a => [a.name, a.ms, a.count, a.error]), [['addon1', 0, 1, null], ['addon0', GAP_WAIT_MS, 0, 'timed out']])
+
+  const all = setup()
+  all.finder.start()
+  all.addons[0].give([web('A')])
+  await tick()
+  assert.equal(all.finder.report.start, 'in add-on order') // add-on 0 was first in order: plays without waiting for add-on 1
+  assert.equal(all.reports[0], all.finder.report)
+
+  const done = setup()
+  done.finder.start()
+  done.addons[1].give([])
+  done.addons[0].give([web('A')])
+  await tick()
+  assert.equal(done.finder.report.start, 'all answered')
+
+  const list = setup({ count: 1 })
+  list.finder.start()
+  list.addons[0].give([stream('Movie.2024.HDCAM.x264.mkv')])
+  await tick()
+  assert.equal(list.finder.report.start, 'list')
+  assert.equal(list.reports[0], list.finder.report)
+  assert.equal(list.events[0][0], 'list')
+})
+
+// ---- anonymous sources (no resolution, no filename, no videoSize) never win the early or gap start ----
+const smartPlay = () => new Stream('⚡ SmartPlay — Auto Verified [TB+]', '', 'https://flixnest.app/smart-play', {}, 0, null, null)
+const cached1080 = n => stream(`Movie.2024.1080p.WEB-DL.DDP5.1.HEVC-${n}.mkv`, { title: '[TB+] 1080p' })
+
+test('anonymous cached SmartPlay answers first: nothing starts until a named source answers, and that one is chosen', async () => {
+  const { addons, time, events, finder, reports } = setup({ count: 3 })
+  finder.start()
+  addons[0].give([smartPlay()])
+  await tick()
+  time.advance(GAP_WAIT_MS)
+  assert.deepEqual(events, [])
+  time.advance(600) // 1400 ms: add-on B answers
+  addons[1].give([cached1080('B')])
+  await tick()
+  assert.deepEqual(events, [['play', ['Movie.2024.1080p.WEB-DL.DDP5.1.HEVC-B.mkv', null]]]) // the anonymous one stays as the last fallback
+  assert.equal(reports[0].start, 'early (good cached source)')
+})
+
+test('only an anonymous source exists: it plays once every add-on has answered', async () => {
+  const { addons, time, events, finder } = setup({ count: 3 })
+  finder.start()
+  addons[0].give([smartPlay()])
+  await tick()
+  time.advance(GAP_WAIT_MS)
+  addons[1].give([])
+  await tick()
+  assert.deepEqual(events, [])
+  addons[2].give([])
+  await tick()
+  assert.equal(events.length, 1)
+  assert.equal(events[0][0], 'play')
+  assert.equal(events[0][1][0], null)
 })

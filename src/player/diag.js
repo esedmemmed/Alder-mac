@@ -24,6 +24,7 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
   let errors = [];
   let subtitleAddons = [];
   let subtitleExtra = null;
+  let find = null;
 
   return {
     /** A source was opened: { url, label, at, total, height }. Clears the previous stream's tracks and decisions. */
@@ -60,8 +61,10 @@ export function createDiag({ now = Date.now, limit = 60 } = {}) {
     },
     /** The names of the file details the add-ons were asked with ([] for none). */
     subtitleExtraKeys(keys) { subtitleExtra = Array.isArray(keys) ? keys.slice() : null; },
-    snapshot() { return { stream, rawTracks, picture, decisions: decisions.slice(), errors: errors.slice(), subtitleAddons: subtitleAddons.slice(), subtitleExtra: subtitleExtra === null ? null : subtitleExtra.slice() }; },
-    clear() { stream = null; rawTracks = null; picture = null; decisions = []; errors = []; subtitleAddons = []; },
+    /** What the finder saw: { addons: [{ name, ms, count, error }], start } (core/finder.js report). */
+    setFind(report) { find = report || null; },
+    snapshot() { return { find, stream, rawTracks, picture, decisions: decisions.slice(), errors: errors.slice(), subtitleAddons: subtitleAddons.slice(), subtitleExtra: subtitleExtra === null ? null : subtitleExtra.slice() }; },
+    clear() { stream = null; rawTracks = null; picture = null; decisions = []; errors = []; subtitleAddons = []; find = null; },
   };
 }
 

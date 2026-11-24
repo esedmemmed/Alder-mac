@@ -13,6 +13,7 @@ export const PLAYER = Object.freeze({
   SKIP_SHOWN: 10000, // the Skip intro pill stays, as in NuvioTV
   HIDE: 5000, // the controls stay up while playing
   START_WAIT: 12000, // for a source to show a picture before the next is tried (4K DV from debrid took 6 s)
+  START_WAIT_CACHED: 8000, // the same for a source its add-on says is cached: a TorBox-cached debrid file normally starts in under 3 s
   RETRIES: 2,
   RETRY_WAIT: 1500,
   TRY: 3,

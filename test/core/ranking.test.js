@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createRanker, createSourceMemory, preferenceScore, readyStreams, sourceRow, TRY, presetName } from '../../src/core/ranking.js'
+import { Stream } from '../../src/core/addon.js'
+import { isAnonymous, createRanker, createSourceMemory, preferenceScore, readyStreams, sourceRow, TRY, presetName, whyChosen } from '../../src/core/ranking.js'
 import { createSettings } from '../../src/core/settings.js'
 import { KEYS } from '../../src/core/keys.js'
 import { fakeHttp, fixtureAddons, memoryStore, settingsStub, stream, tv } from './helpers.js'
@@ -37,7 +38,7 @@ test('rank: the file played last time, then the release the previous episode use
   const a = stream('A.1080p.WEB-DL.DDP5.1.mkv', { bingeGroup: 'g1' })
   const b = stream('B.720p.WEB-DL.DDP5.1.mkv', { bingeGroup: 'g2' })
   const c = stream('C.2160p.WEB-DL.DDP5.1.HDR.mkv', { bingeGroup: 'g3' })
-  assert.deepEqual(names(ranker({ memory }).rank([a, b, c])), names([a, b, c]))
+  assert.deepEqual(names(ranker({ memory }).rank([a, b, c])), names([c, a, b])) // no memory: the device's own height first, then lower ones tallest first
   store.set(KEYS.sourceBinge('tt1'), 'g3')
   assert.deepEqual(names(ranker({ memory }).rank([a, b, c])), names([c, a, b]))
   store.set(KEYS.sourceFile('tt1'), 'B.720p.WEB-DL.DDP5.1.mkv')
@@ -113,7 +114,8 @@ test('preferenceScore: Alder\'s numbers for release, HDR and dub preferences', (
 
 test('preferenceScore: "No preference" scores 0 for everything (TV speakers, nothing set)', () => {
   const score = preferenceScore(settingsStub())
-  for (const n of ['Movie.2160p.BluRay.REMUX.DV.Atmos', 'Movie.Hindi.DUB', 'Movie.WEB-DL']) assert.equal(score(stream(n)), 0)
+  for (const n of ['Movie.2160p.BluRay.REMUX.DV.Atmos', 'Movie.WEB-DL']) assert.equal(score(stream(n)), 0)
+  assert.equal(score(stream('Movie.Hindi.DUB')), -2) // except a foreign dub: dubs are not preferred by default
 })
 
 // ---- wanted ----
@@ -277,4 +279,122 @@ test('createSourceMemory: file per video, binge group per title; a stream withou
   memory.remember('v1', 'm1', new (stream('x').constructor)('t', 'd', 'u', {}, 0, null, null))
   assert.equal(memory.file('v1'), null)
   assert.equal(memory.binge('m1'), null)
+})
+
+// ---- cached, foreign dubs, goodStart ----
+test('rank: cached before fit; a cached source outranks an uncached one, but "may not play" still loses', () => {
+  const unknown = stream('Movie.1080p.WEB-DL.DDP5.1.mkv')
+  const cached = stream('Movie.1080p.WEB-DL.DDP5.1.cached.mkv', { title: '[TB+] 1080p' })
+  const uncached = stream('Movie.1080p.WEB-DL.DDP5.1.other.mkv', { title: '[TB download] 1080p' })
+  assert.deepEqual(names(ranker().rank([uncached, unknown, cached])), names([cached, unknown, uncached]))
+  const headers = stream('Movie.1080p.WEB-DL.DDP5.1.hdr.mkv', { title: '[TB+] 1080p', headers: { Referer: 'x' } })
+  assert.deepEqual(names(ranker().rank([headers, unknown])), names([unknown, headers]))
+  const threeD = stream('Movie.3D.1080p.WEB-DL.DDP5.1.mkv', { title: '[TB+] 1080p' })
+  assert.deepEqual(names(ranker().rank([threeD, unknown])), names([unknown, threeD]))
+})
+
+test('preferenceScore: dubs are penalised by default and with "original"; "mine" is unchanged', () => {
+  const hindi = stream('Movie.1080p.Hindi.mkv')
+  const dual = stream('Movie.1080p.Hindi.English.mkv')
+  const plain = stream('Movie.1080p.mkv')
+  const score = (over, s) => preferenceScore(settingsStub(over))(s)
+  assert.deepEqual([hindi, dual, plain].map(s => score({}, s)), [-2, 0, 0])
+  assert.deepEqual([hindi, dual, plain].map(s => score({ dub: () => 'original' }, s)), [-2, 0, 0])
+  assert.deepEqual([hindi, dual, plain].map(s => score({ dub: () => 'mine', audioLanguage: () => 'hi' }, s)), [2, 2, 0])
+  assert.deepEqual(names(ranker().rank([hindi, plain])), names([plain, hindi]))
+})
+
+test('goodStart: cached, fits, has sound; on the TV profile and the Mac profile', () => {
+  const good = stream('Movie.1080p.WEB-DL.DD5.1.x264.mkv', { title: '[TB+] 1080p' })
+  const notCached = stream('Movie.1080p.WEB-DL.DD5.1.x264.mkv')
+  const tooTall = stream('Movie.2160p.WEB-DL.DD5.1.x265.mkv', { title: '[TB+]' })
+  const noSound = stream('Movie.1080p.BluRay.REMUX.DTS-HD.MA.5.1.mkv', { title: '[TB+]' })
+  const r = ranker()
+  assert.equal(r.goodStart(good), true)
+  assert.equal(r.goodStart(notCached), false)
+  assert.equal(r.goodStart(noSound), false)
+  const hd = ranker({ device: tv({ height: 1080, hdr: false }) })
+  assert.equal(hd.goodStart(tooTall), false)
+  assert.equal(hd.goodStart(good), true)
+  const mac = ranker({ device: tv({ autoOk: s => s.height <= 1080 }) }) // a Mac-style profile with an autoOk rule
+  assert.equal(mac.goodStart(good), true)
+  assert.equal(mac.goodStart(stream('Movie.1080p.WEB-DL.DD5.1.x264.mkv', { title: '[TB+] 1080p HDR' })), true)
+  const strict = ranker({ device: tv({ autoOk: () => false }) })
+  assert.equal(strict.goodStart(good), false)
+})
+
+// ---- whyChosen ----
+test('whyChosen: the parts that are known, in order', () => {
+  assert.equal(whyChosen(stream('Movie.1080p.WEB-DL.AC3.x264.mkv', { title: '[TB+] 1080p' })), 'cached, 1080p, H.264, AC3')
+  assert.equal(whyChosen(stream('Movie.2160p.HEVC.DTS.Hindi.mkv', { title: '[TB download]' })), 'not cached, 2160p, HEVC, DTS, dub')
+  assert.equal(whyChosen(stream('Movie.mkv')), 'sound unknown')
+  assert.equal(whyChosen(stream('Movie.mkv'), 2), 'sound unknown, remembered')
+  assert.equal(whyChosen(stream('Movie.1080p.AC3.mkv'), 0), '1080p, AC3')
+})
+
+// ---- anonymous sources ----
+test('isAnonymous: no resolution, no filename, no videoSize; goodStart is false, rank puts it below named ones of the same cached level', () => {
+  const anon = new Stream('⚡ SmartPlay — Auto Verified [TB+]', '', 'https://flixnest.app/smart-play', {}, 0, null, null)
+  const named = stream('Movie.1080p.WEB-DL.DD5.1.x264.mkv', { title: '[TB+] 1080p' })
+  const uncachedNamed = stream('Movie.1080p.WEB-DL.DD5.1.x264.other.mkv', { title: '[TB download] 1080p' })
+  assert.equal(isAnonymous(anon), true)
+  assert.equal(isAnonymous(named), false)
+  assert.equal(isAnonymous(new Stream('x', '', 'https://h/x', {}, 5e9, null, null)), false) // a videoSize is a file detail
+  assert.equal(isAnonymous(new Stream('x 1080p', '', 'https://h/x', {}, 0, null, null)), false) // a named resolution
+  const r = ranker()
+  assert.equal(r.goodStart(anon), false)
+  assert.deepEqual(r.rank([anon, named]), [named, anon])
+  assert.deepEqual(r.rank([anon, uncachedNamed]), [anon, uncachedNamed]) // cached still comes first
+  assert.deepEqual(r.autoCandidates([anon]), [anon]) // still chosen when nothing else is playable
+  assert.ok(whyChosen(anon).includes('no quality or file named'))
+  assert.ok(!whyChosen(named).includes('no quality or file named'))
+})
+
+// ---- preferred resolution and a dub listed first ----
+const HIND = 'The.Return.of.the.King.2003.EXTENDED.720p.10bit.BluRay.x265.HEVC.[Org.DvD.Hindi.DD.2.0.~192Kbps.+.English.DD.2.0].ESub.mkv'
+test('dubFirst: a dub language listed before English; a language word alone, or English subs, is not it', () => {
+  const d = (name, o) => stream(name, o).dubFirst
+  assert.equal(d(HIND), true)
+  assert.equal(d('Movie 2024 1080p Hindi-English'), true)
+  assert.equal(d('Movie 2024 Dual Audio [Hindi + English]'), true)
+  assert.equal(d('Movie 2024 Tam+Tel+Hin+Eng'), true)
+  assert.equal(d('Movie 2024 English + Hindi'), false)
+  assert.equal(d('Hindi Medium 2017 1080p'), false)
+  assert.equal(d('Movie 2024 1080p', { title: 'Hindi Medium' }), false)
+  assert.equal(d('Hindi Movie 1080p English subs'), false)
+  assert.equal(d('Movie.2024.1080p.WEB-DL'), false)
+})
+
+test('rank: the preferred resolution beats add-on order (1080 then 2160 then 720 on a 1080-preferring 4K device; 2160 first on a TV)', () => {
+  const dubbed720 = stream(HIND, { title: '[TB+] 720p' })
+  const p1080 = stream('Movie.2003.1080p.BluRay.x265.DD5.1.mkv', { title: '[TB+] 1080p' })
+  const p2160 = stream('Movie.2003.2160p.BluRay.x265.DD5.1.mkv', { title: '[TB+] 2160p' })
+  const p480 = stream('Movie.2003.480p.BluRay.x264.DD5.1.mkv', { title: '[TB+] 480p' })
+  const list = [dubbed720, p480, p2160, p1080]
+  const phone = ranker({ device: tv({ height: 2160, preferHeight: 1080 }) })
+  assert.deepEqual(names(phone.rank(list)), names([p1080, p2160, dubbed720, p480])) // a dub listed first never beats resolution
+  assert.equal(phone.autoCandidates(list)[0], p1080)
+  assert.equal(ranker({ device: tv({ height: 2160 }) }).autoCandidates(list)[0], p2160) // no preferHeight: the device height
+  assert.deepEqual(names(ranker({ device: tv({ height: 2160, preferHeight: 2160 }) }).rank(list)), names([p2160, p1080, dubbed720, p480]))
+})
+
+test('rank: a dub listed first loses a tie with a clean release at the same resolution, but stays playable; a release preset still beats resolution', () => {
+  const dubbed = stream(HIND.replace('720p', '1080p'), { title: '[TB+] 1080p' })
+  const clean720 = stream('Movie.2003.1080p.WEB-DL.x264.DD5.1.mkv', { title: '[TB+] 1080p' })
+  const r = ranker({ device: tv({ height: 2160, preferHeight: 1080 }) })
+  assert.deepEqual(names(r.rank([dubbed, clean720])), names([clean720, dubbed]))
+  assert.deepEqual(r.autoCandidates([dubbed]), [dubbed])
+  const remux = stream('Movie.2003.720p.BluRay.REMUX.x264.DD5.1.mkv', { title: '[TB+] 720p' })
+  const web1080 = stream('Movie.2003.1080p.WEB-DL.x264.DD5.1.mkv', { title: '[TB+] 1080p' })
+  const preset = ranker({ settings: settingsStub({ release: () => 'remux' }), device: tv({ height: 2160, preferHeight: 1080 }) })
+  assert.deepEqual(names(preset.rank([web1080, remux])), names([remux, web1080]))
+})
+
+test('whyChosen: names the best resolution offered and a dub listed first', () => {
+  const dubbed720 = stream(HIND, { title: '[TB+] 720p' })
+  const p1080 = stream('Movie.2003.1080p.BluRay.x265.DD5.1.mkv', { title: '[TB+] 1080p' })
+  const device = tv({ height: 2160, preferHeight: 1080 })
+  const why = whyChosen(dubbed720, 0, { device, sources: [dubbed720, p1080] })
+  assert.ok(why.includes('dual audio with a dub listed first') && why.includes('best resolution offered was 1080p'), why)
+  assert.ok(!whyChosen(p1080, 0, { device, sources: [dubbed720, p1080] }).includes('best resolution'))
 })

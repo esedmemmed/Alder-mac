@@ -18,7 +18,7 @@ export function autoOk(s) {
 
 export function macProfile() {
   return {
-    hevc: true, av1: false, dolbyVision: false, hdr: false, height: 1080, fps: 30, codec: 'H.264 8-bit',
+    hevc: true, av1: false, dolbyVision: false, hdr: false, height: 1080, preferHeight: 1080, fps: 30, codec: 'H.264 8-bit',
     audio: new Set(TU8000_AUDIO.concat(UNPLAYABLE_AUDIO)), source: 'Mac profile', notes: ['HEVC and 4K sources are manual picks, not hidden'],
     autoOk,
   }

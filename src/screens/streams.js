@@ -34,8 +34,9 @@ export function createStreamsScreen(params = {}) {
 
   function say(el, text) { clear(el); el.appendChild(h('div', { class: 'st-status t-body t-2 on-art' }, text)); }
 
-  function play(streams, picked) {
+  function play(streams, picked, report) {
     const p = playerParams(params, streams, { picked });
+    if (report) p.findReport = report;
     if (picked) ctx.router.push('player', p); // Back from the player returns to this list
     else ctx.router.replace('player', p); // Back from the player returns to the title page
   }
@@ -53,7 +54,7 @@ export function createStreamsScreen(params = {}) {
     const row = h('div', { class: 'st-row' + (r.dim ? ' dim' : '') + (mute ? ' mute' : ''), 'data-focus': '', tabindex: '-1', role: 'button' },
       h('span', { class: 'st-q' }, r.quality), detail, h('span', { class: 'st-size' }, r.size));
     row.addEventListener('focus', () => scrollTo(row));
-    row.addEventListener('click', () => play([r.stream], true));
+    row.addEventListener('click', () => play([r.stream], true, finder ? finder.report : null));
     return row;
   }
 
@@ -114,7 +115,7 @@ export function createStreamsScreen(params = {}) {
       const pick = !!params.pick || session.settings.alwaysList();
       finder = session.finder({
         type: params.type || 'movie', id: params.id, videoId: params.videoId, pick, maxHeight: params.maxHeight || 0,
-        onPlay: (streams) => { if (!dead) play(streams, false); },
+        onPlay: (streams, report) => { if (!dead) play(streams, false, report); },
         onList: showList,
         onStatus: (code) => {
           if (dead) return;

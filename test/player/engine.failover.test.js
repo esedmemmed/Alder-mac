@@ -322,3 +322,30 @@ test('time reports before play() (a seek landing) are not a picture', async () =
   assert.equal(t.callsOf('play').length, 0);
   assert.equal(t.events.started.length, 0);
 });
+
+both('a cached source gets 8 s to show a picture, an unknown one 12 s; the decision shows the real seconds', async () => {
+  const cached = makeEngine({ sources: [stream('A 1080p DDP5.1', { start: 'never' }, { title: '[TB+] 1080p' }), stream('B 1080p DDP5.1')] });
+  await cached.start();
+  await cached.advance(7900);
+  assert.equal(cached.loads().length, 1, 'still waiting just before 8 s');
+  await cached.advance(200);
+  assert.equal(cached.loads().length, 2, 'the next opens right after 8 s');
+  assert.equal(cached.loads()[1].t, 8000);
+  const lines = cached.diag.snapshot().decisions.map((d) => d.text);
+  assert.ok(lines.some((l) => /source failed \(no picture after 8 s\)/.test(l)), lines.join(' | '));
+  assert.ok(lines.some((l) => l === 'source: cached, 1080p, sound unknown' || /^source: cached, 1080p/.test(l)), lines.join(' | '));
+  const plain = makeEngine({ sources: [stream('A 1080p DDP5.1', { start: 'never' }), stream('B 1080p DDP5.1')] });
+  await plain.start();
+  await plain.advance(11900);
+  assert.equal(plain.loads().length, 1);
+  await plain.advance(200);
+  assert.equal(plain.loads()[1].t, 12000);
+  assert.ok(plain.diag.snapshot().decisions.some((d) => /no picture after 12 s/.test(d.text)));
+});
+
+both('the find report from the sources page reaches Diagnostics', async () => {
+  const report = { addons: [{ name: 'Torrentio', ms: 900, count: 12, error: null }], start: 'all answered' };
+  const t = makeEngine({ sources: [stream('A 1080p DDP5.1')], params: { findReport: report } });
+  await t.start();
+  assert.deepEqual(t.diag.snapshot().find, report);
+});

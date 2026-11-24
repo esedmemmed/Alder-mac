@@ -2,7 +2,7 @@
 // (household sharing), when to start playing, when to show the list. Normally it picks sources and hands the player a short
 // list to fall back on, so Play is one click; with `pick` (held OK on Play, or after three sources failed) it lists them all.
 
-import { readyStreams, TRY } from './ranking.js'
+import { readyStreams, isAnonymous, TRY } from './ranking.js'
 
 /**
  * The stream add-ons to ask for [type]/[videoId]: shared ones from the profiles lending theirs first (their own stream
@@ -39,7 +39,7 @@ export const GAP_WAIT_MS = 800 // after this long, a playable later answer can s
  *   onStatus(code)   "no-addons" when there is nothing to ask
  */
 export class SourceFinder {
-  constructor({ addons, type, videoId, ranker, pick = false, onPlay, onList, onStatus = () => {}, timers = null }) {
+  constructor({ addons, type, videoId, ranker, pick = false, onPlay, onList, onStatus = () => {}, timers = null, now = null }) {
     this.addons = addons
     this.type = type
     this.videoId = videoId
@@ -49,19 +49,25 @@ export class SourceFinder {
     this.onList = onList
     this.onStatus = onStatus
     this.timers = timers || { setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: id => clearTimeout(id) }
+    this.now = now || (() => Date.now())
+    this.t0 = 0
+    /** For Diagnostics: one entry per add-on { name, ms, count, error } as it answers, and why playback started (or the list opened). */
+    this.report = { addons: [], start: null }
     this.answers = addons.map(() => null)
     this.started = false
     this.listed = false
     this.waitingForEarlier = false
+    this.gapOpen = false // the 800 ms gap start was blocked by an anonymous best source: later answers may start through a gap
     this.timer = null
   }
 
   start() {
     if (this.addons.length === 0) { this.onStatus('no-addons'); return }
+    this.t0 = this.now()
     this.addons.forEach((addon, i) => {
       addon.streams(this.type, this.videoId).then(
         streams => { if (Array.isArray(streams)) streams.forEach(s => { if (s && typeof s === 'object') s.addonName = addon.name }); this.answer(i, streams) },
-        () => this.answer(i, []), // an add-on that fails just has no sources
+        e => this.answer(i, [], e && e.kind === 'timeout' ? 'timed out' : 'failed'), // an add-on that fails just has no sources
       )
     })
   }
@@ -72,11 +78,12 @@ export class SourceFinder {
     if (this.timer !== null) { this.timers.clearTimeout(this.timer); this.timer = null }
   }
 
-  answer(i, streams) {
+  answer(i, streams, error = null) {
     this.answers[i] = streams
+    this.report.addons.push({ name: this.addons[i].name, ms: this.now() - this.t0, count: Array.isArray(streams) ? streams.length : 0, error })
     if (this.answers.every(a => a !== null)) {
       if (this.pick || this.listed) this.showList()
-      else this.tryStart()
+      else this.tryStart(this.gapOpen)
     } else if (!this.pick) {
       this.tryStart()
       if (!this.started && !this.waitingForEarlier && readyStreams(this.answers, true).some(s => this.ranker.playable(s) && this.ranker.wanted(s))) {
@@ -88,23 +95,41 @@ export class SourceFinder {
 
   showList() {
     this.listed = true
+    this.report.start = 'list'
     const entries = []
     this.addons.forEach((addon, i) => (this.answers[i] || []).forEach(stream => entries.push({ stream, addon: addon.name })))
-    this.onList(this.ranker.listModel(entries))
+    this.onList(this.ranker.listModel(entries), this.report)
   }
 
   /** Keep add-on order when earlier ones answer promptly; after 800 ms, a playable later answer can start. */
   tryStart(allowGaps = false) {
     if (this.started || this.pick || this.listed) return
+    // Early start: a cached, sound, well-fitting best source among the answers so far (gaps allowed) plays at once, unless
+    // the remembered release is still expected (the hold below keeps its precedence).
+    if (!allowGaps && this.answers.some(a => a === null) && this.ranker.goodStart) {
+      const sofar = readyStreams(this.answers, true)
+      const early = this.ranker.autoCandidates(sofar)
+      if (early.length > 0 && this.ranker.goodStart(early[0]) && !(this.ranker.memoryPending && this.ranker.memoryPending(sofar))) {
+        this.started = true
+        this.report.start = 'early (good cached source)'
+        this.onPlay(early.slice(0, TRY), this.report)
+        return
+      }
+    }
     const ready = readyStreams(this.answers, allowGaps)
     const best = this.ranker.autoCandidates(ready)
     if (best.length === 0 && this.answers.some(a => a === null)) return
+    if (best.length > 0 && isAnonymous(best[0]) && this.answers.some(a => a === null)) { // never start an unnamed source while add-ons are still out
+      if (allowGaps) this.gapOpen = true
+      return
+    }
     if (best.length > 0 && !allowGaps && this.answers.some(a => a === null) && this.ranker.memoryPending && this.ranker.memoryPending(ready)) {
       if (!this.macHeld) { this.macHeld = true; this.ranker.memoryHeld() }
       return
     }
     if (best.length === 0) { this.showList(); return }
     this.started = true
-    this.onPlay(best.slice(0, TRY))
+    this.report.start = allowGaps ? 'gap 800 ms' : this.answers.some(a => a === null) ? 'in add-on order' : 'all answered'
+    this.onPlay(best.slice(0, TRY), this.report)
   }
 }

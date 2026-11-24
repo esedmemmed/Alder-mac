@@ -281,6 +281,7 @@ export function createSearchScreen() {
   }
 
   function onCardFocus(section, index) {
+    if (document.documentElement.classList.contains('phone')) { show(section.metas[index]); return; } // phone: the results scroll natively, nothing moves by transform
     // The focused row snaps to the pane's top, as on Home; rows above it draw nothing.
     const at = sections.indexOf(section);
     sectionTop = section.el.offsetTop;

@@ -179,6 +179,11 @@ export function createAvplay({ bridge = null, log = null } = {}) {
     if (mine !== session) return;
     const was = cache[e.name];
     cache[e.name] = e.value;
+    if ((typeof __ALDER_ANDROID__ !== 'undefined' && __ALDER_ANDROID__) && e.name === 'sub-text') { // Android: the cue text, for the page's own subtitle overlay (an empty text is no line)
+      const text = String(e.value === undefined || e.value === null ? '' : e.value);
+      call('onSubtitle', { durationMs: text ? 60000 : 0, text, type: undefined }); // native sends '' when a cue ends: the line stays until then
+      return;
+    }
     if (e.name === 'time-pos' && Number.isFinite(e.value)) call('onTime', Math.round(e.value * 1000));
     else if (e.name === 'pause') paused = !!e.value;
     else if (e.name === 'paused-for-cache') {
@@ -239,7 +244,7 @@ export function createAvplay({ bridge = null, log = null } = {}) {
         br.on('playbackRestart', () => onRestart(mine)),
         br.on('endFile', (e) => onEnd(e, mine)),
       ];
-      if (!observedBridges.has(br)) { observedBridges.add(br); send('observe', br.observe(OBSERVED)); }
+      if (!observedBridges.has(br)) { observedBridges.add(br); send('observe', br.observe((typeof __ALDER_ANDROID__ !== 'undefined' && __ALDER_ANDROID__) ? OBSERVED.concat('sub-text') : OBSERVED)); }
       br.load(url, { headers: headers && Object.keys(headers).length ? headers : undefined }).catch((e) => {
         if (mine !== session) return;
         const m = mapError(errorCode(e));
@@ -401,5 +406,14 @@ export function createAvplay({ bridge = null, log = null } = {}) {
       return true;
     },
   };
+  return (typeof __ALDER_ANDROID__ !== 'undefined' && __ALDER_ANDROID__) ? withoutSubtitleDrawing(api) : api;
+}
+
+/**
+ * The Android variant (scripts/build.mjs --mac --android defines __ALDER_ANDROID__): the page draws every subtitle, so the adapter has no
+ * addSubtitle, setSubDelay or delayKeysHint, and the native `sub-text` property feeds the engine's file-subtitle handler (onProp, observe).
+ */
+function withoutSubtitleDrawing(api) {
+  delete api.addSubtitle; delete api.setSubDelay; delete api.delayKeysHint;
   return api;
 }

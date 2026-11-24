@@ -56,11 +56,25 @@ export function preferenceScore(settings, names = languageName) {
       : release === 'web' ? (s.web && !s.remux ? 2 : s.remux ? -2 : 0)
       : 0
     const byHdr = hdr === 'dv' ? (s.dolbyVision ? 2 : s.hdr ? 1 : 0) : hdr === 'hdr10' ? (s.hdr ? 2 : 0) : 0
-    const byDub = dub === 'original' ? (s.dubbed ? -2 : 0)
+    const byDub = dub === 'original' ? (s.dubbed || s.foreignDub ? -2 : 0)
       : dub === 'mine' ? (s.mentions(language, names) ? 2 : s.multiAudio ? 1 : 0)
-      : 0
+      : (s.foreignDub ? -2 : 0)
     return byRelease + byHdr + byDub // Alder adds 1 for bigAudio when a receiver is set; Tizen has no receiver option
   }
+}
+
+/** A source that names no resolution and has neither a filename nor a videoSize (an add-on's "auto" entry): nothing to time subtitles against. */
+export function isAnonymous(s) {
+  return s.height === 0 && !s.filename && !(Number.isInteger(s.size) && s.size > 0)
+}
+
+/** Resolution score for [height] on [device]: preferHeight (the profile's height when it has none) 3, above it up to the device's height 2, below it 1 + height/10000, 0 unknown. */
+export function resolutionRank(height, device) {
+  const p = device.preferHeight || device.height
+  if (!(height > 0)) return 0
+  if (height === p) return 3
+  if (height > p && height <= device.height) return 2
+  return height < p ? 1 + height / 10000 : 0.5 // above the screen: after everything that fits
 }
 
 /**
@@ -95,11 +109,21 @@ export function createRanker({ settings, device, memory, videoId, metaId = '', m
       [s => binge !== null && s.bingeGroup === binge, 'desc'],
       [s => s.awkward, 'asc'],
       [s => s.mayNotPlay, 'asc'],
+      [s => s.cached, 'desc'],
+      [s => isAnonymous(s), 'asc'], // an unnamed source sorts below every named one of the same cached level
       [s => info.get(s).fit, 'desc'],
       [s => info.get(s).audio, 'desc'],
       [s => info.get(s).pref, 'desc'],
+      [s => resolutionScore(s), 'desc'], // the device's preferred resolution, then the next best, instead of add-on order
+      [s => dubDemoted(s), 'asc'], // last: a dub listed before the original only loses a tie at the same resolution (the player picks the original audio track itself)
     ])
   }
+
+  const dubMine = () => settings.dub() === 'mine' && settings.audioLanguage() !== 'en' ? settings.audioLanguage() : ''
+  const dubDemoted = s => s.dubFirst && !(dubMine() && s.mentions(dubMine(), names))
+
+  /** The resolution key: preferred height 3, above it up to the screen 2, below it 1 (taller first), unknown 0. */
+  const resolutionScore = s => resolutionRank(s.height, tv)
 
   /** Within Settings' limits (quality, file size, HDR), and never a cam or screener. Unknown sizes and resolutions pass. */
   function wanted(s) {
@@ -117,6 +141,9 @@ export function createRanker({ settings, device, memory, videoId, metaId = '', m
     rank,
     wanted,
     noSound,
+
+    /** Good enough to start at once without waiting for earlier add-ons: cached, fits this screen, has sound, passes autoOk. */
+    goodStart: s => s.cached === 1 && !isAnonymous(s) && s.fit(tv) === 2 && !noSound(s) && (!tv.autoOk || tv.autoOk(s)),
 
     /** Something is remembered for this video and none of [streams] is it (core/release-memory.js pending). */
     memoryPending: (streams) => !!(memory && memory.pending && memory.pending(videoId, metaId, streams)),
@@ -173,6 +200,31 @@ export function sourceRow(s, addon, best, tv) {
     size: sourceSize(s.size),
     dim: s.height >= 1 && s.height <= 719, // low resolutions are drawn at 48% opacity until focused
   }
+}
+
+/**
+ * Why a source is the one playing, in a few words for Diagnostics: "cached, 1080p, H.264, AC3". Each part only when known.
+ * [remembered] is the session memory's level for it (> 0: it is the release played before). [context] { device, sources }: with it, a
+ * source below the preferred height says what resolution the list offered at best.
+ */
+export function whyChosen(s, remembered = 0, context = null) {
+  const parts = []
+  if (s.cached === 1) parts.push('cached')
+  else if (s.cached === -1) parts.push('not cached')
+  if (s.height > 0) parts.push(s.height + 'p')
+  if (isAnonymous(s)) parts.push('no quality or file named')
+  if (s.dubFirst) parts.push('dual audio with a dub listed first')
+  if (context && context.device && Array.isArray(context.sources) && s.height !== (context.device.preferHeight || context.device.height)) {
+    const best = context.sources.reduce((b, o) => (resolutionRank(o.height, context.device) > resolutionRank(b.height, context.device) ? o : b), s)
+    if (best.height > 0) parts.push('best resolution offered was ' + best.height + 'p')
+  }
+  if (s.hevc) parts.push('HEVC')
+  else if (/[xh].?264|\bavc\b/.test(s.words)) parts.push('H.264')
+  const codecs = s.audioCodecs
+  parts.push(codecs.length ? codecs.join('/') : 'sound unknown')
+  if (s.foreignDub) parts.push('dub')
+  if (remembered > 0) parts.push('remembered')
+  return parts.join(', ')
 }
 
 /** The name of the current stream preferences: "Add-on's order", "Best picture", "Balanced", "Fast start" or "Custom". */

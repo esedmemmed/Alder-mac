@@ -333,6 +333,7 @@ export function createDetailsScreen(params = {}) {
   }
 
   function scrollStory(by) {
+    if (document.documentElement.classList.contains('phone')) return; // phone: the story shows in full, the screen scrolls
     const story = info && info.querySelector('.dt-story');
     if (!story) return;
     const inner = story.firstChild;

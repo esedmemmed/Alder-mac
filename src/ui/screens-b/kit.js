@@ -58,6 +58,7 @@ export function artLayer(images, { width = 1920 } = {}) {
  * rows' offsetTop is read against [inner], which must be positioned. Moves with transform only.
  */
 export function keepVisible(clip, inner, row, state, rowHeight = row.offsetHeight) {
+  if (document.documentElement.classList.contains('phone')) return; // phone: the screen scrolls natively
   const view = clip.clientHeight || 640;
   const top = row.offsetTop;
   if (top < state.y) state.y = top;

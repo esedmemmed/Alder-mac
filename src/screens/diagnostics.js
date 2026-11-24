@@ -45,6 +45,14 @@ export function buildReport({ log, diag, device = null, version = '', env = '', 
   section('ICONS', [ICON_NAMES.length + ' icons, light on dark (left) and dark on light (right); all three rows should show every icon'], { icons: true });
   section('DEVICE', device ? [describeDevice(device)].concat(device.notes || []) : ['No device profile yet']);
 
+  // Which add-ons answered what, and why this source started when it did (no links: only names, counts and times)
+  const f = diag.find;
+  if (f) {
+    const bare = (t) => String(t).replace(/\S*:\/\/\S*/g, '').trim();
+    section('SOURCES', ['Start: ' + bare(f.start === null || f.start === undefined ? 'unknown' : f.start)].concat((f.addons || []).map((a) => bare(a.name) + ': ' +
+      (a.error ? bare(a.error) + ' after ' + a.ms + ' ms' : a.count > 0 ? a.count + ' in ' + a.ms + ' ms' : 'nothing playable in ' + a.ms + ' ms'))));
+  }
+
   const s = diag.stream;
   if (s) {
     section('STREAM', [
@@ -125,6 +133,7 @@ export function createDiagnosticsScreen() {
   let maxScroll = 0;
 
   function setScroll(to) {
+    if (document.documentElement.classList.contains('phone')) return; // phone: the screen scrolls natively
     scroll = Math.max(0, Math.min(maxScroll, to));
     content.style.transform = 'translate3d(0,' + (-scroll) + 'px,0)';
     status.textContent = (maxScroll > 0 ? Math.round(scroll / maxScroll * 100) + '%   ' : '') + '▲▼ Scroll   ◀ ▶ Page   OK Top / end   Back Close';

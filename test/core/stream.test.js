@@ -251,3 +251,32 @@ test('runtime(): "147 min" -> "2h 27m", also "2h35min" / "2h 35m"; under an hour
   assert.equal(runtime('  147 min  '), '2h 27m')
   assert.equal(runtime('147 min (director\'s cut)'), '2h 27m')
 })
+
+test('Stream words: styled letters are read as plain ones (NFKC), for matching only', () => {
+  const s = stream('Movie', { title: '𝟰𝗞 ᵈᵛ' })
+  assert.equal(s.height, 2160)
+  assert.equal(s.dolbyVision, true)
+  assert.equal(s.title, '𝟰𝗞 ᵈᵛ') // the display text is untouched
+})
+
+test('Stream.cached: 1 cached, -1 uncached, 0 unknown; only the add-on name and description count', () => {
+  const c = (title, description = '', filename = 'Movie.mkv') => stream(filename, { title, description }).cached
+  assert.equal(c('[TB+] 1080p'), 1)
+  assert.equal(c('⚡ 4K'), 1)
+  assert.equal(c('Instant'), 1)
+  assert.equal(c('', 'RD+ 1080p'), 1)
+  assert.equal(c('[TB download]'), -1)
+  assert.equal(c('⏳'), -1)
+  assert.equal(c('Torrentio 1080p'), 0)
+  assert.equal(c('1080p', '', 'Movie.cached.1080p.mkv'), 0) // the file name does not count
+})
+
+test('Stream.foreignDub: a dub with no sign of the original audio', () => {
+  const d = name => stream(name).foreignDub
+  assert.equal(d('Movie 2024 Hindi 1080p'), true)
+  assert.equal(d('Hindi-English Dual Audio'), false)
+  assert.equal(d('TRUEFRENCH'), true)
+  assert.equal(d('Movie.ENG.ITA'), false)
+  assert.equal(d('Original'), false)
+  assert.equal(d('Movie.2024.1080p.WEB-DL'), false)
+})

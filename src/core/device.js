@@ -22,6 +22,7 @@ export function deviceProfile(env = {}) {
   const { webapis, av1 = false, log = () => {} } = env
   const profile = tu8000Profile()
   profile.av1 = !!av1
+  profile.preferHeight = profile.height // the TV's own height: the resolution ranking prefers (core/ranking.js resolutionRank)
   if (!webapis) {
     profile.notes.push('webapis missing: using the TU8000 profile as is')
     log('device: ' + profile.notes[0])
@@ -45,6 +46,7 @@ export function deviceProfile(env = {}) {
   } catch (e) {
     profile.notes.push('avinfo failed (' + errorText(e) + '): hdr from the TU8000 profile')
   }
+  profile.preferHeight = profile.height
   log('device: ' + describeDevice(profile))
   profile.notes.forEach(n => log('device: ' + n))
   return profile

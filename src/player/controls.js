@@ -67,7 +67,8 @@ export function createControls({ host, engine, timers = { setTimeout: (f, ms) =>
   pauseInfo.style.display = 'none';
   const elapsed = h('div', { class: 'pl-elapsed t-small on-art' });
   const length = h('div', { class: 'pl-length t-small on-art' });
-  const bar = createBar(1728);
+  const phone = typeof document !== 'undefined' && document.documentElement.classList.contains('phone');
+  const bar = createBar(phone ? (document.documentElement.classList.contains('portrait') ? 1080 : 1920) - 80 : 1728); // phone: the bar spans the screen with 40 px each side
   bar.el.classList.add('pl-mainbar');
 
   const buttons = {};

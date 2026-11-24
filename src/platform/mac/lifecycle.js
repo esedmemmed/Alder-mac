@@ -46,7 +46,11 @@ export function createLifecycle({ bridge = macBridge, log = null } = {}) {
   function bind(engine, avplay) {
     const mine = { engine, avplay };
     player = mine;
-    return () => { if (player === mine) player = null; };
+    // Android: the player is landscape whatever the phone does, the rest of the app follows the sensor (the shell's `orientation`)
+    const b = (typeof __ALDER_ANDROID__ !== 'undefined' && __ALDER_ANDROID__) ? bridge() : null;
+    const turn = (mode) => { if (b && typeof b.orientation === 'function') b.orientation(mode).catch(() => {}); };
+    turn('landscape');
+    return () => { if (player === mine) player = null; turn('any'); };
   }
 
   /** Listens to the shell's events; safe to call without a shell. */
